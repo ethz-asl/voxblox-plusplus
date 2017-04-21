@@ -1,10 +1,10 @@
 #ifndef GLOBAL_SEGMENT_MAP_LABEL_TSDF_MAP_H_
 #define GLOBAL_SEGMENT_MAP_LABEL_TSDF_MAP_H_
 
-#include <glog/logging.h>
 #include <memory>
 #include <utility>
 
+#include <glog/logging.h>
 #include <voxblox/core/common.h>
 #include <voxblox/core/layer.h>
 #include <voxblox/core/voxel.h>
@@ -54,11 +54,11 @@ class LabelTsdfMap {
   FloatingPoint block_size() const { return tsdf_layer_->block_size(); }
 
  protected:
+  Label highest_label_;
+
   // The layers.
   Layer<TsdfVoxel>::Ptr tsdf_layer_;
   Layer<LabelVoxel>::Ptr label_layer_;
-
-  Label highest_label_;
 };
 
 }  // namespace voxblox

@@ -1,10 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0"?>
 <package format="2">
-  <name>global_segment_map</name>
+  <name>gsm_node</name>
   <version>0.0.0</version>
-  <description>Global Segmentation Map voxblox extension</description>
+  <description>Global Segmentation Map ROS node</description>
 
-  <author email="margaritagrinvald@gmail.com">margaritaG</author>
+  <author email="margaritagrinvald@gmail.com">Margarita Grinvald</author>
 
   <maintainer email="margaritagrinvald@gmail.com">margaritaG</maintainer>
   <maintainer email="ffurrer@gmail.com">ffurrer</maintainer>
@@ -15,9 +15,14 @@
   <buildtool_depend>catkin</buildtool_depend>
   <buildtool_depend>catkin_simple</buildtool_depend>
 
-  <depend>Boost</depend>
-  <depend>eigen_catkin</depend>
   <depend>glog_catkin</depend>
+  <depend>minkindr_conversions</depend>
+  <depend>object_toolbox</depend>
+  <depend>pcl_conversions</depend>
   <depend>pcl_ros</depend>
+  <depend>roscpp</depend>
   <depend>voxblox</depend>
+  <depend>global_segment_map</depend>
+  <depend>voxblox_ros</depend>
+
 </package>

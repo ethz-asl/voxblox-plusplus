@@ -1,8 +1,8 @@
-#include "global_segment_map/label_block_serialization.h"
-
 #include <memory>
 
 #include <glog/logging.h>
+
+#include "global_segment_map/label_block_serialization.h"
 
 namespace voxblox {
 
