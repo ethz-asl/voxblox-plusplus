@@ -29,8 +29,7 @@ class Controller {
 
   void AdvertiseMeshTopic(ros::Publisher* mesh_pub);
 
-  void AdvertiseGenerateMeshService(
-      ros::ServiceServer* generate_mesh_srv);
+  void AdvertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
   void AdvertiseExtractSegmentsService(
       ros::ServiceServer* extract_segments_srv);
@@ -38,13 +37,13 @@ class Controller {
   void updateMeshEvent(const ros::TimerEvent& e);
 
  private:
-  void SegmentPointCloudCallback(
+  void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
-  bool GenerateMeshCallback(std_srvs::Empty::Request& request,
+  bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
 
-  bool ExtractSegmentsCallback(std_srvs::Empty::Request& request,
+  bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
 
   void extractSegmentLayers(voxblox::Label label,
@@ -52,11 +51,8 @@ class Controller {
                             voxblox::Layer<voxblox::LabelVoxel>* label_layer);
 
   bool lookupTransform(const std::string& from_frame,
-                       const std::string& to_frame,
-                       const ros::Time& timestamp,
+                       const std::string& to_frame, const ros::Time& timestamp,
                        voxblox::Transformation* transform);
-
-
 
   ros::NodeHandle* node_handle_private_;
 
@@ -66,7 +62,7 @@ class Controller {
   ros::Publisher* mesh_pub_;
   ros::Timer update_mesh_timer_;
 
-  int callback_count_;
+  size_t callback_count_;
 
   voxblox::LabelTsdfMap::Config map_config_;
 
@@ -79,8 +75,8 @@ class Controller {
   std::shared_ptr<voxblox::MeshLabelIntegrator> mesh_integrator_;
 
   std::vector<voxblox::Segment*> segments_to_integrate_;
-  std::map<voxblox::Label, std::map<voxblox::Segment*, size_t> > segment_label_candidates;
-
+  std::map<voxblox::Label, std::map<voxblox::Segment*, size_t> >
+      segment_label_candidates;
 };
 }  // namespace voxblox_gsm
 

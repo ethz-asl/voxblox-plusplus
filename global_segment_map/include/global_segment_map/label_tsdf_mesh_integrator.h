@@ -14,42 +14,84 @@
 
 namespace voxblox {
 
-class MeshLabelIntegrator : public MeshIntegrator {
+class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
  public:
-  MeshLabelIntegrator(const Config& config,
+  MeshLabelIntegrator(const MeshIntegrator::Config& config,
                       Layer<TsdfVoxel>* tsdf_layer,
-                      Layer<LabelVoxel>* label_layer,
-                      MeshLayer* mesh_layer,
+                      Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
                       bool visualize_confidence = false)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_(CHECK_NOTNULL(label_layer)),
         visualize_confidence(visualize_confidence) {}
 
-  void generateMeshForUpdatedBlocks(bool clear_updated_flag, bool* updated) {
-    // Only update parts of the mesh for blocks that have updated.
-    // clear_updated_flag decides whether to reset 'updated' after updating the
-    // mesh.
+  // Generates mesh for the tsdf layer.
+  void generateMesh(bool only_mesh_updated_blocks, bool clear_updated_flag) {
     BlockIndexList all_tsdf_blocks;
-    tsdf_layer_->getAllAllocatedBlocks(&all_tsdf_blocks);
+    BlockIndexList all_label_blocks;
+    if (only_mesh_updated_blocks) {
+      tsdf_layer_->getAllUpdatedBlocks(&all_tsdf_blocks);
+      // TODO(grinvalm) unique union of block indices here.
+      label_layer_->getAllUpdatedBlocks(&all_label_blocks);
+    } else {
+      tsdf_layer_->getAllAllocatedBlocks(&all_tsdf_blocks);
+    }
 
+    // Allocate all the mesh memory
     for (const BlockIndex& block_index : all_tsdf_blocks) {
-      Block<TsdfVoxel>::Ptr tsdf_block =
-          tsdf_layer_->getBlockPtrByIndex(block_index);
-      Block<LabelVoxel>::Ptr label_block =
-          label_layer_->getBlockPtrByIndex(block_index);
-      if (tsdf_block->updated() || label_block->updated()) {
-        *updated = true;
-        updateMeshForBlock(block_index);
-        if (clear_updated_flag) {
-          tsdf_block->updated() = false;
-          label_block->updated() = false;
-        }
+      mesh_layer_->allocateMeshPtrByIndex(block_index);
+    }
+
+    ThreadSafeIndex index_getter(all_tsdf_blocks.size(),
+                                 config_.integrator_threads);
+
+    AlignedVector<std::thread> integration_threads;
+    for (size_t i = 0; i < config_.integrator_threads; ++i) {
+      integration_threads.emplace_back(
+          &MeshIntegrator::generateMeshBlocksFunction, this, all_tsdf_blocks,
+          clear_updated_flag, &index_getter);
+    }
+
+    for (std::thread& thread : integration_threads) {
+      thread.join();
+    }
+  }
+
+  void generateMeshBlocksFunction(const BlockIndexList& all_tsdf_blocks,
+                                  bool clear_updated_flag,
+                                  ThreadSafeIndex* index_getter) {
+    DCHECK(index_getter != nullptr);
+
+    size_t list_idx;
+    while (index_getter->getNextIndex(&list_idx)) {
+      const BlockIndex& block_idx = all_tsdf_blocks[list_idx];
+      typename Block<TsdfVoxel>::Ptr tsdf_block =
+          tsdf_layer_->getBlockPtrByIndex(block_idx);
+      typename Block<LabelVoxel>::Ptr label_block =
+          label_layer_->getBlockPtrByIndex(block_idx);
+
+      updateMeshForBlock(block_idx);
+      if (clear_updated_flag) {
+        tsdf_block->updated() = false;
+        label_block->updated() = false;
       }
     }
   }
 
+  Color getColorFromLabel(const Label& label) {
+    Color color;
+    auto label_color_map_it = label_color_map_.find(label);
+
+    if (label_color_map_it != label_color_map_.end()) {
+      color = label_color_map_it->second;
+    } else {
+      color = randomColor();
+      label_color_map_.insert(std::pair<Label, Color>(label, color));
+    }
+    return color;
+  }
+
   virtual void updateMeshForBlock(const BlockIndex& block_index) {
-    Mesh::Ptr mesh = mesh_layer_->allocateMeshPtrByIndex(block_index);
+    Mesh::Ptr mesh = mesh_layer_->getMeshPtrByIndex(block_index);
     mesh->clear();
     // This block should already exist, otherwise it makes no sense to update
     // the mesh for it. ;)
@@ -67,79 +109,44 @@ class MeshLabelIntegrator : public MeshIntegrator {
     }
 
     extractBlockMesh(tsdf_block, mesh);
-
     // Update colors if needed.
     if (config_.use_color) {
       updateMeshColor(*label_block, mesh.get());
     }
-
-    if (config_.compute_normals) {
-      computeMeshNormals(*tsdf_block, mesh.get());
-    }
   }
-
-  Color getColorFromLabel(const Label& label) {
-    Color color;
-    auto label_color_map_it = label_color_map_.find(label);
-
-    if (label_color_map_it != label_color_map_.end()) {
-      color = label_color_map_it->second;
-    } else {
-      color = randomColor();
-      label_color_map_.insert(std::pair<Label, Color>(label, color));
-    }
-    return color;
-  }
-
 
   void updateMeshColor(const Block<LabelVoxel>& label_block, Mesh* mesh) {
-    CHECK_NOTNULL(mesh);
+    DCHECK(mesh != nullptr);
 
     mesh->colors.clear();
     mesh->colors.resize(mesh->indices.size());
 
     // Use nearest-neighbor search.
-    for (size_t i = 0u; i < mesh->vertices.size(); i++) {
+    for (size_t i = 0; i < mesh->vertices.size(); ++i) {
       const Point& vertex = mesh->vertices[i];
       VoxelIndex voxel_index =
           label_block.computeVoxelIndexFromCoordinates(vertex);
-      const Point voxel_center =
-          label_block.computeCoordinatesFromVoxelIndex(voxel_index);
-
-      // Should be within half a voxel of the voxel center in all dimensions, or
-      // it belongs in the other one.
-      const Point dist_from_center = vertex - voxel_center;
-      for (unsigned int j = 0u; j < 3u; ++j) {
-        if (std::abs(dist_from_center(j)) > voxel_size_ / 2.0) {
-          voxel_index(j) += signum(dist_from_center(j));
-        }
-      }
-
       if (label_block.isValidVoxelIndex(voxel_index)) {
+        const LabelVoxel& voxel = label_block.getVoxelByVoxelIndex(voxel_index);
+
         Color color;
         if (visualize_confidence) {
-          color = rainbowColorMap(
-              label_block.getVoxelByVoxelIndex(voxel_index).label_confidence / 100);
+          color = rainbowColorMap(voxel.label_confidence / 100);
         } else {
-          color = getColorFromLabel(
-              label_block.getVoxelByVoxelIndex(voxel_index).label);
+          color = getColorFromLabel(voxel.label);
         }
         mesh->colors[i] = color;
       } else {
-        // Get the nearest block.
-        const Block<LabelVoxel>::ConstPtr neighbor_block =
+        const typename Block<LabelVoxel>::ConstPtr neighbor_block =
             label_layer_->getBlockPtrByCoordinates(vertex);
-        if (neighbor_block) {
-          Color color;
-          if (visualize_confidence) {
-            color = rainbowColorMap(
-                neighbor_block->getVoxelByCoordinates(vertex).label_confidence / 100);
-          } else {
-            color = getColorFromLabel(
-                neighbor_block->getVoxelByCoordinates(vertex).label);
-          }
-          mesh->colors[i] = color;
+        const LabelVoxel& voxel = neighbor_block->getVoxelByCoordinates(vertex);
+        Color color;
+        if (visualize_confidence) {
+          color = rainbowColorMap(voxel.label_confidence / 100);
+        } else {
+          color = getColorFromLabel(voxel.label);
         }
+        mesh->colors[i] = color;
       }
     }
   }

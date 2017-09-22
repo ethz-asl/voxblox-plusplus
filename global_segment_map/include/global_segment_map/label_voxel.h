@@ -10,12 +10,12 @@
 namespace voxblox {
 
 struct LabelVoxel {
-  float label_confidence = 0.0f;
+  LabelConfidence label_confidence = 0u;
   Label label = 0u;
 };
 
 namespace voxel_types {
-  const std::string kLabel = "label";
+const std::string kLabel = "label";
 }  // namespace voxel_types
 
 template <>

@@ -19,35 +19,47 @@
 namespace voxblox {
 
 class Segment {
-public:
+ public:
   voxblox::Pointcloud points_C_;
   voxblox::Transformation T_G_C_;
   voxblox::Colors colors_;
   voxblox::Labels labels_;
 };
 
-class LabelTsdfIntegrator : public TsdfIntegrator {
+class LabelTsdfIntegrator : public MergedTsdfIntegrator {
  public:
-  LabelTsdfIntegrator(const Config& config, Layer<TsdfVoxel>* tsdf_layer,
-                      Layer<LabelVoxel>* label_layer, Label* highest_label)
-      : TsdfIntegrator(config, CHECK_NOTNULL(tsdf_layer)),
-        label_layer_(CHECK_NOTNULL(label_layer)),
-        highest_label_(CHECK_NOTNULL(highest_label)) {
-    CHECK(label_layer_);
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  //  typedef std::map<Label, std::map<Label, int>> LabelVoxelMap;
+  typedef AnyIndexHashMapType<LabelVoxel>::type LabelVoxelMap;
 
-    // TODO(grinvalm): parametrize.
-    pairwise_confidence_merging_ = true;
-    pairwise_confidence_ratio_threshold_ = 0.05;
-    pairwise_confidence_threshold_ = 2;
+  struct LabelTsdfConfig {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    bool enable_pairwise_confidence_merging = false;
+    float pairwise_confidence_ratio_threshold = 0.05f;
+    int pairwise_confidence_threshold = 2;
 
     // Experiments showed that capped confidence value
     // only introduces artifacts in planar regions.
-    cap_confidence_ = false;
-    confidence_cap_value_ = 10;
+    // Cap confidence settings.
+    bool cap_confidence = false;
+    int confidence_cap_value = 10;
+  };
+
+  LabelTsdfIntegrator(const Config& config,
+                      const LabelTsdfConfig& label_tsdf_config,
+                      Layer<TsdfVoxel>* tsdf_layer,
+                      Layer<LabelVoxel>* label_layer, Label* highest_label)
+      : MergedTsdfIntegrator(config, CHECK_NOTNULL(tsdf_layer)),
+        label_tsdf_config_(label_tsdf_config),
+        label_layer_(CHECK_NOTNULL(label_layer)),
+        highest_label_(CHECK_NOTNULL(highest_label)) {
+    CHECK(label_layer_);
   }
 
-  inline void computeSegmentLabelCandidates(Segment* segment,
-      std::map<Label, std::map<Segment*, size_t> >* candidates) {
+  inline void computeSegmentLabelCandidates(
+      Segment* segment,
+      std::map<Label, std::map<Segment*, size_t>>* candidates) {
     // Flag to check whether there exists at least one label candidate.
     bool candidate_label_exists = false;
     int segment_points_count = segment->points_C_.size();
@@ -63,7 +75,8 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
       if (block_ptr != nullptr) {
         candidate_label_exists = true;
         const LabelVoxel& voxel = block_ptr->getVoxelByCoordinates(point_G);
-        // Allocated but unobserved voxels have label 0
+        // Do not consider allocated but unobserved voxels
+        // which have label == 0.
         if (voxel.label != 0u) {
           auto label_it = candidates->find(voxel.label);
           if (label_it != candidates->end()) {
@@ -71,13 +84,13 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
             if (segment_it != label_it->second.end()) {
               ++segment_it->second;
 
-              if (pairwise_confidence_merging_) {
+              if (label_tsdf_config_.enable_pairwise_confidence_merging) {
                 // Add all segment labels that overlap with more than
                 // a threshold ratio to the set of potential merge candidates.
                 if ((float)segment_it->second / (float)segment_points_count >
-                                        pairwise_confidence_ratio_threshold_) {
-                  if (merge_candidate_labels.find(voxel.label)
-                      == merge_candidate_labels.end()) {
+                    label_tsdf_config_.pairwise_confidence_ratio_threshold) {
+                  if (merge_candidate_labels.find(voxel.label) ==
+                      merge_candidate_labels.end()) {
                     merge_candidate_labels.insert(voxel.label);
                   }
                 }
@@ -88,21 +101,22 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
           } else {
             std::map<Segment*, size_t> segment_points_count;
             segment_points_count.insert(std::make_pair(segment, 1u));
-            candidates->insert(std::make_pair(voxel.label, segment_points_count));
+            candidates->insert(
+                std::make_pair(voxel.label, segment_points_count));
           }
         }
       }
     }
 
-    if (pairwise_confidence_merging_) {
+    if (label_tsdf_config_.enable_pairwise_confidence_merging) {
       std::vector<Label> merge_candidates;
       std::copy(merge_candidate_labels.begin(), merge_candidate_labels.end(),
                 std::back_inserter(merge_candidates));
 
       // For every couple of labels from the merge candidates
       // set or increase their pairwise confidence.
-      for (int i = 0; i < merge_candidates.size(); i++) {
-        for (int j = i+1; j < merge_candidates.size(); j++) {
+      for (size_t i = 0; i < merge_candidates.size(); ++i) {
+        for (size_t j = i + 1; j < merge_candidates.size(); ++j) {
           Label label1 = merge_candidates[i];
           Label label2 = merge_candidates[j];
 
@@ -118,18 +132,20 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
               if (confidence != pairs->second.end()) {
                 ++confidence->second;
                 LOG(INFO) << "Confidence between label " << label1
-                    << " and label " << label2 << " is " << confidence->second;
+                          << " and label " << label2 << " is "
+                          << confidence->second;
               } else {
                 pairs->second.insert(std::make_pair(label2, 1));
                 LOG(INFO) << "Confidence between label " << label1
-                    << " and label " << label2 << " is 1";
+                          << " and label " << label2 << " is 1";
               }
             } else {
               std::map<Label, int> confidence_pair;
               confidence_pair.insert(std::make_pair(label2, 1));
-              pairwise_confidence_.insert(std::make_pair(label1, confidence_pair));
+              pairwise_confidence_.insert(
+                  std::make_pair(label1, confidence_pair));
               LOG(INFO) << "Confidence between label " << label1
-                  << " and label " << label2 << " is 1";
+                        << " and label " << label2 << " is 1";
             }
           }
         }
@@ -140,46 +156,37 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
     if (!candidate_label_exists) {
       Label fresh_label = getFreshLabel();
       std::map<Segment*, size_t> map;
-      map.insert(std::pair<Segment*, size_t>(segment, segment->points_C_.size()));
-      candidates->insert(std::pair<Label, std::map<Segment*, size_t> >
-                                                            (fresh_label, map));
+      map.insert(
+          std::pair<Segment*, size_t>(segment, segment->points_C_.size()));
+      candidates->insert(
+          std::pair<Label, std::map<Segment*, size_t>>(fresh_label, map));
     }
-
-//    // Print candidates
-//    ROS_INFO("Candidates now: ");
-//    for(auto it = candidates->cbegin(); it != candidates->cend(); ++it) {
-//        std::cout << "Label: " << it->first << "\n";
-//        for(auto itt = it->second.cbegin(); itt != it->second.cend(); ++itt) {
-//            std::cout <<"Segment: " <<  itt->first << ", count: "
-//                      << itt->second << "\n";
-//        }
-//    }
   }
 
   // Fetch the next segment label pair which has overall
   // the highest voxel count.
   inline bool getNextSegmentLabelPair(
-      std::map<voxblox::Label, std::map<voxblox::Segment*, size_t> >* candidates,
+      std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
       std::set<Segment*>* labelled_segments,
       std::pair<Segment*, Label>* segment_label_pair) {
     Label max_label;
-    size_t max_count = 0;
+    size_t max_count = 0u;
     Segment* max_segment;
 
-    for (auto label_it = candidates->begin();
-        label_it != candidates->end(); ++label_it) {
+    for (auto label_it = candidates->begin(); label_it != candidates->end();
+         ++label_it) {
       for (auto segment_it = label_it->second.begin();
-          segment_it != label_it->second.end(); segment_it++) {
-        if (segment_it->second > max_count
-            && labelled_segments->find(segment_it->first)
-                == labelled_segments->end()) {
+           segment_it != label_it->second.end(); segment_it++) {
+        if (segment_it->second > max_count &&
+            labelled_segments->find(segment_it->first) ==
+                labelled_segments->end()) {
           max_segment = segment_it->first;
           max_count = segment_it->second;
           max_label = label_it->first;
         }
       }
     }
-    if (max_count == 0) {
+    if (max_count == 0u) {
       return false;
     }
     segment_label_pair->first = max_segment;
@@ -190,12 +197,13 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
 
   inline void decideLabelPointClouds(
       std::vector<voxblox::Segment*>* segments_to_integrate,
-      std::map<voxblox::Label, std::map<voxblox::Segment*, size_t> >* candidates) {
+      std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>*
+          candidates) {
     std::set<Segment*> labelled_segments;
-    std::pair< Segment*, Label> pair;
+    std::pair<Segment*, Label> pair;
 
     while (getNextSegmentLabelPair(candidates, &labelled_segments, &pair)) {
-      for (size_t i = 0; i < pair.first->points_C_.size(); ++i) {
+      for (size_t i = 0u; i < pair.first->points_C_.size(); ++i) {
         pair.first->labels_.push_back(pair.second);
       }
       labelled_segments.insert(pair.first);
@@ -204,10 +212,10 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
 
     // For every segment that didn't get a label, assign it an unseen label.
     for (auto segment_it = segments_to_integrate->begin();
-        segment_it != segments_to_integrate->end(); ++segment_it) {
+         segment_it != segments_to_integrate->end(); ++segment_it) {
       if (labelled_segments.find(*segment_it) == labelled_segments.end()) {
         Label fresh = getFreshLabel();
-        for (size_t i = 0; i <(*segment_it)->points_C_.size(); ++i) {
+        for (size_t i = 0; i < (*segment_it)->points_C_.size(); ++i) {
           (*segment_it)->labels_.push_back(fresh);
         }
         labelled_segments.insert(*segment_it);
@@ -215,41 +223,172 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
     }
   }
 
-  // Increase or decrease the voxel count for a label.
-  // TODO(grinvalm): when count for a label goes to 0
-  // remove label form label_count.
-  inline void changeLabelCount(const Label label, int count) {
-    auto label_count = label_count_.find(label);
-    if (label_count != label_count_.end()) {
-      label_count->second = label_count->second + count;
-    } else {
-      if (label != 0u) {
-        label_count_.insert(std::make_pair(label, count));
+
+//  // Increase or decrease the voxel count for a label.
+//  // TODO(grinvalm): when count for a label goes to 0
+//  // remove label form label_count.
+//  inline void changeLabelCount(const Label label, int count,
+//                               std::lock_guard<std::mutex> lock) {
+//    auto label_count = labels_count_map_.find(label);
+//    if (label_count != labels_count_map_.end()) {
+//      label_count->second = label_count->second + count;
+//    } else {
+//      if (label != 0u) {
+//        labels_count_map_.insert(std::make_pair(label, count));
+//      }
+//    }
+//  }
+
+  // Will return a pointer to a voxel located at global_voxel_idx in the label
+  // layer. Thread safe.
+  // Takes in the last_block_idx and last_block to prevent unneeded map lookups.
+  // If the block this voxel would be in has not been allocated, a voxel in
+  // temp_voxel_storage is allocated and returned instead.
+  // This can be merged into the layer later by calling
+  // updateLayerWithStoredVoxels(temp_voxel_storage)
+  inline LabelVoxel* findOrTempAllocateLabelVoxelPtr(
+      const VoxelIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
+      BlockIndex* last_block_idx,
+      LabelVoxelMap* temp_label_voxel_storage) const {
+    DCHECK(temp_label_voxel_storage != nullptr);
+    DCHECK(last_block != nullptr);
+    DCHECK(last_block_idx != nullptr);
+
+    const BlockIndex block_idx = getBlockIndexFromGlobalVoxelIndex(
+        global_voxel_idx, voxels_per_side_inv_);
+
+    if (block_idx != *last_block_idx) {
+      *last_block = label_layer_->getBlockPtrByIndex(block_idx);
+      *last_block_idx = block_idx;
+      if (*last_block != nullptr) {
+        (*last_block)->updated() = true;
       }
+    }
+
+    // If no block at this location currently exists, we allocate a temporary
+    // voxel that will be merged into the map later
+    if (*last_block == nullptr) {
+      return &((*temp_label_voxel_storage)[global_voxel_idx]);
+    } else {
+      const VoxelIndex local_voxel_idx =
+          getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
+
+      return &((*last_block)->getVoxelByVoxelIndex(local_voxel_idx));
     }
   }
 
-  inline void updateLabelVoxel(const Label& label,
-                               LabelVoxel* label_voxel) {
-    updateLabelVoxel(label, 1, label_voxel);
+  // NOT thread safe
+  inline void updateLayerWithStoredLabelVoxels(
+      const LabelVoxelMap& temp_label_voxel_storage) {
+    BlockIndex last_block_idx;
+    Block<LabelVoxel>::Ptr block = nullptr;
+
+    for (const std::pair<const VoxelIndex, LabelVoxel>& temp_voxel :
+         temp_label_voxel_storage) {
+      const BlockIndex block_idx = getBlockIndexFromGlobalVoxelIndex(
+          temp_voxel.first, voxels_per_side_inv_);
+      const VoxelIndex local_voxel_idx =
+          getLocalFromGlobalVoxelIndex(temp_voxel.first, voxels_per_side_);
+
+      if ((block_idx != last_block_idx) || (block == nullptr)) {
+        block = label_layer_->allocateBlockPtrByIndex(block_idx);
+        block->updated() = true;
+      }
+
+      LabelVoxel& base_voxel = block->getVoxelByVoxelIndex(local_voxel_idx);
+
+      if (base_voxel.label == temp_voxel.second.label) {
+        // TODO(grinvalm) or confidence just 1? what are confidences
+        // of temp voxel? always 1?
+        base_voxel.label_confidence =
+            base_voxel.label_confidence + temp_voxel.second.label_confidence;
+        if (label_tsdf_config_.cap_confidence) {
+          if (base_voxel.label_confidence >
+              label_tsdf_config_.confidence_cap_value) {
+            base_voxel.label_confidence =
+                label_tsdf_config_.confidence_cap_value;
+          }
+        }
+      } else {
+        if (base_voxel.label_confidence == 0u) {
+          // TODO(grinvalm): find a way to do bookkeping of the
+          // voxel counts in a multithreaded scenario
+          // without blocking the parallelism with mutexes.
+//          changeLabelCount(temp_voxel.second.label, 1);
+//          changeLabelCount(base_voxel.label, -1);
+
+          base_voxel.label = temp_voxel.second.label;
+          base_voxel.label_confidence = temp_voxel.second.label_confidence;
+          if (*highest_label_ < temp_voxel.second.label) {
+            *highest_label_ = temp_voxel.second.label;
+          }
+        } else {
+          base_voxel.label_confidence =
+              base_voxel.label_confidence - temp_voxel.second.label_confidence;
+        }
+      }
+      // TODO(grinvalm) update base_voxel with temp_voxel, how? how many?
+
+      //      const float new_weight = base_voxel.weight +
+      //      temp_voxel.second.weight;
+      //
+      //      // it is possible that both voxels have weights very close to
+      //      zero, due to
+      //      // the limited precision of floating points dividing by this small
+      //      value
+      //      // can
+      //      // cause nans
+      //      if (new_weight < kFloatEpsilon) {
+      //        continue;
+      //      }
+      //
+      //      // color blending is expensive only do it close to the surface
+      //      if (std::abs(temp_voxel.second.distance) <
+      //          config_.default_truncation_distance) {
+      //        base_voxel.color = Color::blendTwoColors(
+      //            base_voxel.color, base_voxel.weight,
+      //            temp_voxel.second.color,
+      //            temp_voxel.second.weight);
+      //      }
+      //
+      //      base_voxel.distance =
+      //          (base_voxel.distance * base_voxel.weight +
+      //           temp_voxel.second.distance * temp_voxel.second.weight) /
+      //          new_weight;
+      //
+      //      base_voxel.weight = std::min(config_.max_weight, new_weight);
+    }
   }
 
-  inline void updateLabelVoxel(const Label& label,
-                               const float confidence,
+  inline void updateLabelVoxel(const Point& point_G, const Label& label,
                                LabelVoxel* label_voxel) {
+    updateLabelVoxel(point_G, label, 1u, label_voxel);
+  }
+
+  // Updates label_voxel. Thread safe.
+  inline void updateLabelVoxel(const Point& point_G, const Label& label,
+                               const LabelConfidence& confidence,
+                               LabelVoxel* label_voxel) {
+    // Lookup the mutex that is responsible for this voxel and lock it
+    std::lock_guard<std::mutex> lock(
+        mutexes_.get(getGridIndexFromPoint(point_G, voxel_size_inv_)));
+
     CHECK_NOTNULL(label_voxel);
 
     if (label_voxel->label == label) {
-      label_voxel->label_confidence = label_voxel->label_confidence + confidence;
-      if (cap_confidence_) {
-        if (label_voxel->label_confidence > confidence_cap_value_) {
-          label_voxel->label_confidence = confidence_cap_value_;
+      label_voxel->label_confidence =
+          label_voxel->label_confidence + confidence;
+      if (label_tsdf_config_.cap_confidence) {
+        if (label_voxel->label_confidence >
+            label_tsdf_config_.confidence_cap_value) {
+          label_voxel->label_confidence =
+              label_tsdf_config_.confidence_cap_value;
         }
       }
     } else {
-      if (label_voxel->label_confidence <= 0.0f) {
-        changeLabelCount(label, 1);
-        changeLabelCount(label_voxel->label, -1);
+      if (label_voxel->label_confidence == 0u) {
+//        changeLabelCount(label, 1, lock);
+//        changeLabelCount(label_voxel->label, -1, lock);
 
         label_voxel->label = label;
         label_voxel->label_confidence = confidence;
@@ -257,45 +396,15 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
           *highest_label_ = label;
         }
       } else {
-        label_voxel->label_confidence = label_voxel->label_confidence - confidence;
+        label_voxel->label_confidence =
+            label_voxel->label_confidence - confidence;
       }
     }
   }
 
-  inline void bundleRays(
-      const Transformation& T_G_C, const Pointcloud& points_C,
-      BlockHashMapType<std::vector<size_t>>::type* voxel_map,
-      BlockHashMapType<std::vector<size_t>>::type* clear_map) {
-    for (size_t pt_idx = 0; pt_idx < points_C.size(); ++pt_idx) {
-      const Point& point_C = points_C[pt_idx];
-      const Point point_G = T_G_C * point_C;
-
-      FloatingPoint ray_distance = (point_C).norm();
-      if (ray_distance < config_.min_ray_length_m) {
-        continue;
-      } else if (config_.allow_clear &&
-                 ray_distance > config_.max_ray_length_m) {
-        VoxelIndex voxel_index =
-            getGridIndexFromPoint(point_G, voxel_size_inv_);
-        (*clear_map)[voxel_index].push_back(pt_idx);
-        continue;
-      }
-
-      // Figure out what the end voxel is here.
-      VoxelIndex voxel_index = getGridIndexFromPoint(point_G, voxel_size_inv_);
-      (*voxel_map)[voxel_index].push_back(pt_idx);
-    }
-
-    LOG(INFO) << "Went from " << points_C.size() << " points to "
-              << voxel_map->size() << " raycasts  and " << clear_map->size()
-              << " clear rays.";
-  }
-
-  void integratePointCloudMerged(const Transformation& T_G_C,
-                                 const Pointcloud& points_C,
-                                 const Colors& colors,
-                                 const Labels& labels,
-                                 bool discard) {
+  void integratePointCloud(const Transformation& T_G_C,
+                           const Pointcloud& points_C, const Colors& colors,
+                           const Labels& labels) {
     DCHECK_EQ(points_C.size(), colors.size());
 
     timing::Timer integrate_timer("integrate");
@@ -304,207 +413,173 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
 
     // Pre-compute a list of unique voxels to end on.
     // Create a hashmap: VOXEL INDEX -> index in original cloud.
-    BlockHashMapType<std::vector<size_t>>::type voxel_map;
+    AnyIndexHashMapType<AlignedVector<size_t>>::type voxel_map;
     // This is a hash map (same as above) to all the indices that need to be
     // cleared.
-    BlockHashMapType<std::vector<size_t>>::type clear_map;
+    AnyIndexHashMapType<AlignedVector<size_t>>::type clear_map;
 
-    bundleRays(T_G_C, points_C, &voxel_map, &clear_map);
+    ThreadSafeIndex index_getter(points_C.size(), config_.integrator_threads);
 
-    const Point voxel_center_offset(0.5, 0.5, 0.5);
+    bundleRays(T_G_C, points_C, colors, &index_getter, &voxel_map, &clear_map);
 
-    FloatingPoint truncation_distance = config_.default_truncation_distance;
-    for (const BlockHashMapType<std::vector<size_t>>::type::value_type& kv :
-         voxel_map) {
-      if (kv.second.empty()) {
-        continue;
-      }
-      // Key actually doesn't matter at all.
-      Point mean_point_C = Point::Zero();
-      Color mean_color;
-
-      Label mean_label;
-      float label_confidence;
-
-      float total_weight = 0.0;
-
-      for (size_t pt_idx : kv.second) {
-        const Point& point_C = points_C[pt_idx];
-        const Color& color = colors[pt_idx];
-
-        const Label& label = labels[pt_idx];
-        if (label == 0u) {
-          LOG(ERROR) << "Integrating a 0 label";
-        }
-
-        float point_weight = getVoxelWeight(
-            point_C, T_G_C * point_C, origin,
-            (kv.first.cast<FloatingPoint>() + voxel_center_offset) *
-                voxel_size_);
-        mean_point_C = (mean_point_C * total_weight + point_C * point_weight) /
-                       (total_weight + point_weight);
-        mean_color = Color::blendTwoColors(mean_color, total_weight, color,
-                                           point_weight);
-        // Assuming for a segment pointcloud all labels are same so for
-        // the voxel label it is enough to take the label of the last point
-        mean_label = label;
-        label_confidence++;
-
-        total_weight += point_weight;
-      }
-
-      const Point point_G = T_G_C * mean_point_C;
-      const Ray unit_ray = (point_G - origin).normalized();
-      const Point ray_end = point_G + unit_ray * truncation_distance;
-      const Point ray_start = config_.voxel_carving_enabled
-                                  ? origin
-                                  : (point_G - unit_ray * truncation_distance);
-
-      const Point start_scaled = ray_start * voxel_size_inv_;
-      const Point end_scaled = ray_end * voxel_size_inv_;
-
-      IndexVector global_voxel_index;
-      timing::Timer cast_ray_timer("integrate/cast_ray");
-      castRay(start_scaled, end_scaled, &global_voxel_index);
-      cast_ray_timer.Stop();
-
-      timing::Timer update_voxels_timer("integrate/update_voxels");
-
-      BlockIndex last_block_idx = BlockIndex::Zero();
-      Block<TsdfVoxel>::Ptr block;
-      Block<LabelVoxel>::Ptr label_block;
-
-      for (const AnyIndex& global_voxel_idx : global_voxel_index) {
-        if (discard) {
-          // Check if this one is already the the block hash map for this
-          // insertion. Skip this to avoid grazing.
-          if (global_voxel_idx != kv.first &&
-              voxel_map.find(global_voxel_idx) != voxel_map.end()) {
-            continue;
-          }
-        }
-
-        BlockIndex block_idx = getGridIndexFromPoint(
-            global_voxel_idx.cast<FloatingPoint>(), voxels_per_side_inv_);
-
-        VoxelIndex local_voxel_idx =
-            getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
-
-        if (!block || block_idx != last_block_idx) {
-           if (!block != !label_block) {
-             LOG(FATAL) << "Block allocation differs between the two layers.";
-           }
-           block = layer_->allocateBlockPtrByIndex(block_idx);
-           label_block = label_layer_->allocateBlockPtrByIndex(block_idx);
-
-           block->updated() = true;
-           label_block->updated() = true;
-
-           last_block_idx = block_idx;
-         }
-
-        const Point voxel_center_G =
-            block->computeCoordinatesFromVoxelIndex(local_voxel_idx);
-        TsdfVoxel& tsdf_voxel = block->getVoxelByVoxelIndex(local_voxel_idx);
-        LabelVoxel& label_voxel =
-                   label_block->getVoxelByVoxelIndex(local_voxel_idx);
-
-        updateTsdfVoxel(origin, mean_point_C, point_G, voxel_center_G,
-                        mean_color, truncation_distance, total_weight,
-                        &tsdf_voxel);
-        // TODO(grinvalm): change the confidnce logic
-        // to exploit the label_confidence count here
-//        updateLabelVoxel(mean_label, label_confidence, &label_voxel);
-        updateLabelVoxel(mean_label, 1, &label_voxel);
-      }
-      update_voxels_timer.Stop();
-    }
-
+    integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
+                  false, voxel_map, clear_map);
     timing::Timer clear_timer("integrate/clear");
-    BlockIndex last_block_idx = BlockIndex::Zero();
-    Block<TsdfVoxel>::Ptr block;
-    Block<LabelVoxel>::Ptr label_block;
-    for (const BlockHashMapType<std::vector<size_t>>::type::value_type& kv :
-         clear_map) {
-      if (kv.second.empty()) {
-        continue;
-      }
-      // Key actually doesn't matter at all.
-      Point point_C = Point::Zero();
-      Color color;
-      Label label;
-      float weight = 0.0;
 
-      for (size_t pt_idx : kv.second) {
-        // Just take first.
-        point_C = points_C[pt_idx];
-        color = colors[pt_idx];
-        label = labels[pt_idx];
-
-        weight = getVoxelWeight(
-            point_C, T_G_C * point_C, origin,
-            (kv.first.cast<FloatingPoint>() + voxel_center_offset) *
-                voxel_size_);
-        break;
-      }
-
-      const Point point_G = T_G_C * point_C;
-      const Ray unit_ray = (point_G - origin).normalized();
-      const Point ray_end = origin + unit_ray * config_.max_ray_length_m;
-      const Point ray_start = origin;
-
-      const Point start_scaled = ray_start * voxel_size_inv_;
-      const Point end_scaled = ray_end * voxel_size_inv_;
-
-      IndexVector global_voxel_index;
-      timing::Timer cast_ray_timer("integrate/cast_ray");
-      castRay(start_scaled, end_scaled, &global_voxel_index);
-      cast_ray_timer.Stop();
-
-      for (const AnyIndex& global_voxel_idx : global_voxel_index) {
-        if (discard) {
-          // Check if this one is already the the block hash map for this
-          // insertion. Skip this to avoid grazing.
-          if (voxel_map.find(global_voxel_idx) != voxel_map.end()) {
-            continue;
-          }
-        }
-
-        BlockIndex block_idx = getGridIndexFromPoint(
-            global_voxel_idx.cast<FloatingPoint>(), voxels_per_side_inv_);
-
-        VoxelIndex local_voxel_idx =
-            getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
-
-
-        if (!block || block_idx != last_block_idx) {
-          if (!block != !label_block) {
-            LOG(FATAL) << "Block allocation differs between the two layers.";
-          }
-          block = layer_->allocateBlockPtrByIndex(block_idx);
-          label_block = label_layer_->allocateBlockPtrByIndex(block_idx);
-
-          block->updated() = true;
-          label_block->updated() = true;
-
-          last_block_idx = block_idx;
-        }
-
-        const Point voxel_center_G =
-            block->computeCoordinatesFromVoxelIndex(local_voxel_idx);
-        TsdfVoxel& tsdf_voxel = block->getVoxelByVoxelIndex(local_voxel_idx);
-        LabelVoxel& label_voxel =
-            label_block->getVoxelByVoxelIndex(local_voxel_idx);
-
-        updateTsdfVoxel(origin, point_C, point_G, voxel_center_G, color,
-                        truncation_distance, weight, &tsdf_voxel);
-        updateLabelVoxel(label, &label_voxel);
-      }
-    }
+    integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
+                  true, voxel_map, clear_map);
 
     clear_timer.Stop();
 
     integrate_timer.Stop();
+
+  }
+
+  void integrateVoxel(
+      const Transformation& T_G_C, const Pointcloud& points_C,
+      const Colors& colors, const Labels& labels, bool enable_anti_grazing,
+      bool clearing_ray, const std::pair<AnyIndex, AlignedVector<size_t>>& kv,
+      const AnyIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
+      VoxelMap* temp_voxel_storage, LabelVoxelMap* temp_label_voxel_storage) {
+    DCHECK(temp_voxel_storage != nullptr);
+    DCHECK(temp_label_voxel_storage != nullptr);
+
+    if (kv.second.empty()) {
+      return;
+    }
+
+    const Point& origin = T_G_C.getPosition();
+    Color merged_color;
+    Point merged_point_C = Point::Zero();
+    FloatingPoint merged_weight = 0.0;
+    Label merged_label;
+
+    for (const size_t pt_idx : kv.second) {
+      const Point& point_C = points_C[pt_idx];
+      const Color& color = colors[pt_idx];
+      const Label& label = labels[pt_idx];
+
+      const float point_weight = getVoxelWeight(point_C);
+      merged_point_C =
+          (merged_point_C * merged_weight + point_C * point_weight) /
+          (merged_weight + point_weight);
+      merged_color = Color::blendTwoColors(merged_color, merged_weight, color,
+                                           point_weight);
+      merged_weight += point_weight;
+      // Assuming all the points of a segment pointcloud
+      // are assigned the same label.
+      merged_label = label;
+
+      // only take first point when clearing
+      if (clearing_ray) {
+        break;
+      }
+    }
+
+    const Point merged_point_G = T_G_C * merged_point_C;
+
+    RayCaster ray_caster(origin, merged_point_G, clearing_ray,
+                         config_.voxel_carving_enabled,
+                         config_.max_ray_length_m, voxel_size_inv_,
+                         config_.default_truncation_distance);
+
+    VoxelIndex global_voxel_idx;
+    while (ray_caster.nextRayIndex(&global_voxel_idx)) {
+      if (enable_anti_grazing) {
+        // Check if this one is already the the block hash map for this
+        // insertion. Skip this to avoid grazing.
+        if ((clearing_ray || global_voxel_idx != kv.first) &&
+            voxel_map.find(global_voxel_idx) != voxel_map.end()) {
+          continue;
+        }
+      }
+      BlockIndex block_idx;
+
+      Block<TsdfVoxel>::Ptr tsdf_block = nullptr;
+      TsdfVoxel* tsdf_voxel = findOrTempAllocateVoxelPtr(
+          global_voxel_idx, &tsdf_block, &block_idx, temp_voxel_storage);
+      const Point voxel_center_G =
+          getCenterPointFromGridIndex(global_voxel_idx, voxel_size_);
+      updateTsdfVoxel(origin, merged_point_G, voxel_center_G, merged_color,
+                      merged_weight, tsdf_voxel);
+
+      Block<LabelVoxel>::Ptr label_block = nullptr;
+      LabelVoxel* label_voxel = findOrTempAllocateLabelVoxelPtr(
+          global_voxel_idx, &label_block, &block_idx, temp_label_voxel_storage);
+      updateLabelVoxel(merged_point_G, merged_label, 1u, label_voxel);
+    }
+  }
+
+  void integrateVoxels(
+      const Transformation& T_G_C, const Pointcloud& points_C,
+      const Colors& colors, const Labels& labels, bool enable_anti_grazing,
+      bool clearing_ray,
+      const AnyIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
+      const AnyIndexHashMapType<AlignedVector<size_t>>::type& clear_map,
+      size_t thread_idx, VoxelMap* temp_voxel_storage,
+      LabelVoxelMap* temp_label_voxel_storage) {
+    DCHECK(temp_voxel_storage != nullptr);
+
+    AnyIndexHashMapType<AlignedVector<size_t>>::type::const_iterator it;
+    size_t map_size;
+    if (clearing_ray) {
+      it = clear_map.begin();
+      map_size = clear_map.size();
+    } else {
+      it = voxel_map.begin();
+      map_size = voxel_map.size();
+    }
+    for (size_t i = 0; i < map_size; ++i) {
+      if (((i + thread_idx + 1) % config_.integrator_threads) == 0) {
+        integrateVoxel(T_G_C, points_C, colors, labels, enable_anti_grazing,
+                       clearing_ray, *it, voxel_map, temp_voxel_storage,
+                       temp_label_voxel_storage);
+      }
+      ++it;
+    }
+  }
+
+  void integrateRays(
+      const Transformation& T_G_C, const Pointcloud& points_C,
+      const Colors& colors, const Labels& labels, bool enable_anti_grazing,
+      bool clearing_ray,
+      const AnyIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
+      const AnyIndexHashMapType<AlignedVector<size_t>>::type& clear_map) {
+    const Point& origin = T_G_C.getPosition();
+
+    AlignedVector<VoxelMap> temp_voxel_storage(config_.integrator_threads);
+    AlignedVector<LabelVoxelMap> temp_label_voxel_storage(
+        config_.integrator_threads);
+
+    // if only 1 thread just do function call, otherwise spawn threads
+    if (config_.integrator_threads == 1) {
+      integrateVoxels(T_G_C, points_C, colors, labels, enable_anti_grazing,
+                      clearing_ray, voxel_map, clear_map, 0,
+                      &(temp_voxel_storage[0]), &(temp_label_voxel_storage[0]));
+    } else {
+      AlignedVector<std::thread> integration_threads;
+      for (size_t i = 0; i < config_.integrator_threads; ++i) {
+        integration_threads.emplace_back(
+            &LabelTsdfIntegrator::integrateVoxels, this, T_G_C, points_C,
+            colors, labels, enable_anti_grazing, clearing_ray, voxel_map,
+            clear_map, i, &(temp_voxel_storage[i]),
+            &(temp_label_voxel_storage[i]));
+      }
+
+      for (std::thread& thread : integration_threads) {
+        thread.join();
+      }
+
+    }
+
+    timing::Timer insertion_timer("inserting_missed_voxels");
+    for (const VoxelMap& temp_voxels : temp_voxel_storage) {
+      updateLayerWithStoredVoxels(temp_voxels);
+    }
+    for (const LabelVoxelMap& temp_label_voxels : temp_label_voxel_storage) {
+      updateLayerWithStoredLabelVoxels(temp_label_voxels);
+    }
+    insertion_timer.Stop();
   }
 
   void swapLabels(Label old_label, Label new_label) {
@@ -513,14 +588,14 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
 
     for (const BlockIndex& block_index : all_label_blocks) {
       Block<LabelVoxel>::Ptr block =
-                      label_layer_->getBlockPtrByIndex(block_index);
+          label_layer_->getBlockPtrByIndex(block_index);
       size_t vps = block->voxels_per_side();
       for (int i = 0; i < vps * vps * vps; i++) {
         LabelVoxel& voxel = block->getVoxelByLinearIndex(i);
         if (voxel.label == old_label) {
           voxel.label = new_label;
-          changeLabelCount(new_label, 1);
-          changeLabelCount(old_label, -1);
+//          changeLabelCount(new_label, 1);
+//          changeLabelCount(old_label, -1);
 
           block->updated() = true;
         }
@@ -529,13 +604,14 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
   }
 
   void mergeLabels() {
-    if (pairwise_confidence_merging_) {
-      for (auto& confidence_map: pairwise_confidence_) {
-        for (auto confidence_pair: confidence_map.second) {
-          if (confidence_pair.second > pairwise_confidence_threshold_) {
+    if (label_tsdf_config_.enable_pairwise_confidence_merging) {
+      for (auto& confidence_map : pairwise_confidence_) {
+        for (auto confidence_pair : confidence_map.second) {
+          if (confidence_pair.second >
+              label_tsdf_config_.pairwise_confidence_threshold) {
             swapLabels(confidence_map.first, confidence_pair.first);
-            LOG(ERROR) << "Merging labels " << confidence_map.first
-                       << " and " << confidence_pair.first;
+            LOG(ERROR) << "Merging labels " << confidence_map.first << " and "
+                       << confidence_pair.first;
             confidence_map.second.erase(confidence_pair.first);
           }
         }
@@ -552,7 +628,7 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
   // for which the voxel count is greater than 0.
   std::vector<Label> getLabelsList() {
     std::vector<Label> labels;
-    for (auto& label_count_pair: label_count_) {
+    for (auto& label_count_pair : labels_count_map_) {
       if (label_count_pair.second > 0) {
         labels.push_back(label_count_pair.first);
       }
@@ -561,20 +637,25 @@ class LabelTsdfIntegrator : public TsdfIntegrator {
   }
 
  protected:
+  LabelTsdfConfig label_tsdf_config_;
   Layer<LabelVoxel>* label_layer_;
 
   Label* highest_label_;
-  std::map<Label, int> label_count_;
+  std::map<Label, int> labels_count_map_;
 
   // Pairwise confidence merging settings.
-  std::map<Label, std::map<Label, int> > pairwise_confidence_;
-  bool pairwise_confidence_merging_;
-  float pairwise_confidence_ratio_threshold_;
-  int pairwise_confidence_threshold_;
+  std::map<Label, std::map<Label, int>> pairwise_confidence_;
 
-  // Cap confidence settings.
-  bool cap_confidence_;
-  int confidence_cap_value_;
+  // We need to prevent simultaneous access to the voxels in the map. We could
+  // put a single mutex on the map or on the blocks, but as voxel updating is
+  // the most expensive operation in integration and most voxels are close
+  // together, both strategies would bottleneck the system. We could make a
+  // mutex per voxel, but this is too ram heavy as one mutex = 40 bytes.
+  // Because of this we create an array that is indexed by the first n bits of
+  // the voxels hash. Assuming a uniform hash distribution, this means the
+  // chance of two threads needing the same lock for unrelated voxels is
+  // (num_threads / (2^n)). For 8 threads and 12 bits this gives 0.2%.
+  ApproxHashArray<12, std::mutex> mutexes_;
 };
 
 }  // namespace voxblox
