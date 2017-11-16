@@ -131,7 +131,10 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
         Color color;
         if (visualize_confidence) {
-          color = rainbowColorMap(voxel.label_confidence / 100);
+          // Scale values to range (0.0, 1.0).
+          constexpr float expected_max_confidence = 100.0f;
+          color =
+              rainbowColorMap(voxel.label_confidence / expected_max_confidence);
         } else {
           color = getColorFromLabel(voxel.label);
         }

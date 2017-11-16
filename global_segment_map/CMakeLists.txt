@@ -6,7 +6,7 @@ catkin_simple(ALL_DEPS_REQUIRED)
 
 find_package(Boost REQUIRED COMPONENTS filesystem)
 
-add_definitions(-std=c++11 -Wno-sign-compare -Wno-unused-value)
+add_definitions(-std=c++11)
 
 cs_add_library(${PROJECT_NAME}
   src/label_block_serialization.cc

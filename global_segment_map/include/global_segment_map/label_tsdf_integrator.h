@@ -29,7 +29,6 @@ class Segment {
 class LabelTsdfIntegrator : public MergedTsdfIntegrator {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  //  typedef std::map<Label, std::map<Label, int>> LabelVoxelMap;
   typedef AnyIndexHashMapType<LabelVoxel>::type LabelVoxelMap;
 
   struct LabelTsdfConfig {
@@ -57,12 +56,87 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     CHECK(label_layer_);
   }
 
+  inline void checkForSegmentLabelMergeCandidate(
+      Label label, int label_points_count, int segment_points_count,
+      std::unordered_set<Label>* merge_candidate_labels) {
+    // All segment labels that overlap with more than a certain
+    // percentage of the segment points are potential merge candidates.
+    float label_segment_overlap_ratio =
+        static_cast<float>(label_points_count) /
+        static_cast<float>(segment_points_count);
+    if (label_segment_overlap_ratio >
+        label_tsdf_config_.pairwise_confidence_ratio_threshold) {
+      merge_candidate_labels->insert(label);
+    }
+  }
+
+  inline void increaseLabelCountForSegment(
+      Segment* segment, Label label, int segment_points_count,
+      std::map<Label, std::map<Segment*, size_t>>* candidates,
+      std::unordered_set<Label>* merge_candidate_labels) {
+    auto label_it = candidates->find(label);
+    if (label_it != candidates->end()) {
+      auto segment_it = label_it->second.find(segment);
+      if (segment_it != label_it->second.end()) {
+        ++segment_it->second;
+
+        if (label_tsdf_config_.enable_pairwise_confidence_merging) {
+          checkForSegmentLabelMergeCandidate(label, segment_it->second,
+                                             segment_points_count,
+                                             merge_candidate_labels);
+        }
+      } else {
+        label_it->second.emplace(segment, 1u);
+      }
+    } else {
+      std::map<Segment*, size_t> segment_points_count;
+      segment_points_count.emplace(segment, 1u);
+      candidates->emplace(label, segment_points_count);
+    }
+  }
+
+  inline void increasePairwiseConfidenceCount(
+      std::vector<Label> merge_candidates) {
+    // For every couple of labels from the merge candidates
+    // set or increase their pairwise confidence.
+    for (size_t i = 0u; i < merge_candidates.size(); ++i) {
+      for (size_t j = i + 1; j < merge_candidates.size(); ++j) {
+        Label label1 = merge_candidates[i];
+        Label label2 = merge_candidates[j];
+
+        if (label1 != label2) {
+          // Pairs consist of (label1, label2) where label1 < label2.
+          if (label1 > label2) {
+            Label tmp = label2;
+            label2 = label1;
+            label1 = tmp;
+          }
+          auto pairs = pairwise_confidence_.find(label1);
+          if (pairs != pairwise_confidence_.end()) {
+            auto confidence = pairs->second.find(label2);
+            if (confidence != pairs->second.end()) {
+              ++confidence->second;
+            } else {
+              pairs->second.emplace(label2, 1);
+            }
+          } else {
+            std::map<Label, int> confidence_pair;
+            confidence_pair.emplace(label2, 1);
+            pairwise_confidence_.emplace(label1, confidence_pair);
+          }
+        }
+      }
+    }
+  }
+
   inline void computeSegmentLabelCandidates(
       Segment* segment,
       std::map<Label, std::map<Segment*, size_t>>* candidates) {
+    DCHECK(segment != nullptr);
+    DCHECK(candidates != nullptr);
     // Flag to check whether there exists at least one label candidate.
     bool candidate_label_exists = false;
-    int segment_points_count = segment->points_C_.size();
+    const int segment_points_count = segment->points_C_.size();
     std::unordered_set<Label> merge_candidate_labels;
 
     for (const Point& point_C : segment->points_C_) {
@@ -73,37 +147,14 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
           label_layer_->getBlockPtrByCoordinates(point_G);
 
       if (block_ptr != nullptr) {
-        candidate_label_exists = true;
         const LabelVoxel& voxel = block_ptr->getVoxelByCoordinates(point_G);
         // Do not consider allocated but unobserved voxels
         // which have label == 0.
         if (voxel.label != 0u) {
-          auto label_it = candidates->find(voxel.label);
-          if (label_it != candidates->end()) {
-            auto segment_it = label_it->second.find(segment);
-            if (segment_it != label_it->second.end()) {
-              ++segment_it->second;
-
-              if (label_tsdf_config_.enable_pairwise_confidence_merging) {
-                // Add all segment labels that overlap with more than
-                // a threshold ratio to the set of potential merge candidates.
-                if ((float)segment_it->second / (float)segment_points_count >
-                    label_tsdf_config_.pairwise_confidence_ratio_threshold) {
-                  if (merge_candidate_labels.find(voxel.label) ==
-                      merge_candidate_labels.end()) {
-                    merge_candidate_labels.insert(voxel.label);
-                  }
-                }
-              }
-            } else {
-              label_it->second.insert(std::make_pair(segment, 1u));
-            }
-          } else {
-            std::map<Segment*, size_t> segment_points_count;
-            segment_points_count.insert(std::make_pair(segment, 1u));
-            candidates->insert(
-                std::make_pair(voxel.label, segment_points_count));
-          }
+          candidate_label_exists = true;
+          increaseLabelCountForSegment(segment, voxel.label,
+                                       segment_points_count, candidates,
+                                       &merge_candidate_labels);
         }
       }
     }
@@ -113,46 +164,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       std::copy(merge_candidate_labels.begin(), merge_candidate_labels.end(),
                 std::back_inserter(merge_candidates));
 
-      // For every couple of labels from the merge candidates
-      // set or increase their pairwise confidence.
-      for (size_t i = 0; i < merge_candidates.size(); ++i) {
-        for (size_t j = i + 1; j < merge_candidates.size(); ++j) {
-          Label label1 = merge_candidates[i];
-          Label label2 = merge_candidates[j];
-
-          if (label1 != label2) {
-            if (label1 > label2) {
-              Label tmp = label2;
-              label2 = label1;
-              label1 = tmp;
-            }
-            auto pairs = pairwise_confidence_.find(label1);
-            if (pairs != pairwise_confidence_.end()) {
-              auto confidence = pairs->second.find(label2);
-              if (confidence != pairs->second.end()) {
-                ++confidence->second;
-                LOG(INFO) << "Confidence between label " << label1
-                          << " and label " << label2 << " is "
-                          << confidence->second;
-              } else {
-                pairs->second.insert(std::make_pair(label2, 1));
-                LOG(INFO) << "Confidence between label " << label1
-                          << " and label " << label2 << " is 1";
-              }
-            } else {
-              std::map<Label, int> confidence_pair;
-              confidence_pair.insert(std::make_pair(label2, 1));
-              pairwise_confidence_.insert(
-                  std::make_pair(label1, confidence_pair));
-              LOG(INFO) << "Confidence between label " << label1
-                        << " and label " << label2 << " is 1";
-            }
-          }
-        }
-      }
+      increasePairwiseConfidenceCount(merge_candidates);
     }
 
-    // Previously unobserved segment get an unseen label.
+    // Previously unobserved segment gets an unseen label.
     if (!candidate_label_exists) {
       Label fresh_label = getFreshLabel();
       std::map<Segment*, size_t> map;
@@ -215,7 +230,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
          segment_it != segments_to_integrate->end(); ++segment_it) {
       if (labelled_segments.find(*segment_it) == labelled_segments.end()) {
         Label fresh = getFreshLabel();
-        for (size_t i = 0; i < (*segment_it)->points_C_.size(); ++i) {
+        for (size_t i = 0u; i < (*segment_it)->points_C_.size(); ++i) {
           (*segment_it)->labels_.push_back(fresh);
         }
         labelled_segments.insert(*segment_it);
@@ -223,21 +238,24 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
+  // TODO(grinvalm): find a way to do bookkeping of the
+  // voxel counts in a multithreaded scenario
+  // without blocking the parallelism with mutexes.
 
-//  // Increase or decrease the voxel count for a label.
-//  // TODO(grinvalm): when count for a label goes to 0
-//  // remove label form label_count.
-//  inline void changeLabelCount(const Label label, int count,
-//                               std::lock_guard<std::mutex> lock) {
-//    auto label_count = labels_count_map_.find(label);
-//    if (label_count != labels_count_map_.end()) {
-//      label_count->second = label_count->second + count;
-//    } else {
-//      if (label != 0u) {
-//        labels_count_map_.insert(std::make_pair(label, count));
-//      }
-//    }
-//  }
+  //  // Increase or decrease the voxel count for a label.
+  //  // TODO(grinvalm): when count for a label goes to 0
+  //  // remove label from label_count.
+  //  inline void changeLabelCount(const Label label, int count,
+  //                               std::lock_guard<std::mutex> lock) {
+  //    auto label_count = labels_count_map_.find(label);
+  //    if (label_count != labels_count_map_.end()) {
+  //      label_count->second = label_count->second + count;
+  //    } else {
+  //      if (label != 0u) {
+  //        labels_count_map_.insert(std::make_pair(label, count));
+  //      }
+  //    }
+  //  }
 
   // Will return a pointer to a voxel located at global_voxel_idx in the label
   // layer. Thread safe.
@@ -311,11 +329,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         }
       } else {
         if (base_voxel.label_confidence == 0u) {
-          // TODO(grinvalm): find a way to do bookkeping of the
-          // voxel counts in a multithreaded scenario
-          // without blocking the parallelism with mutexes.
-//          changeLabelCount(temp_voxel.second.label, 1);
-//          changeLabelCount(base_voxel.label, -1);
+          //          changeLabelCount(temp_voxel.second.label, 1);
+          //          changeLabelCount(base_voxel.label, -1);
 
           base_voxel.label = temp_voxel.second.label;
           base_voxel.label_confidence = temp_voxel.second.label_confidence;
@@ -387,8 +402,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     } else {
       if (label_voxel->label_confidence == 0u) {
-//        changeLabelCount(label, 1, lock);
-//        changeLabelCount(label_voxel->label, -1, lock);
+        //        changeLabelCount(label, 1, lock);
+        //        changeLabelCount(label_voxel->label, -1, lock);
 
         label_voxel->label = label;
         label_voxel->label_confidence = confidence;
@@ -432,7 +447,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     clear_timer.Stop();
 
     integrate_timer.Stop();
-
   }
 
   void integrateVoxel(
@@ -451,7 +465,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     const Point& origin = T_G_C.getPosition();
     Color merged_color;
     Point merged_point_C = Point::Zero();
-    FloatingPoint merged_weight = 0.0;
+    FloatingPoint merged_weight = 0.0f;
     Label merged_label;
 
     for (const size_t pt_idx : kv.second) {
@@ -486,7 +500,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     VoxelIndex global_voxel_idx;
     while (ray_caster.nextRayIndex(&global_voxel_idx)) {
       if (enable_anti_grazing) {
-        // Check if this one is already the the block hash map for this
+        // Check if this one is already the block hash map for this
         // insertion. Skip this to avoid grazing.
         if ((clearing_ray || global_voxel_idx != kv.first) &&
             voxel_map.find(global_voxel_idx) != voxel_map.end()) {
@@ -569,7 +583,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       for (std::thread& thread : integration_threads) {
         thread.join();
       }
-
     }
 
     timing::Timer insertion_timer("inserting_missed_voxels");
@@ -594,8 +607,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         LabelVoxel& voxel = block->getVoxelByLinearIndex(i);
         if (voxel.label == old_label) {
           voxel.label = new_label;
-//          changeLabelCount(new_label, 1);
-//          changeLabelCount(old_label, -1);
+          //          changeLabelCount(new_label, 1);
+          //          changeLabelCount(old_label, -1);
 
           block->updated() = true;
         }
@@ -606,13 +619,15 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void mergeLabels() {
     if (label_tsdf_config_.enable_pairwise_confidence_merging) {
       for (auto& confidence_map : pairwise_confidence_) {
-        for (auto confidence_pair : confidence_map.second) {
-          if (confidence_pair.second >
+        for (auto confidence_pair_it = confidence_map.second.begin();
+             confidence_pair_it != confidence_map.second.end();
+             ++confidence_pair_it) {
+          if (confidence_pair_it->second >
               label_tsdf_config_.pairwise_confidence_threshold) {
-            swapLabels(confidence_map.first, confidence_pair.first);
+            swapLabels(confidence_map.first, confidence_pair_it->first);
             LOG(ERROR) << "Merging labels " << confidence_map.first << " and "
-                       << confidence_pair.first;
-            confidence_map.second.erase(confidence_pair.first);
+                       << confidence_pair_it->first;
+            confidence_map.second.erase(confidence_pair_it->first);
           }
         }
       }
@@ -620,7 +635,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   }
 
   Label getFreshLabel() {
-    CHECK_LT(*highest_label_, 0xFFFFFFFF);
+    CHECK_LT(*highest_label_, std::numeric_limits<unsigned int>::max());
     return ++(*highest_label_);
   }
 

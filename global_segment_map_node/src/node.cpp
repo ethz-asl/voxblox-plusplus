@@ -16,16 +16,16 @@ int main(int argc, char** argv) {
   voxblox_gsm::Controller controller(&node_handle_private);
 
   ros::Subscriber segment_point_cloud_sub;
-  controller.SubscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
+  controller.subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
   ros::Publisher mesh_publisher;
-  controller.AdvertiseMeshTopic(&mesh_publisher);
+  controller.advertiseMeshTopic(&mesh_publisher);
 
   ros::ServiceServer generate_mesh_srv;
-  controller.AdvertiseGenerateMeshService(&generate_mesh_srv);
+  controller.advertiseGenerateMeshService(&generate_mesh_srv);
 
   ros::ServiceServer extract_segments_srv;
-  controller.AdvertiseExtractSegmentsService(&extract_segments_srv);
+  controller.advertiseExtractSegmentsService(&extract_segments_srv);
 
   ros::spin();
   return 0;

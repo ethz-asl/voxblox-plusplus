@@ -1,5 +1,8 @@
 // Copyright 2017 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
+#include <cmath>
+#include <string>
+
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <modelify/object_toolbox/object_toolbox.h>
@@ -11,9 +14,6 @@
 
 #include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
-
-#include <cmath>
-#include <string>
 
 #include "voxblox_gsm/controller.h"
 
@@ -31,6 +31,7 @@ void visualizeMesh(const voxblox::MeshLayer& mesh_layer) {
   viewer->setBackgroundColor(0, 0, 0);
   viewer->addCoordinateSystem(0.2);
   viewer->initCameraParameters();
+  // TODO(grinvalm): find some general default parameters.
   viewer->setCameraPosition(6.29004, 2.67376, -0.678248, -0.423442, 0.895521,
                             -0.136893);
 
@@ -40,7 +41,8 @@ void visualizeMesh(const voxblox::MeshLayer& mesh_layer) {
   pcl::PointCloud<pcl::Normal>::ConstPtr normals_ptr(&normals);
 
   while (!viewer->wasStopped()) {
-    viewer->spinOnce(100);
+    constexpr int updateIntervalms = 100;
+    viewer->spinOnce(updateIntervalms);
 
     boost::mutex::scoped_lock updatedMeshLock(updateMeshMutex);
 
@@ -52,7 +54,7 @@ void visualizeMesh(const voxblox::MeshLayer& mesh_layer) {
                                   voxblox::Point::Zero());
 
       // Combine everything in the layer into one giant combined mesh.
-      size_t v = 0;
+      size_t v = 0u;
       voxblox::BlockIndexList mesh_indices;
       mesh_layer.getAllAllocatedMeshes(&mesh_indices);
       for (const voxblox::BlockIndex& block_index : mesh_indices) {
@@ -173,7 +175,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
 Controller::~Controller() {}
 
-void Controller::SubscribeSegmentPointCloudTopic(
+void Controller::subscribeSegmentPointCloudTopic(
     ros::Subscriber* segment_point_cloud_sub) {
   CHECK_NOTNULL(segment_point_cloud_sub);
   // TODO(grinvalm): parametrize this.
@@ -189,7 +191,7 @@ void Controller::SubscribeSegmentPointCloudTopic(
       this);
 }
 
-void Controller::AdvertiseMeshTopic(ros::Publisher* mesh_pub) {
+void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
   CHECK_NOTNULL(mesh_pub);
   *mesh_pub = node_handle_private_->advertise<visualization_msgs::MarkerArray>(
       "mesh", 1, true);
@@ -197,14 +199,14 @@ void Controller::AdvertiseMeshTopic(ros::Publisher* mesh_pub) {
   mesh_pub_ = mesh_pub;
 }
 
-void Controller::AdvertiseGenerateMeshService(
+void Controller::advertiseGenerateMeshService(
     ros::ServiceServer* generate_mesh_srv) {
   CHECK_NOTNULL(generate_mesh_srv);
   *generate_mesh_srv = node_handle_private_->advertiseService(
       "generate_mesh", &Controller::generateMeshCallback, this);
 }
 
-void Controller::AdvertiseExtractSegmentsService(
+void Controller::advertiseExtractSegmentsService(
     ros::ServiceServer* extract_segments_srv) {
   CHECK_NOTNULL(extract_segments_srv);
   *extract_segments_srv = node_handle_private_->advertiseService(
@@ -217,9 +219,10 @@ void Controller::segmentPointCloudCallback(
   ROS_INFO("Timestamp of segment: %f.",
            segment_point_cloud_msg->header.stamp.toSec());
 
-  // Using timestamps to check when segment messages
-  // for a frame have arrived all. Segments from the same
-  // frame will all have the same timestamp.
+  // Message timestamps are used to detect when all
+  // segment messages from a certain frame have arrived.
+  // Since segments from the same frame all have the same timestamp,
+  // the start of a new frame is detected when the message timestamp changes.
   // TODO(grinvalm): need additional check for the last frame to be integrated.
   if (segment_point_cloud_msg->header.stamp != last_segment_msg_timestamp_) {
     ROS_INFO("Deciding labels for %lu pointclouds.",
@@ -279,9 +282,8 @@ void Controller::segmentPointCloudCallback(
     start = ros::WallTime::now();
 
     segment_label_candidates.clear();
-    for (auto segment_it = segments_to_integrate_.begin();
-         segment_it != segments_to_integrate_.end(); ++segment_it) {
-      delete *segment_it;
+    for (voxblox::Segment* segment: segments_to_integrate_) {
+      delete segment;
     }
     segments_to_integrate_.clear();
 

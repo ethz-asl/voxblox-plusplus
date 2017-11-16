@@ -24,14 +24,14 @@ class Controller {
 
   ~Controller();
 
-  void SubscribeSegmentPointCloudTopic(
+  void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
 
-  void AdvertiseMeshTopic(ros::Publisher* mesh_pub);
+  void advertiseMeshTopic(ros::Publisher* mesh_pub);
 
-  void AdvertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
+  void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
-  void AdvertiseExtractSegmentsService(
+  void advertiseExtractSegmentsService(
       ros::ServiceServer* extract_segments_srv);
 
   void updateMeshEvent(const ros::TimerEvent& e);
