@@ -236,6 +236,8 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Finished deciding labels in %f seconds.", (end - start).toSec());
 
     bool merge = false;
+    constexpr bool is_freespace_pointcloud = false;
+
     if (merge) {
       ROS_INFO("Merging %lu pointclouds.", segments_to_integrate_.size());
       // Merge pointclouds
@@ -258,7 +260,8 @@ void Controller::segmentPointCloudCallback(
                segments_to_integrate_.size(), points_C_.size());
       start = ros::WallTime::now();
 
-      integrator_->integratePointCloud(T_G_C_, points_C_, colors_, labels_);
+      integrator_->integratePointCloud(T_G_C_, points_C_, colors_, labels_,
+                                       is_freespace_pointcloud);
 
       end = ros::WallTime::now();
       ROS_INFO("Finished integrating merged pointclouds in %f seconds.",
@@ -269,7 +272,8 @@ void Controller::segmentPointCloudCallback(
 
       for (const auto& segment : segments_to_integrate_) {
         integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                         segment->colors_, segment->labels_);
+                                         segment->colors_, segment->labels_,
+                                         is_freespace_pointcloud);
       }
       integrator_->mergeLabels();
 
@@ -282,7 +286,7 @@ void Controller::segmentPointCloudCallback(
     start = ros::WallTime::now();
 
     segment_label_candidates.clear();
-    for (voxblox::Segment* segment: segments_to_integrate_) {
+    for (voxblox::Segment* segment : segments_to_integrate_) {
       delete segment;
     }
     segments_to_integrate_.clear();

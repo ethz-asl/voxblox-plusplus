@@ -30,7 +30,6 @@ class Segment {
 class LabelTsdfIntegrator : public MergedTsdfIntegrator {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  typedef AnyIndexHashMapType<LabelVoxel>::type LabelVoxelMap;
   typedef AnyIndexHashMapType<AlignedVector<size_t>>::type VoxelMap;
 
   struct LabelTsdfConfig {
@@ -259,122 +258,73 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   //    }
   //  }
 
-  // Will return a pointer to a voxel located at global_voxel_idx in the label
+  // Will return a pointer to a voxel located at global_voxel_idx in the tsdf
   // layer. Thread safe.
   // Takes in the last_block_idx and last_block to prevent unneeded map lookups.
-  // If the block this voxel would be in has not been allocated, a voxel in
-  // temp_voxel_storage is allocated and returned instead.
-  // This can be merged into the layer later by calling
-  // updateLayerWithStoredVoxels(temp_voxel_storage)
-  inline LabelVoxel* findOrTempAllocateLabelVoxelPtr(
+  // If the block this voxel would be in has not been allocated, a block in
+  // temp_block_map_ is created/accessed and a voxel from this map is returned
+  // instead. Unlike the layer, accessing temp_block_map_ is controlled via a
+  // mutex allowing it to grow during integration.
+  // These temporary blocks can be merged into the layer later by calling
+  // updateLayerWithStoredBlocks()
+  LabelVoxel* allocateStorageAndGetLabelVoxelPtr(
       const VoxelIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
-      BlockIndex* last_block_idx,
-      LabelVoxelMap* temp_label_voxel_storage) const {
-    DCHECK(temp_label_voxel_storage != nullptr);
+      BlockIndex* last_block_idx) {
     DCHECK(last_block != nullptr);
     DCHECK(last_block_idx != nullptr);
 
     const BlockIndex block_idx = getBlockIndexFromGlobalVoxelIndex(
         global_voxel_idx, voxels_per_side_inv_);
 
-    if (block_idx != *last_block_idx) {
+    if ((block_idx != *last_block_idx) || (*last_block == nullptr)) {
       *last_block = label_layer_->getBlockPtrByIndex(block_idx);
       *last_block_idx = block_idx;
-      if (*last_block != nullptr) {
-        (*last_block)->updated() = true;
-      }
     }
 
     // If no block at this location currently exists, we allocate a temporary
     // voxel that will be merged into the map later
     if (*last_block == nullptr) {
-      return &((*temp_label_voxel_storage)[global_voxel_idx]);
-    } else {
-      const VoxelIndex local_voxel_idx =
-          getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
+      // To allow temp_block_map_ to grow we can only let one thread in at once
+      std::lock_guard<std::mutex> lock(temp_block_mutex_);
 
-      return &((*last_block)->getVoxelByVoxelIndex(local_voxel_idx));
+      typename Layer<LabelVoxel>::BlockHashMap::iterator it =
+          temp_label_block_map_.find(block_idx);
+      if (it != temp_label_block_map_.end()) {
+        *last_block = it->second;
+      } else {
+        auto insert_status = temp_label_block_map_.emplace(
+            block_idx,
+            std::make_shared<Block<LabelVoxel>>(
+                voxels_per_side_, voxel_size_,
+                getOriginPointFromGridIndex(block_idx, block_size_)));
+
+        DCHECK(insert_status.second)
+            << "Block already exists when allocating at "
+            << block_idx.transpose();
+
+        *last_block = insert_status.first->second;
+      }
     }
+
+    (*last_block)->updated() = true;
+
+    const VoxelIndex local_voxel_idx =
+        getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
+
+    return &((*last_block)->getVoxelByVoxelIndex(local_voxel_idx));
   }
 
   // NOT thread safe
-  inline void updateLayerWithStoredLabelVoxels(
-      const LabelVoxelMap& temp_label_voxel_storage) {
+  void updateLabelLayerWithStoredBlocks() {
     BlockIndex last_block_idx;
     Block<LabelVoxel>::Ptr block = nullptr;
 
-    for (const std::pair<const VoxelIndex, LabelVoxel>& temp_voxel :
-         temp_label_voxel_storage) {
-      const BlockIndex block_idx = getBlockIndexFromGlobalVoxelIndex(
-          temp_voxel.first, voxels_per_side_inv_);
-      const VoxelIndex local_voxel_idx =
-          getLocalFromGlobalVoxelIndex(temp_voxel.first, voxels_per_side_);
-
-      if ((block_idx != last_block_idx) || (block == nullptr)) {
-        block = label_layer_->allocateBlockPtrByIndex(block_idx);
-        block->updated() = true;
-      }
-
-      LabelVoxel& base_voxel = block->getVoxelByVoxelIndex(local_voxel_idx);
-
-      if (base_voxel.label == temp_voxel.second.label) {
-        // TODO(grinvalm) or confidence just 1? what are confidences
-        // of temp voxel? always 1?
-        base_voxel.label_confidence =
-            base_voxel.label_confidence + temp_voxel.second.label_confidence;
-        if (label_tsdf_config_.cap_confidence) {
-          if (base_voxel.label_confidence >
-              label_tsdf_config_.confidence_cap_value) {
-            base_voxel.label_confidence =
-                label_tsdf_config_.confidence_cap_value;
-          }
-        }
-      } else {
-        if (base_voxel.label_confidence == 0u) {
-          //          changeLabelCount(temp_voxel.second.label, 1);
-          //          changeLabelCount(base_voxel.label, -1);
-
-          base_voxel.label = temp_voxel.second.label;
-          base_voxel.label_confidence = temp_voxel.second.label_confidence;
-          if (*highest_label_ < temp_voxel.second.label) {
-            *highest_label_ = temp_voxel.second.label;
-          }
-        } else {
-          base_voxel.label_confidence =
-              base_voxel.label_confidence - temp_voxel.second.label_confidence;
-        }
-      }
-      // TODO(grinvalm) update base_voxel with temp_voxel, how? how many?
-
-      //      const float new_weight = base_voxel.weight +
-      //      temp_voxel.second.weight;
-      //
-      //      // it is possible that both voxels have weights very close to
-      //      zero, due to
-      //      // the limited precision of floating points dividing by this small
-      //      value
-      //      // can
-      //      // cause nans
-      //      if (new_weight < kFloatEpsilon) {
-      //        continue;
-      //      }
-      //
-      //      // color blending is expensive only do it close to the surface
-      //      if (std::abs(temp_voxel.second.distance) <
-      //          config_.default_truncation_distance) {
-      //        base_voxel.color = Color::blendTwoColors(
-      //            base_voxel.color, base_voxel.weight,
-      //            temp_voxel.second.color,
-      //            temp_voxel.second.weight);
-      //      }
-      //
-      //      base_voxel.distance =
-      //          (base_voxel.distance * base_voxel.weight +
-      //           temp_voxel.second.distance * temp_voxel.second.weight) /
-      //          new_weight;
-      //
-      //      base_voxel.weight = std::min(config_.max_weight, new_weight);
+    for (const std::pair<const BlockIndex, Block<LabelVoxel>::Ptr>&
+             temp_label_block_pair : temp_label_block_map_) {
+      label_layer_->insertBlock(temp_label_block_pair);
     }
+
+    temp_block_map_.clear();
   }
 
   inline void updateLabelVoxel(const Point& point_G, const Label& label,
@@ -421,30 +371,26 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void integratePointCloud(const Transformation& T_G_C,
                            const Pointcloud& points_C, const Colors& colors,
-                           const Labels& labels) {
+                           const Labels& labels, const bool freespace_points) {
     DCHECK_EQ(points_C.size(), colors.size());
 
     timing::Timer integrate_timer("integrate");
 
-    const Point& origin = T_G_C.getPosition();
-
     // Pre-compute a list of unique voxels to end on.
     // Create a hashmap: VOXEL INDEX -> index in original cloud.
-    AnyIndexHashMapType<AlignedVector<size_t>>::type voxel_map;
+    VoxelMap voxel_map;
     // This is a hash map (same as above) to all the indices that need to be
     // cleared.
-    AnyIndexHashMapType<AlignedVector<size_t>>::type clear_map;
+    VoxelMap clear_map;
 
     ThreadSafeIndex index_getter(points_C.size());
 
-    // TODO(ff): Double check if this the proper thing.
-    constexpr bool kIsFreespacePointCloud = false;
-
-    bundleRays(T_G_C, points_C, colors, kIsFreespacePointCloud, &index_getter,
+    bundleRays(T_G_C, points_C, colors, freespace_points, &index_getter,
                &voxel_map, &clear_map);
 
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
                   false, voxel_map, clear_map);
+
     timing::Timer clear_timer("integrate/clear");
 
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
@@ -455,15 +401,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     integrate_timer.Stop();
   }
 
-  void integrateVoxel(
-      const Transformation& T_G_C, const Pointcloud& points_C,
-      const Colors& colors, const Labels& labels, bool enable_anti_grazing,
-      bool clearing_ray, const std::pair<AnyIndex, AlignedVector<size_t>>& kv,
-      const AnyIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
-      VoxelMap* temp_voxel_storage, LabelVoxelMap* temp_label_voxel_storage) {
-    DCHECK(temp_voxel_storage != nullptr);
-    DCHECK(temp_label_voxel_storage != nullptr);
-
+  void integrateVoxel(const Transformation& T_G_C, const Pointcloud& points_C,
+                      const Colors& colors, const Labels& labels,
+                      bool enable_anti_grazing, bool clearing_ray,
+                      const std::pair<AnyIndex, AlignedVector<size_t>>& kv,
+                      const VoxelMap& voxel_map) {
     if (kv.second.empty()) {
       return;
     }
@@ -518,27 +460,24 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       Block<TsdfVoxel>::Ptr tsdf_block = nullptr;
       TsdfVoxel* tsdf_voxel = allocateStorageAndGetVoxelPtr(
           global_voxel_idx, &tsdf_block, &block_idx);
+
       updateTsdfVoxel(origin, merged_point_G, global_voxel_idx, merged_color,
                       merged_weight, tsdf_voxel);
-      // TODO(ff): Implement allocateStorageAndGetLabelVoxelPtr.
+
       Block<LabelVoxel>::Ptr label_block = nullptr;
-      LabelVoxel* label_voxel = findOrTempAllocateLabelVoxelPtr(
-          global_voxel_idx, &label_block, &block_idx, temp_label_voxel_storage);
+      LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
+          global_voxel_idx, &label_block, &block_idx);
+
       updateLabelVoxel(merged_point_G, merged_label, 1u, label_voxel);
     }
   }
 
-  void integrateVoxels(
-      const Transformation& T_G_C, const Pointcloud& points_C,
-      const Colors& colors, const Labels& labels, bool enable_anti_grazing,
-      bool clearing_ray,
-      const AnyIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
-      const AnyIndexHashMapType<AlignedVector<size_t>>::type& clear_map,
-      size_t thread_idx, VoxelMap* temp_voxel_storage,
-      LabelVoxelMap* temp_label_voxel_storage) {
-    DCHECK(temp_voxel_storage != nullptr);
-
-    AnyIndexHashMapType<AlignedVector<size_t>>::type::const_iterator it;
+  void integrateVoxels(const Transformation& T_G_C, const Pointcloud& points_C,
+                       const Colors& colors, const Labels& labels,
+                       bool enable_anti_grazing, bool clearing_ray,
+                       const VoxelMap& voxel_map, const VoxelMap& clear_map,
+                       size_t thread_idx) {
+    VoxelMap::const_iterator it;
     size_t map_size;
     if (clearing_ray) {
       it = clear_map.begin();
@@ -550,8 +489,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     for (size_t i = 0; i < map_size; ++i) {
       if (((i + thread_idx + 1) % config_.integrator_threads) == 0) {
         integrateVoxel(T_G_C, points_C, colors, labels, enable_anti_grazing,
-                       clearing_ray, *it, voxel_map, temp_voxel_storage,
-                       temp_label_voxel_storage);
+                       clearing_ray, *it, voxel_map);
       }
       ++it;
     }
@@ -561,27 +499,22 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       const Transformation& T_G_C, const Pointcloud& points_C,
       const Colors& colors, const Labels& labels, bool enable_anti_grazing,
       bool clearing_ray,
-      const AnyIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
-      const AnyIndexHashMapType<AlignedVector<size_t>>::type& clear_map) {
+      const VoxelMap& voxel_map,
+      const VoxelMap& clear_map) {
     const Point& origin = T_G_C.getPosition();
-
-    AlignedVector<VoxelMap> temp_voxel_storage(config_.integrator_threads);
-    AlignedVector<LabelVoxelMap> temp_label_voxel_storage(
-        config_.integrator_threads);
 
     // if only 1 thread just do function call, otherwise spawn threads
     if (config_.integrator_threads == 1) {
+      constexpr size_t thread_idx = 0;
       integrateVoxels(T_G_C, points_C, colors, labels, enable_anti_grazing,
-                      clearing_ray, voxel_map, clear_map, 0,
-                      &(temp_voxel_storage[0]), &(temp_label_voxel_storage[0]));
+                      clearing_ray, voxel_map, clear_map, thread_idx);
     } else {
       std::list<std::thread> integration_threads;
       for (size_t i = 0; i < config_.integrator_threads; ++i) {
-        integration_threads.emplace_back(
-            &LabelTsdfIntegrator::integrateVoxels, this, T_G_C, points_C,
-            colors, labels, enable_anti_grazing, clearing_ray, voxel_map,
-            clear_map, i, &(temp_voxel_storage[i]),
-            &(temp_label_voxel_storage[i]));
+        integration_threads.emplace_back(&LabelTsdfIntegrator::integrateVoxels,
+                                         this, T_G_C, points_C, colors, labels,
+                                         enable_anti_grazing, clearing_ray,
+                                         voxel_map, clear_map, i);
       }
 
       for (std::thread& thread : integration_threads) {
@@ -589,12 +522,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     }
 
-    timing::Timer insertion_timer("inserting_missed_voxels");
+    timing::Timer insertion_timer("inserting_missed_blocks");
     updateLayerWithStoredBlocks();
-    // TODO(ff): Implement updateLayerWithStoredLabelBlocks.
-    for (const LabelVoxelMap& temp_label_voxels : temp_label_voxel_storage) {
-      updateLayerWithStoredLabelVoxels(temp_label_voxels);
-    }
+    updateLabelLayerWithStoredBlocks();
+
+
     insertion_timer.Stop();
   }
 
@@ -657,6 +589,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
  protected:
   LabelTsdfConfig label_tsdf_config_;
   Layer<LabelVoxel>* label_layer_;
+
+  // Temporary block storage, used to hold blocks that need to be created while
+  // integrating a new pointcloud
+  std::mutex temp_block_mutex_;  // TODO(grinvalm): one mutex is enough for
+                                 // label and tsdf?
+  Layer<LabelVoxel>::BlockHashMap temp_label_block_map_;
 
   Label* highest_label_;
   std::map<Label, int> labels_count_map_;
