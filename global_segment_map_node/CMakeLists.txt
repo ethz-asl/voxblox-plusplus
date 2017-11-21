@@ -13,7 +13,7 @@ cs_add_library(${PROJECT_NAME}_library
 cs_add_executable(${PROJECT_NAME}
   src/node.cpp
 )
-target_link_libraries(${PROJECT_NAME} 
+target_link_libraries(${PROJECT_NAME}
   ${PROJECT_NAME}_library
 )
 
