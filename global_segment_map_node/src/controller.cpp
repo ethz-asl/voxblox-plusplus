@@ -236,7 +236,7 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Finished deciding labels in %f seconds.", (end - start).toSec());
 
     bool merge = false;
-    constexpr bool is_freespace_pointcloud = false;
+    constexpr bool kIsFreespacePointcloud = false;
 
     if (merge) {
       ROS_INFO("Merging %lu pointclouds.", segments_to_integrate_.size());

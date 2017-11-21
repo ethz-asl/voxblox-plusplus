@@ -284,8 +284,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // If no block at this location currently exists, we allocate a temporary
     // voxel that will be merged into the map later
     if (*last_block == nullptr) {
-      // To allow temp_block_map_ to grow we can only let one thread in at once
-      std::lock_guard<std::mutex> lock(temp_block_mutex_);
+      // To allow temp_label_block_map_ to grow we can only let
+      // one thread in at once
+      std::lock_guard<std::mutex> lock(temp_label_block_mutex_);
 
       typename Layer<LabelVoxel>::BlockHashMap::iterator it =
           temp_label_block_map_.find(block_idx);
@@ -403,7 +404,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void integrateVoxel(const Transformation& T_G_C, const Pointcloud& points_C,
                       const Colors& colors, const Labels& labels,
-                      bool enable_anti_grazing, bool clearing_ray,
+                      const bool enable_anti_grazing, const bool clearing_ray,
                       const std::pair<AnyIndex, AlignedVector<size_t>>& kv,
                       const VoxelMap& voxel_map) {
     if (kv.second.empty()) {
@@ -474,9 +475,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void integrateVoxels(const Transformation& T_G_C, const Pointcloud& points_C,
                        const Colors& colors, const Labels& labels,
-                       bool enable_anti_grazing, bool clearing_ray,
+                       const bool enable_anti_grazing, const bool clearing_ray,
                        const VoxelMap& voxel_map, const VoxelMap& clear_map,
-                       size_t thread_idx) {
+                       const size_t thread_idx) {
     VoxelMap::const_iterator it;
     size_t map_size;
     if (clearing_ray) {
@@ -495,12 +496,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
-  void integrateRays(
-      const Transformation& T_G_C, const Pointcloud& points_C,
-      const Colors& colors, const Labels& labels, bool enable_anti_grazing,
-      bool clearing_ray,
-      const VoxelMap& voxel_map,
-      const VoxelMap& clear_map) {
+  void integrateRays(const Transformation& T_G_C, const Pointcloud& points_C,
+                     const Colors& colors, const Labels& labels,
+                     const bool enable_anti_grazing, const bool clearing_ray,
+                     const VoxelMap& voxel_map, const VoxelMap& clear_map) {
     const Point& origin = T_G_C.getPosition();
 
     // if only 1 thread just do function call, otherwise spawn threads
@@ -525,7 +524,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     timing::Timer insertion_timer("inserting_missed_blocks");
     updateLayerWithStoredBlocks();
     updateLabelLayerWithStoredBlocks();
-
 
     insertion_timer.Stop();
   }
@@ -592,6 +590,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Temporary block storage, used to hold blocks that need to be created while
   // integrating a new pointcloud
+  std::mutex temp_label_block_mutex_;
   Layer<LabelVoxel>::BlockHashMap temp_label_block_map_;
 
   Label* highest_label_;
