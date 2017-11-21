@@ -2,6 +2,7 @@
 #define GLOBAL_SEGMENT_MAP_LABEL_TSDF_INTEGRATOR_H_
 
 #include <algorithm>
+#include <list>
 #include <map>
 #include <utility>
 #include <vector>
@@ -30,6 +31,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   typedef AnyIndexHashMapType<LabelVoxel>::type LabelVoxelMap;
+  typedef AnyIndexHashMapType<AlignedVector<size_t>>::type VoxelMap;
 
   struct LabelTsdfConfig {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -433,9 +435,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // cleared.
     AnyIndexHashMapType<AlignedVector<size_t>>::type clear_map;
 
-    ThreadSafeIndex index_getter(points_C.size(), config_.integrator_threads);
+    ThreadSafeIndex index_getter(points_C.size());
 
-    bundleRays(T_G_C, points_C, colors, &index_getter, &voxel_map, &clear_map);
+    // TODO(ff): Double check if this the proper thing.
+    constexpr bool kIsFreespacePointCloud = false;
+
+    bundleRays(T_G_C, points_C, colors, kIsFreespacePointCloud, &index_getter,
+               &voxel_map, &clear_map);
 
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
                   false, voxel_map, clear_map);
@@ -510,13 +516,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       BlockIndex block_idx;
 
       Block<TsdfVoxel>::Ptr tsdf_block = nullptr;
-      TsdfVoxel* tsdf_voxel = findOrTempAllocateVoxelPtr(
-          global_voxel_idx, &tsdf_block, &block_idx, temp_voxel_storage);
-      const Point voxel_center_G =
-          getCenterPointFromGridIndex(global_voxel_idx, voxel_size_);
-      updateTsdfVoxel(origin, merged_point_G, voxel_center_G, merged_color,
+      TsdfVoxel* tsdf_voxel = allocateStorageAndGetVoxelPtr(
+          global_voxel_idx, &tsdf_block, &block_idx);
+      updateTsdfVoxel(origin, merged_point_G, global_voxel_idx, merged_color,
                       merged_weight, tsdf_voxel);
-
+      // TODO(ff): Implement allocateStorageAndGetLabelVoxelPtr.
       Block<LabelVoxel>::Ptr label_block = nullptr;
       LabelVoxel* label_voxel = findOrTempAllocateLabelVoxelPtr(
           global_voxel_idx, &label_block, &block_idx, temp_label_voxel_storage);
@@ -571,7 +575,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
                       clearing_ray, voxel_map, clear_map, 0,
                       &(temp_voxel_storage[0]), &(temp_label_voxel_storage[0]));
     } else {
-      AlignedVector<std::thread> integration_threads;
+      std::list<std::thread> integration_threads;
       for (size_t i = 0; i < config_.integrator_threads; ++i) {
         integration_threads.emplace_back(
             &LabelTsdfIntegrator::integrateVoxels, this, T_G_C, points_C,
@@ -586,9 +590,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
 
     timing::Timer insertion_timer("inserting_missed_voxels");
-    for (const VoxelMap& temp_voxels : temp_voxel_storage) {
-      updateLayerWithStoredVoxels(temp_voxels);
-    }
+    updateLayerWithStoredBlocks();
+    // TODO(ff): Implement updateLayerWithStoredLabelBlocks.
     for (const LabelVoxelMap& temp_label_voxels : temp_label_voxel_storage) {
       updateLayerWithStoredLabelVoxels(temp_label_voxels);
     }
