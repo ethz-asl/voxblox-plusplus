@@ -47,3 +47,5 @@ mesh_results
 
 # Tools
 autolintc
+
+*.ply
