@@ -261,7 +261,7 @@ void Controller::segmentPointCloudCallback(
       start = ros::WallTime::now();
 
       integrator_->integratePointCloud(T_G_C_, points_C_, colors_, labels_,
-                                       is_freespace_pointcloud);
+                                       kIsFreespacePointcloud);
 
       end = ros::WallTime::now();
       ROS_INFO("Finished integrating merged pointclouds in %f seconds.",
@@ -273,7 +273,7 @@ void Controller::segmentPointCloudCallback(
       for (const auto& segment : segments_to_integrate_) {
         integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                          segment->colors_, segment->labels_,
-                                         is_freespace_pointcloud);
+                                         kIsFreespacePointcloud);
       }
       integrator_->mergeLabels();
 
