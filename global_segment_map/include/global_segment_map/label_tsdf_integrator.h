@@ -258,7 +258,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   //    }
   //  }
 
-  // Will return a pointer to a voxel located at global_voxel_idx in the tsdf
+  // Will return a pointer to a voxel located at global_voxel_idx in the label
   // layer. Thread safe.
   // Takes in the last_block_idx and last_block to prevent unneeded map lookups.
   // If the block this voxel would be in has not been allocated, a block in
@@ -592,8 +592,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Temporary block storage, used to hold blocks that need to be created while
   // integrating a new pointcloud
-  std::mutex temp_block_mutex_;  // TODO(grinvalm): one mutex is enough for
-                                 // label and tsdf?
   Layer<LabelVoxel>::BlockHashMap temp_label_block_map_;
 
   Label* highest_label_;
