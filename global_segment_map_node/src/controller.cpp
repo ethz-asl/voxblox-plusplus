@@ -384,7 +384,7 @@ bool Controller::validateMergedObjectCallback(
     modelify_msgs::ValidateMergedObject::Response& response) {
   typedef voxblox::TsdfVoxel VoxelType;
   typedef voxblox::Transformation Transformation;
-  typedef kindr::minimal::RotationQuaternionTemplate<double> RotationQuaternion;
+  typedef kindr::minimal::RotationQuaternionTemplate<float> RotationQuaternion;
   typedef voxblox::Layer<VoxelType> Layer;
   // TODO(ff): Do the following afterwards in modelify.
   // - Check if merged object agrees with whole map (at all poses).
@@ -396,20 +396,21 @@ bool Controller::validateMergedObjectCallback(
   // Extract TSDF layer of merged object.
   std::shared_ptr<Layer> merged_object_layer_O;
   CHECK(voxblox::deserializeMsgToLayer(request.gsm_update.object.tsdf_layer,
-                                       merged_object_layer_O))
+                                       merged_object_layer_O.get()))
       << "Deserializing of merged object message failed.";
 
   // Extract transformations.
-  std::unordered_set<Transformation> transforms_W_O;
+  std::vector<Transformation> transforms_W_O;
   // TODO(ff): I guess transforms should be part of object and not of the
   // gsm_update.
   for (geometry_msgs::Transform transform : request.gsm_update.transforms) {
     RotationQuaternion quaternion(transform.rotation.w, transform.rotation.x,
                                   transform.rotation.y, transform.rotation.z);
-    Eigen::Vector3d translation(transform.translation.x,
+    Eigen::Vector3f translation(transform.translation.x,
                                 transform.translation.y,
                                 transform.translation.z);
-    transforms_W_O.emplace(quaternion, translation);
+    Transformation t(quaternion, translation);
+    transforms_W_O.emplace_back(quaternion, translation);
   }
 
   voxblox::utils::VoxelEvaluationMode voxel_evaluation_mode =
@@ -422,11 +423,11 @@ bool Controller::validateMergedObjectCallback(
 
     // Transform merged object into the world frame.
     voxblox::transformLayer<VoxelType>(
-        merged_object_layer_O, transform_W_O.inverse(), merged_object_layer_W);
+        *merged_object_layer_O.get(), transform_W_O.inverse(), merged_object_layer_W.get());
 
     // Evaluate the RMSE of the merged object layer in the world layer.
-    voxblox::FloatingPoint rmse_error = evaluateLayersRmse(
-        map_->getTsdfLayerPtr(), merged_object_layer_W, voxel_evaluation_mode,
+    voxblox::FloatingPoint rmse_error = voxblox::utils::evaluateLayersRmse(
+        *(map_->getTsdfLayerPtr()), *merged_object_layer_W, voxel_evaluation_mode,
         &voxel_evaluation_details);
     // TODO(ff): Move this to modelify_ros conversions.h.
     response.voxel_evaluation_details[idx].rmse = voxel_evaluation_details.rmse;
