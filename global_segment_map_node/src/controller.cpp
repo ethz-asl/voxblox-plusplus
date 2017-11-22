@@ -12,8 +12,8 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/integrator/merge_integration.h>
-#include <voxblox_ros/mesh_vis.h>
 #include <voxblox_ros/conversions.h>
+#include <voxblox_ros/mesh_vis.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
@@ -205,9 +205,11 @@ void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
 void Controller::serviceValidateMergedObjectTopic(
     ros::ServiceServer* validate_merged_object_srv) {
   CHECK_NOTNULL(validate_merged_object_srv);
+  static const std::string kValidateMergedObjectTopicRosParam =
+      "validate_merged_object";
   std::string validate_merged_object_topic =
       "/scenenet_node/validate_merged_object";
-  node_handle_private_->param<std::string>("validate_merged_object",
+  node_handle_private_->param<std::string>(kValidateMergedObjectTopicRosParam,
                                            validate_merged_object_topic,
                                            validate_merged_object_topic);
 
@@ -422,14 +424,15 @@ bool Controller::validateMergedObjectCallback(
     std::shared_ptr<Layer> merged_object_layer_W;
 
     // Transform merged object into the world frame.
-    voxblox::transformLayer<VoxelType>(
-        *merged_object_layer_O.get(), transform_W_O.inverse(), merged_object_layer_W.get());
+    voxblox::transformLayer<VoxelType>(*merged_object_layer_O.get(),
+                                       transform_W_O.inverse(),
+                                       merged_object_layer_W.get());
 
     // Evaluate the RMSE of the merged object layer in the world layer.
-    voxblox::FloatingPoint rmse_error = voxblox::utils::evaluateLayersRmse(
-        *(map_->getTsdfLayerPtr()), *merged_object_layer_W, voxel_evaluation_mode,
-        &voxel_evaluation_details);
-    // TODO(ff): Move this to modelify_ros conversions.h.
+    voxblox::utils::evaluateLayersRmse(
+        *(map_->getTsdfLayerPtr()), *merged_object_layer_W,
+        voxel_evaluation_mode, &voxel_evaluation_details);
+    // TODO(ff): Move this to modelify_ros or voxblox_ros conversions.h.
     response.voxel_evaluation_details[idx].rmse = voxel_evaluation_details.rmse;
     response.voxel_evaluation_details[idx].max_error =
         voxel_evaluation_details.max_error;
