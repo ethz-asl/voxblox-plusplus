@@ -29,6 +29,8 @@ class Controller {
 
   void advertiseMeshTopic(ros::Publisher* mesh_pub);
 
+  void advertiseObjectTopic(ros::Publisher* object_pub);
+
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
   void advertiseExtractSegmentsService(
@@ -46,6 +48,8 @@ class Controller {
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
 
+  void publishObjects();
+
   void extractSegmentLayers(voxblox::Label label,
                             voxblox::Layer<voxblox::TsdfVoxel>* tsdf_layer,
                             voxblox::Layer<voxblox::LabelVoxel>* label_layer);
@@ -60,6 +64,7 @@ class Controller {
   ros::Time last_segment_msg_timestamp_;
 
   ros::Publisher* mesh_pub_;
+  ros::Publisher* object_pub_;
   ros::Timer update_mesh_timer_;
 
   size_t callback_count_;
@@ -77,6 +82,11 @@ class Controller {
   std::vector<voxblox::Segment*> segments_to_integrate_;
   std::map<voxblox::Label, std::map<voxblox::Segment*, size_t> >
       segment_label_candidates;
+
+  std::set<voxblox::Label> all_published_segments_;
+  std::vector<voxblox::Label> segment_labels_to_publish_;
+
+  std::map<voxblox::Label, std::set<voxblox::Label>> merges_to_publish_;
 };
 }  // namespace voxblox_gsm
 

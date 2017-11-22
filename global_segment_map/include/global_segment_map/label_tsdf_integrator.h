@@ -35,9 +35,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   struct LabelTsdfConfig {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    bool enable_pairwise_confidence_merging = false;
+    bool enable_pairwise_confidence_merging = true;
     float pairwise_confidence_ratio_threshold = 0.05f;
     int pairwise_confidence_threshold = 2;
+
+    // Number of frames after which the updated
+    // objects are published.
+    int object_flushing_age_threshold = 3;
 
     // Experiments showed that capped confidence value
     // only introduces artifacts in planar regions.
@@ -355,6 +359,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     } else {
       if (label_voxel->label_confidence == 0u) {
+        // Both of the segments corresponding to the two labels are
+        // updated, one gains a voxel, one loses a voxel.
+        std::lock_guard<std::mutex> lock(updated_labels_mutex_);
+        updated_labels_.insert(label);
+        updated_labels_.insert(label_voxel->label);
+
         //        changeLabelCount(label, 1, lock);
         //        changeLabelCount(label_voxel->label, -1, lock);
 
@@ -549,18 +559,73 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
-  void mergeLabels() {
+  void resetCurrentFrameUpdatedLabelsAge() {
+    for (Label label : updated_labels_) {
+      // Set timestamp or integer age of segment.
+      // Here is the place to do it so it's the same timestamp
+      // for all segments in a frame.
+      labels_to_publish_[label] = 0;
+    }
+    updated_labels_.clear();
+  }
+
+  void getLabelsToPublish(
+      std::vector<voxblox::Label>* segment_labels_to_publish) {
+    resetCurrentFrameUpdatedLabelsAge();
+
+    for (auto label_age_pair_it = labels_to_publish_.begin();
+         label_age_pair_it != labels_to_publish_.end();
+         /* no increment */) {
+      // Increase age of a label to publish;
+      ++(label_age_pair_it)->second;
+      if (label_age_pair_it->second >
+          label_tsdf_config_.object_flushing_age_threshold) {
+        segment_labels_to_publish->push_back(label_age_pair_it->first);
+        labels_to_publish_.erase(label_age_pair_it++);
+      } else {
+        ++label_age_pair_it;
+      }
+    }
+  }
+
+  void mergeLabels(std::map<Label, std::set<Label>>* merges_to_publish) {
     if (label_tsdf_config_.enable_pairwise_confidence_merging) {
       for (auto& confidence_map : pairwise_confidence_) {
         for (auto confidence_pair_it = confidence_map.second.begin();
              confidence_pair_it != confidence_map.second.end();
-             ++confidence_pair_it) {
+             /* no increment */) {
           if (confidence_pair_it->second >
               label_tsdf_config_.pairwise_confidence_threshold) {
-            swapLabels(confidence_map.first, confidence_pair_it->first);
-            LOG(ERROR) << "Merging labels " << confidence_map.first << " and "
-                       << confidence_pair_it->first;
-            confidence_map.second.erase(confidence_pair_it->first);
+            // Merging labels.
+            // Voxels assigned to old_label get assigned to new_label instead.
+            Label old_label = confidence_pair_it->first;
+            Label new_label = confidence_map.first;
+            LOG(ERROR) << "Merging labels " << old_label << " and "
+                       << new_label;
+
+            swapLabels(old_label, new_label);
+            // TODO(grinvalm): add to new_label the potential
+            // merge candidates of old_label.
+            confidence_map.second.erase(confidence_pair_it++);
+
+            // Delete any staged segment publishing for overridden label.
+            auto label_age_pair_it = labels_to_publish_.find(old_label);
+            if (label_age_pair_it != labels_to_publish_.end()) {
+              labels_to_publish_.erase(old_label);
+            }
+            updated_labels_.erase(old_label);
+
+            std::map<Label, std::set<Label>>::iterator label_it =
+                merges_to_publish->find(new_label);
+            if (label_it != merges_to_publish->end()) {
+              label_it->second.emplace(old_label);
+            } else {
+              std::set<Label> incorporated_labels;
+              incorporated_labels.emplace(old_label);
+              merges_to_publish->emplace(new_label, incorporated_labels);
+            }
+          } else {
+            ++confidence_pair_it;
           }
         }
       }
@@ -588,7 +653,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   LabelTsdfConfig label_tsdf_config_;
   Layer<LabelVoxel>* label_layer_;
 
-  // Temporary block storage, used to hold blocks that need to be created while
+  // Temporary block storage, used to hold blocks that need to be created
+  // while
   // integrating a new pointcloud
   std::mutex temp_label_block_mutex_;
   Layer<LabelVoxel>::BlockHashMap temp_label_block_map_;
@@ -609,6 +675,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // chance of two threads needing the same lock for unrelated voxels is
   // (num_threads / (2^n)). For 8 threads and 12 bits this gives 0.2%.
   ApproxHashArray<12, std::mutex> mutexes_;
+
+  std::mutex updated_labels_mutex_;
+  std::set<Label> updated_labels_;
+
+  std::map<Label, int> labels_to_publish_;
 };
 
 }  // namespace voxblox

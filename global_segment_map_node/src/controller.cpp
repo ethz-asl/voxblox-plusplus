@@ -199,6 +199,15 @@ void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
   mesh_pub_ = mesh_pub;
 }
 
+void Controller::advertiseObjectTopic(ros::Publisher* object_pub) {
+  CHECK_NOTNULL(object_pub);
+  *object_pub =
+      node_handle_private_->advertise<visualization_msgs::MarkerArray>("mesh",
+                                                                       1, true);
+
+  object_pub_ = object_pub;
+}
+
 void Controller::advertiseGenerateMeshService(
     ros::ServiceServer* generate_mesh_srv) {
   CHECK_NOTNULL(generate_mesh_srv);
@@ -235,52 +244,22 @@ void Controller::segmentPointCloudCallback(
     ros::WallTime end = ros::WallTime::now();
     ROS_INFO("Finished deciding labels in %f seconds.", (end - start).toSec());
 
-    bool merge = false;
     constexpr bool kIsFreespacePointcloud = false;
 
-    if (merge) {
-      ROS_INFO("Merging %lu pointclouds.", segments_to_integrate_.size());
-      // Merge pointclouds
-      voxblox::Pointcloud points_C_;
-      voxblox::Transformation T_G_C_;
-      voxblox::Colors colors_;
-      voxblox::Labels labels_;
+    ROS_INFO("Integrating %lu pointclouds.", segments_to_integrate_.size());
+    start = ros::WallTime::now();
 
-      for (const auto& segment : segments_to_integrate_) {
-        points_C_.insert(points_C_.end(), segment->points_C_.begin(),
-                         segment->points_C_.end());
-        colors_.insert(colors_.end(), segment->colors_.begin(),
-                       segment->colors_.end());
-        labels_.insert(labels_.end(), segment->labels_.begin(),
-                       segment->labels_.end());
-        T_G_C_ = segment->T_G_C_;
-      }
-
-      ROS_INFO("Integrating %lu merged pointclouds with %lu points.",
-               segments_to_integrate_.size(), points_C_.size());
-      start = ros::WallTime::now();
-
-      integrator_->integratePointCloud(T_G_C_, points_C_, colors_, labels_,
+    for (const auto& segment : segments_to_integrate_) {
+      integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                       segment->colors_, segment->labels_,
                                        kIsFreespacePointcloud);
-
-      end = ros::WallTime::now();
-      ROS_INFO("Finished integrating merged pointclouds in %f seconds.",
-               (end - start).toSec());
-    } else {
-      ROS_INFO("Integrating %lu pointclouds.", segments_to_integrate_.size());
-      start = ros::WallTime::now();
-
-      for (const auto& segment : segments_to_integrate_) {
-        integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                         segment->colors_, segment->labels_,
-                                         kIsFreespacePointcloud);
-      }
-      integrator_->mergeLabels();
-
-      end = ros::WallTime::now();
-      ROS_INFO("Finished integrating pointclouds in %f seconds.",
-               (end - start).toSec());
     }
+    integrator_->mergeLabels(&merges_to_publish_);
+    integrator_->getLabelsToPublish(&segment_labels_to_publish_);
+
+    end = ros::WallTime::now();
+    ROS_INFO("Finished integrating pointclouds in %f seconds.",
+             (end - start).toSec());
 
     ROS_INFO("Clearing candidates and memory.");
     start = ros::WallTime::now();
@@ -293,6 +272,8 @@ void Controller::segmentPointCloudCallback(
 
     end = ros::WallTime::now();
     ROS_INFO("Finished clearing memory in %f seconds.", (end - start).toSec());
+
+    publishObjects();
   }
 
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
@@ -519,6 +500,33 @@ void Controller::extractSegmentLayers(
       }
     }
   }
+}
+
+void Controller::publishObjects() {
+  for (voxblox::Label label : segment_labels_to_publish_) {
+    if (all_published_segments_.find(label) != all_published_segments_.end()) {
+      // Segment previously published, sending update message.
+      LOG(ERROR) << "UPDATING SEGMENT WITH LABEL " << label;
+    } else {
+      // Segment never previously published, sending first type of message.
+      LOG(ERROR) << "SENDING SEGMENT WITH LABEL " << label;
+    }
+    auto merged_label_it = merges_to_publish_.find(label);
+    if (merged_label_it != merges_to_publish_.end()) {
+      for (voxblox::Label merged_label : merged_label_it->second) {
+        if (all_published_segments_.find(merged_label) !=
+            all_published_segments_.end()) {
+          LOG(ERROR) << "LABEL " << label
+                     << "INCLUDES THE PREVIOUSLY PUBLISHED LABEL "
+                     << merged_label;
+        }
+      }
+      merges_to_publish_.erase(merged_label_it);
+    }
+
+    all_published_segments_.insert(label);
+  }
+  segment_labels_to_publish_.clear();
 }
 
 bool Controller::lookupTransform(const std::string& from_frame,
