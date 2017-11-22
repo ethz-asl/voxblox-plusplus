@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <string>
+#include <unordered_set>
 
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
@@ -10,7 +11,9 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <voxblox/integrator/merge_integration.h>
 #include <voxblox_ros/mesh_vis.h>
+#include <voxblox_ros/conversions.h>
 
 #include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
@@ -191,29 +194,26 @@ void Controller::subscribeSegmentPointCloudTopic(
       this);
 }
 
-void Controller::subscribeValidateMergedObjectTopic(
-    ros::Subscriber* validate_merged_object_sub) {
-  CHECK_NOTNULL(validate_merged_object_sub);
-  std::string validate_merged_object_topic =
-      "/scenenet_node/validate_merged_object";
-  node_handle_private_->param<std::string>("validate_merged_object",
-                                           validate_merged_object_topic,
-                                           validate_merged_object_topic);
-
-  // Large queue size to give slack to the algorithm
-  // pipeline and not lose any messages.
-  constexpr size_t kValidateMergedObjectQueueSize = 2000u;
-  *validate_merged_object_sub = node_handle_private_->subscribe(
-      validate_merged_object_topic, kValidateMergedObjectQueueSize,
-      &Controller::validateMergedObjectCallback, this);
-}
-
 void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
   CHECK_NOTNULL(mesh_pub);
   *mesh_pub = node_handle_private_->advertise<visualization_msgs::MarkerArray>(
       "mesh", 1, true);
 
   mesh_pub_ = mesh_pub;
+}
+
+void Controller::serviceValidateMergedObjectTopic(
+    ros::ServiceServer* validate_merged_object_srv) {
+  CHECK_NOTNULL(validate_merged_object_srv);
+  std::string validate_merged_object_topic =
+      "/scenenet_node/validate_merged_object";
+  node_handle_private_->param<std::string>("validate_merged_object",
+                                           validate_merged_object_topic,
+                                           validate_merged_object_topic);
+
+  *validate_merged_object_srv = node_handle_private_->advertiseService(
+      validate_merged_object_topic, &Controller::validateMergedObjectCallback,
+      this);
 }
 
 void Controller::advertiseGenerateMeshService(
@@ -379,9 +379,73 @@ void Controller::segmentPointCloudCallback(
   }
 }
 
-void Controller::validateMergedObjectCallback(
-    const modelify_msgs::GsmUpdate::Ptr& gsm_update_msg) {
-  // TODO(ff): Implement this.
+bool Controller::validateMergedObjectCallback(
+    const modelify_msgs::ValidateMergedObject::Request& request,
+    modelify_msgs::ValidateMergedObject::Response& response) {
+  typedef voxblox::TsdfVoxel VoxelType;
+  typedef voxblox::Transformation Transformation;
+  typedef kindr::minimal::RotationQuaternionTemplate<double> RotationQuaternion;
+  typedef voxblox::Layer<VoxelType> Layer;
+  // TODO(ff): Do the following afterwards in modelify.
+  // - Check if merged object agrees with whole map (at all poses).
+  // - If it doesn't agree at all poses try the merging again with the
+  // reduced set of objects.
+  // - Optionally put the one that doesn't agree with
+  // the others in a list not to merge with the other merged ones
+
+  // Extract TSDF layer of merged object.
+  std::shared_ptr<Layer> merged_object_layer_O;
+  CHECK(voxblox::deserializeMsgToLayer(request.gsm_update.object.tsdf_layer,
+                                       merged_object_layer_O))
+      << "Deserializing of merged object message failed.";
+
+  // Extract transformations.
+  std::unordered_set<Transformation> transforms_W_O;
+  // TODO(ff): I guess transforms should be part of object and not of the
+  // gsm_update.
+  for (geometry_msgs::Transform transform : request.gsm_update.transforms) {
+    RotationQuaternion quaternion(transform.rotation.w, transform.rotation.x,
+                                  transform.rotation.y, transform.rotation.z);
+    Eigen::Vector3d translation(transform.translation.x,
+                                transform.translation.y,
+                                transform.translation.z);
+    transforms_W_O.emplace(quaternion, translation);
+  }
+
+  voxblox::utils::VoxelEvaluationMode voxel_evaluation_mode =
+      voxblox::utils::VoxelEvaluationMode::kEvaluateAllVoxels;
+  voxblox::utils::VoxelEvaluationDetails voxel_evaluation_details;
+  size_t idx = 0u;
+  // Check if world TSDF layer agrees with merged object at all object poses.
+  for (Transformation transform_W_O : transforms_W_O) {
+    std::shared_ptr<Layer> merged_object_layer_W;
+
+    // Transform merged object into the world frame.
+    voxblox::transformLayer<VoxelType>(
+        merged_object_layer_O, transform_W_O.inverse(), merged_object_layer_W);
+
+    // Evaluate the RMSE of the merged object layer in the world layer.
+    voxblox::FloatingPoint rmse_error = evaluateLayersRmse(
+        map_->getTsdfLayerPtr(), merged_object_layer_W, voxel_evaluation_mode,
+        &voxel_evaluation_details);
+    // TODO(ff): Move this to modelify_ros conversions.h.
+    response.voxel_evaluation_details[idx].rmse = voxel_evaluation_details.rmse;
+    response.voxel_evaluation_details[idx].max_error =
+        voxel_evaluation_details.max_error;
+    response.voxel_evaluation_details[idx].min_error =
+        voxel_evaluation_details.min_error;
+    response.voxel_evaluation_details[idx].num_evaluated_voxels =
+        voxel_evaluation_details.num_evaluated_voxels;
+    response.voxel_evaluation_details[idx].num_ignored_voxels =
+        voxel_evaluation_details.num_ignored_voxels;
+    response.voxel_evaluation_details[idx].num_overlapping_voxels =
+        voxel_evaluation_details.num_overlapping_voxels;
+    response.voxel_evaluation_details[idx].num_non_overlapping_voxels =
+        voxel_evaluation_details.num_non_overlapping_voxels;
+    ++idx;
+    CHECK_LT(idx, transforms_W_O.size());
+  }
+  return true;
 }
 
 bool Controller::generateMeshCallback(

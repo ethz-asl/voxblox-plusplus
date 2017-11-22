@@ -5,10 +5,11 @@
 
 #include <vector>
 
+#include <geometry_msgs/Transform.h>
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_tsdf_mesh_integrator.h>
-#include <modelify_msgs/GsmUpdate.h>
+#include <modelify_msgs/ValidateMergedObject.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
@@ -28,10 +29,10 @@ class Controller {
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
 
-  void subscribeValidateMergedObjectTopic(
-      ros::Subscriber* validate_merged_object_sub);
-
   void advertiseMeshTopic(ros::Publisher* mesh_pub);
+
+  void serviceValidateMergedObjectTopic(
+      ros::ServiceServer* validate_merged_object_srv);
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
@@ -44,11 +45,12 @@ class Controller {
   void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
-  void validateMergedObjectCallback(
-      const modelify_msgs::GsmUpdate::Ptr& gsm_update_msg);
-
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
+
+  bool validateMergedObjectCallback(
+      const modelify_msgs::ValidateMergedObject::Request& request,
+      modelify_msgs::ValidateMergedObject::Response& response);
 
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);

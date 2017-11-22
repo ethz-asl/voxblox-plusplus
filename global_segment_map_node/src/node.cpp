@@ -18,8 +18,8 @@ int main(int argc, char** argv) {
   ros::Subscriber segment_point_cloud_sub;
   controller.subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
-  ros::Subscriber validate_merged_object_sub;
-  controller.subscribeValidateMergedObjectTopic(&validate_merged_object_sub);
+  ros::ServiceServer validate_merged_object_srv;
+  controller.serviceValidateMergedObjectTopic(&validate_merged_object_srv);
 
   ros::Publisher mesh_publisher;
   controller.advertiseMeshTopic(&mesh_publisher);
