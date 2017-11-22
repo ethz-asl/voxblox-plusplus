@@ -399,7 +399,7 @@ bool Controller::validateMergedObjectCallback(
   std::shared_ptr<Layer> merged_object_layer_O;
   CHECK(voxblox::deserializeMsgToLayer(request.gsm_update.object.tsdf_layer,
                                        merged_object_layer_O.get()))
-      << "Deserializing of merged object message failed.";
+      << "Deserializing of TSDF layer from merged object message failed.";
 
   // Extract transformations.
   std::vector<Transformation> transforms_W_O;
