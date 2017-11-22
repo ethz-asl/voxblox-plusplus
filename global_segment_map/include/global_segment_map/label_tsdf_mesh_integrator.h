@@ -30,11 +30,11 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     BlockIndexList all_tsdf_blocks;
     BlockIndexList all_label_blocks;
     if (only_mesh_updated_blocks) {
-      tsdf_layer_->getAllUpdatedBlocks(&all_tsdf_blocks);
+      sdf_layer_mutable_->getAllUpdatedBlocks(&all_tsdf_blocks);
       // TODO(grinvalm) unique union of block indices here.
       label_layer_->getAllUpdatedBlocks(&all_label_blocks);
     } else {
-      tsdf_layer_->getAllAllocatedBlocks(&all_tsdf_blocks);
+      sdf_layer_mutable_->getAllAllocatedBlocks(&all_tsdf_blocks);
     }
 
     // Allocate all the mesh memory
@@ -65,7 +65,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     while (index_getter->getNextIndex(&list_idx)) {
       const BlockIndex& block_idx = all_tsdf_blocks[list_idx];
       typename Block<TsdfVoxel>::Ptr tsdf_block =
-          tsdf_layer_->getBlockPtrByIndex(block_idx);
+          sdf_layer_mutable_->getBlockPtrByIndex(block_idx);
       typename Block<LabelVoxel>::Ptr label_block =
           label_layer_->getBlockPtrByIndex(block_idx);
 
@@ -96,7 +96,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     // This block should already exist, otherwise it makes no sense to update
     // the mesh for it. ;)
     Block<TsdfVoxel>::ConstPtr tsdf_block =
-        tsdf_layer_->getBlockPtrByIndex(block_index);
+        sdf_layer_mutable_->getBlockPtrByIndex(block_index);
     Block<LabelVoxel>::ConstPtr label_block =
         label_layer_->getBlockPtrByIndex(block_index);
 
