@@ -5,16 +5,18 @@
 
 #include <vector>
 
+#include <geometry_msgs/Transform.h>
+#include <global_segment_map/label_tsdf_integrator.h>
+#include <global_segment_map/label_tsdf_map.h>
+#include <global_segment_map/label_tsdf_mesh_integrator.h>
+#include <modelify_msgs/ValidateMergedObject.h>
+#include <pcl/io/vtk_lib_io.h>
+#include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_srvs/Empty.h>
 #include <tf/transform_listener.h>
-#include <pcl/io/vtk_lib_io.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <global_segment_map/label_tsdf_map.h>
-#include <global_segment_map/label_tsdf_integrator.h>
 #include <voxblox/io/mesh_ply.h>
-#include <global_segment_map/label_tsdf_mesh_integrator.h>
 
 namespace voxblox_gsm {
 
@@ -29,6 +31,9 @@ class Controller {
 
   void advertiseMeshTopic(ros::Publisher* mesh_pub);
 
+  void serviceValidateMergedObjectTopic(
+      ros::ServiceServer* validate_merged_object_srv);
+
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
   void advertiseExtractSegmentsService(
@@ -42,6 +47,10 @@ class Controller {
 
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
+
+  bool validateMergedObjectCallback(
+      modelify_msgs::ValidateMergedObject::Request& request,
+      modelify_msgs::ValidateMergedObject::Response& response);
 
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
