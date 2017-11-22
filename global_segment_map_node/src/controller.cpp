@@ -208,7 +208,7 @@ void Controller::serviceValidateMergedObjectTopic(
   static const std::string kValidateMergedObjectTopicRosParam =
       "validate_merged_object";
   std::string validate_merged_object_topic =
-      "/scenenet_node/validate_merged_object";
+      "validate_merged_object";
   node_handle_private_->param<std::string>(kValidateMergedObjectTopicRosParam,
                                            validate_merged_object_topic,
                                            validate_merged_object_topic);
