@@ -89,7 +89,7 @@ class Controller {
   std::shared_ptr<voxblox::MeshLabelIntegrator> mesh_integrator_;
 
   std::vector<voxblox::Segment*> segments_to_integrate_;
-  std::map<voxblox::Label, std::map<voxblox::Segment*, size_t> >
+  std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>
       segment_label_candidates;
 
   std::set<voxblox::Label> all_published_segments_;

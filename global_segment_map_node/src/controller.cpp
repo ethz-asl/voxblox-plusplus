@@ -250,7 +250,8 @@ void Controller::segmentPointCloudCallback(
   // segment messages from a certain frame have arrived.
   // Since segments from the same frame all have the same timestamp,
   // the start of a new frame is detected when the message timestamp changes.
-  // TODO(grinvalm): need additional check for the last frame to be integrated.
+  // TODO(grinvalm): need additional check for the last frame to be
+  // integrated.
   if (segment_point_cloud_msg->header.stamp != last_segment_msg_timestamp_) {
     ROS_INFO("Deciding labels for %lu pointclouds.",
              segments_to_integrate_.size());
@@ -522,7 +523,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   // too small to result in any polygon. Find a fix, maybe with a size
   // threshold.
 
-  for (auto& label : labels) {
+  for (voxblox::Label label : labels) {
     voxblox::Layer<voxblox::TsdfVoxel> tsdf_layer(map_config_.voxel_size,
                                                   map_config_.voxels_per_side);
     voxblox::Layer<voxblox::LabelVoxel> label_layer(
@@ -625,7 +626,8 @@ bool Controller::lookupTransform(const std::string& from_frame,
   tf::StampedTransform tf_transform;
   ros::Time time_to_lookup = timestamp;
 
-  // If this transform isn't possible at the time, then try to just look up
+  // If this transform isn't possible at the time, then try to just look
+  // up
   // the latest (this is to work with bag files and static transform
   // publisher, etc).
   if (!tf_listener_.canTransform(to_frame, from_frame, time_to_lookup)) {
