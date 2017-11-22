@@ -5,16 +5,17 @@
 
 #include <vector>
 
+#include <global_segment_map/label_tsdf_integrator.h>
+#include <global_segment_map/label_tsdf_map.h>
+#include <global_segment_map/label_tsdf_mesh_integrator.h>
+#include <modelify_msgs/GsmUpdate.h>
+#include <pcl/io/vtk_lib_io.h>
+#include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_srvs/Empty.h>
 #include <tf/transform_listener.h>
-#include <pcl/io/vtk_lib_io.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <global_segment_map/label_tsdf_map.h>
-#include <global_segment_map/label_tsdf_integrator.h>
 #include <voxblox/io/mesh_ply.h>
-#include <global_segment_map/label_tsdf_mesh_integrator.h>
 
 namespace voxblox_gsm {
 
@@ -26,6 +27,9 @@ class Controller {
 
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
+
+  void subscribeValidateMergedObjectTopic(
+      ros::Subscriber* validate_merged_object_sub);
 
   void advertiseMeshTopic(ros::Publisher* mesh_pub);
 
@@ -39,6 +43,9 @@ class Controller {
  private:
   void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
+
+  void validateMergedObjectCallback(
+      const modelify_msgs::GsmUpdate::Ptr& gsm_update_msg);
 
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);

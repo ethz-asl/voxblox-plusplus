@@ -6,9 +6,9 @@
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <modelify/object_toolbox/object_toolbox.h>
-#include <pcl_conversions/pcl_conversions.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
+#include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox_ros/mesh_vis.h>
 
@@ -191,6 +191,23 @@ void Controller::subscribeSegmentPointCloudTopic(
       this);
 }
 
+void Controller::subscribeValidateMergedObjectTopic(
+    ros::Subscriber* validate_merged_object_sub) {
+  CHECK_NOTNULL(validate_merged_object_sub);
+  std::string validate_merged_object_topic =
+      "/scenenet_node/validate_merged_object";
+  node_handle_private_->param<std::string>("validate_merged_object",
+                                           validate_merged_object_topic,
+                                           validate_merged_object_topic);
+
+  // Large queue size to give slack to the algorithm
+  // pipeline and not lose any messages.
+  constexpr size_t kValidateMergedObjectQueueSize = 2000u;
+  *validate_merged_object_sub = node_handle_private_->subscribe(
+      validate_merged_object_topic, kValidateMergedObjectQueueSize,
+      &Controller::validateMergedObjectCallback, this);
+}
+
 void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
   CHECK_NOTNULL(mesh_pub);
   *mesh_pub = node_handle_private_->advertise<visualization_msgs::MarkerArray>(
@@ -360,6 +377,11 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO_STREAM("Timings: " << std::endl
                                 << voxblox::timing::Timing::Print());
   }
+}
+
+void Controller::validateMergedObjectCallback(
+    const modelify_msgs::GsmUpdate::Ptr& gsm_update_msg) {
+  // TODO(ff): Implement this.
 }
 
 bool Controller::generateMeshCallback(
