@@ -49,7 +49,7 @@ class Controller {
                             std_srvs::Empty::Response& response);
 
   bool validateMergedObjectCallback(
-      const modelify_msgs::ValidateMergedObject::Request& request,
+      modelify_msgs::ValidateMergedObject::Request& request,
       modelify_msgs::ValidateMergedObject::Response& response);
 
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,

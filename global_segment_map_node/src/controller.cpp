@@ -380,7 +380,7 @@ void Controller::segmentPointCloudCallback(
 }
 
 bool Controller::validateMergedObjectCallback(
-    const modelify_msgs::ValidateMergedObject::Request& request,
+    modelify_msgs::ValidateMergedObject::Request& request,
     modelify_msgs::ValidateMergedObject::Response& response) {
   typedef voxblox::TsdfVoxel VoxelType;
   typedef voxblox::Transformation Transformation;
