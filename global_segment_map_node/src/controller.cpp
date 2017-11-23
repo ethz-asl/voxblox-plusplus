@@ -627,8 +627,7 @@ bool Controller::lookupTransform(const std::string& from_frame,
   ros::Time time_to_lookup = timestamp;
 
   // If this transform isn't possible at the time, then try to just look
-  // up
-  // the latest (this is to work with bag files and static transform
+  // up the latest (this is to work with bag files and static transform
   // publisher, etc).
   if (!tf_listener_.canTransform(to_frame, from_frame, time_to_lookup)) {
     time_to_lookup = ros::Time(0);

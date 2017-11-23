@@ -622,7 +622,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
             }
             updated_labels_.erase(old_label);
 
-
             // Store the happened merge.
             std::map<Label, std::set<Label>>::iterator label_it =
                 merges_to_publish->find(new_label);
