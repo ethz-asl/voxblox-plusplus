@@ -24,6 +24,9 @@ int main(int argc, char** argv) {
   ros::Publisher mesh_publisher;
   controller.advertiseMeshTopic(&mesh_publisher);
 
+  ros::Publisher gsm_update_publisher;
+  controller.advertiseGsmUpdateTopic(&gsm_update_publisher);
+
   ros::ServiceServer generate_mesh_srv;
   controller.advertiseGenerateMeshService(&generate_mesh_srv);
 

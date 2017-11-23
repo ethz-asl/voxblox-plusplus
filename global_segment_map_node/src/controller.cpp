@@ -211,6 +211,17 @@ void Controller::advertiseObjectTopic(ros::Publisher* object_pub) {
   object_pub_ = object_pub;
 }
 
+void Controller::advertiseGsmUpdateTopic(ros::Publisher* gsm_update_pub) {
+  CHECK_NOTNULL(gsm_update_pub);
+  static const std::string kGsmUpdateTopic = "gsm_update";
+  // TODO(ff): Reduce this value, once we know some reasonable limit.
+  constexpr int kGsmUpdateQueueSize = 2000;
+
+  *gsm_update_pub = node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
+      kGsmUpdateTopic, kGsmUpdateQueueSize, true);
+  gsm_update_pub_ = gsm_update_pub;
+}
+
 void Controller::validateMergedObjectService(
     ros::ServiceServer* validate_merged_object_srv) {
   CHECK_NOTNULL(validate_merged_object_srv);
@@ -591,28 +602,58 @@ void Controller::extractSegmentLayers(
   }
 }
 
+// TODO(ff): Create this somewhere:
+// void serializeGsmAsMsg(const map&, const label&, const parent_labels&, msg*);
+
 void Controller::publishObjects() {
+  CHECK_NOTNULL(gsm_update_pub_);
+  modelify_msgs::GsmUpdate gsm_update_msg;
+  // TODO(ff): Not sure if we want to use this or ros::Time::now();
+  gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
+  static const std::string kGsmUpdateFrameId = "world";
+  gsm_update_msg.header.frame_id = kGsmUpdateFrameId;
+
   for (voxblox::Label label : segment_labels_to_publish_) {
+    // Extract the TSDF and label layers corresponding to this label.
+    voxblox::Layer<voxblox::TsdfVoxel> tsdf_layer(map_config_.voxel_size,
+                                                  map_config_.voxels_per_side);
+    voxblox::Layer<voxblox::LabelVoxel> label_layer(
+        map_config_.voxel_size, map_config_.voxels_per_side);
+    extractSegmentLayers(label, &tsdf_layer, &label_layer);
+    // TODO(ff): Convert to origin and extract transform.
+    constexpr bool kSerializeOnlyUpdated = false;
+    voxblox::serializeLayerAsMsg<voxblox::TsdfVoxel>(
+        tsdf_layer, kSerializeOnlyUpdated, &gsm_update_msg.object.tsdf_layer);
+    // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
+    // yet, hence it doesn't work.
+    // voxblox::serializeLayerAsMsg<voxblox::LabelVoxel>(
+    //     label_layer, kSerializeOnlyUpdated,
+    //     &gsm_update_msg.object.label_layer);
+
+    // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
+    gsm_update_msg.label = label;
+    gsm_update_msg.old_labels.clear();
+    geometry_msgs::Transform transform;
+    // TODO(ff): Actually fill in the transform from above.
+    gsm_update_msg.transforms.push_back(transform);
+
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
-      LOG(ERROR) << "UPDATING SEGMENT WITH LABEL " << label;
+      gsm_update_msg.old_labels.push_back(label);
     } else {
       // Segment never previously published, sending first type of message.
-      LOG(ERROR) << "SENDING SEGMENT WITH LABEL " << label;
     }
     auto merged_label_it = merges_to_publish_.find(label);
     if (merged_label_it != merges_to_publish_.end()) {
       for (voxblox::Label merged_label : merged_label_it->second) {
         if (all_published_segments_.find(merged_label) !=
             all_published_segments_.end()) {
-          LOG(ERROR) << "LABEL " << label
-                     << "INCLUDES THE PREVIOUSLY PUBLISHED LABEL "
-                     << merged_label;
+          gsm_update_msg.old_labels.push_back(merged_label);
         }
       }
       merges_to_publish_.erase(merged_label_it);
     }
-
+    gsm_update_pub_->publish(gsm_update_msg);
     all_published_segments_.insert(label);
   }
   segment_labels_to_publish_.clear();
