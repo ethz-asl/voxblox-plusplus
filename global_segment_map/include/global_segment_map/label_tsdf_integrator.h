@@ -246,24 +246,23 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
-  // TODO(grinvalm): find a way to do bookkeping of the
-  // voxel counts in a multithreaded scenario
-  // without blocking the parallelism with mutexes.
-
-  //  // Increase or decrease the voxel count for a label.
-  //  // TODO(grinvalm): when count for a label goes to 0
-  //  // remove label from label_count.
-  //  inline void changeLabelCount(const Label label, int count,
-  //                               std::lock_guard<std::mutex> lock) {
-  //    auto label_count = labels_count_map_.find(label);
-  //    if (label_count != labels_count_map_.end()) {
-  //      label_count->second = label_count->second + count;
-  //    } else {
-  //      if (label != 0u) {
-  //        labels_count_map_.insert(std::make_pair(label, count));
-  //      }
-  //    }
-  //  }
+  // Increase or decrease the voxel count for a label.
+  // TODO(grinvalm): when count for a label goes to 0
+  // remove label from label_count.
+  inline void changeLabelCount(const Label label, int count) {
+    auto label_count_it = labels_count_map_.find(label);
+    if (label_count_it != labels_count_map_.end()) {
+      label_count_it->second = label_count_it->second + count;
+      if (label_count_it->second <= 0) {
+        labels_count_map_.erase(label_count_it);
+      }
+    } else {
+      if (label != 0u) {
+        DCHECK(count > 0);
+        labels_count_map_.insert(std::make_pair(label, count));
+      }
+    }
+  }
 
   // Will return a pointer to a voxel located at global_voxel_idx in the label
   // layer. Thread safe.
@@ -368,8 +367,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         updated_labels_.insert(label);
         updated_labels_.insert(label_voxel->label);
 
-        //        changeLabelCount(label, 1, lock);
-        //        changeLabelCount(label_voxel->label, -1, lock);
+        changeLabelCount(label, 1);
+        changeLabelCount(label_voxel->label, -1);
 
         label_voxel->label = label;
         label_voxel->label_confidence = confidence;
@@ -541,6 +540,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     insertion_timer.Stop();
   }
 
+  // Not thread safe.
   void swapLabels(Label old_label, Label new_label) {
     BlockIndexList all_label_blocks;
     label_layer_->getAllAllocatedBlocks(&all_label_blocks);
@@ -553,8 +553,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         LabelVoxel& voxel = block->getVoxelByLinearIndex(i);
         if (voxel.label == old_label) {
           voxel.label = new_label;
-          //          changeLabelCount(new_label, 1);
-          //          changeLabelCount(old_label, -1);
+          changeLabelCount(new_label, 1);
+          changeLabelCount(old_label, -1);
 
           block->updated() = true;
         }
@@ -592,6 +592,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
+  // Not thread safe.
   void mergeLabels(std::map<Label, std::set<Label>>* merges_to_publish) {
     if (label_tsdf_config_.enable_pairwise_confidence_merging) {
       for (std::pair<Label, LabelCounterMap> confidence_map :
