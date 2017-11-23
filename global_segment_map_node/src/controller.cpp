@@ -209,7 +209,6 @@ void Controller::advertiseObjectTopic(ros::Publisher* object_pub) {
                                                                        1, true);
 
   object_pub_ = object_pub;
-
 }
 
 void Controller::validateMergedObjectService(
@@ -217,8 +216,7 @@ void Controller::validateMergedObjectService(
   CHECK_NOTNULL(validate_merged_object_srv);
   static const std::string kValidateMergedObjectTopicRosParam =
       "validate_merged_object";
-  std::string validate_merged_object_topic =
-      "validate_merged_object";
+  std::string validate_merged_object_topic = "validate_merged_object";
   node_handle_private_->param<std::string>(kValidateMergedObjectTopicRosParam,
                                            validate_merged_object_topic,
                                            validate_merged_object_topic);
@@ -226,6 +224,7 @@ void Controller::validateMergedObjectService(
   *validate_merged_object_srv = node_handle_private_->advertiseService(
       validate_merged_object_topic, &Controller::validateMergedObjectCallback,
       this);
+}
 
 void Controller::advertiseGenerateMeshService(
     ros::ServiceServer* generate_mesh_srv) {
