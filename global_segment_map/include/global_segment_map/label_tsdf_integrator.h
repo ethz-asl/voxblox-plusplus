@@ -247,8 +247,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   }
 
   // Increase or decrease the voxel count for a label.
-  // TODO(grinvalm): when count for a label goes to 0
-  // remove label from label_count.
   inline void changeLabelCount(const Label label, int count) {
     auto label_count_it = labels_count_map_.find(label);
     if (label_count_it != labels_count_map_.end()) {
