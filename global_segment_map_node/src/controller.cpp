@@ -12,6 +12,7 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/integrator/merge_integration.h>
+#include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
 
@@ -620,7 +621,15 @@ void Controller::publishObjects() {
     voxblox::Layer<voxblox::LabelVoxel> label_layer(
         map_config_.voxel_size, map_config_.voxels_per_side);
     extractSegmentLayers(label, &tsdf_layer, &label_layer);
-    // TODO(ff): Convert to origin and extract transform.
+    // Convert to origin and extract translation.
+    voxblox::Point origin_shifted_tsdf_layer_W;
+    voxblox::utils::centerBlocksOfLayer<voxblox::TsdfVoxel>(
+        &tsdf_layer, &origin_shifted_tsdf_layer_W);
+    // TODO(ff): If this is time consuming we can omit this step.
+    voxblox::Point origin_shifted_label_layer_W;
+    voxblox::utils::centerBlocksOfLayer<voxblox::LabelVoxel>(
+        &label_layer, &origin_shifted_label_layer_W);
+    CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
     constexpr bool kSerializeOnlyUpdated = false;
     voxblox::serializeLayerAsMsg<voxblox::TsdfVoxel>(
         tsdf_layer, kSerializeOnlyUpdated, &gsm_update_msg.object.tsdf_layer);
@@ -631,10 +640,18 @@ void Controller::publishObjects() {
     //     &gsm_update_msg.object.label_layer);
 
     // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
+
     gsm_update_msg.label = label;
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
-    // TODO(ff): Actually fill in the transform from above.
+    transform.translation.x = origin_shifted_tsdf_layer_W[0];
+    transform.translation.y = origin_shifted_tsdf_layer_W[1];
+    transform.translation.z = origin_shifted_tsdf_layer_W[2];
+    transform.rotation.w = 1.;
+    transform.rotation.x = 0.;
+    transform.rotation.y = 0.;
+    transform.rotation.z = 0.;
+
     gsm_update_msg.transforms.push_back(transform);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
