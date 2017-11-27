@@ -651,7 +651,7 @@ void Controller::publishObjects() {
     transform.rotation.x = 0.;
     transform.rotation.y = 0.;
     transform.rotation.z = 0.;
-
+    gsm_update_msg.transforms.clear();
     gsm_update_msg.transforms.push_back(transform);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
