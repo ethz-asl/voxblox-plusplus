@@ -24,6 +24,7 @@
   <depend>roscpp</depend>
   <depend>voxblox</depend>
   <depend>global_segment_map</depend>
+  <depend>voxblox_msgs</depend>
   <depend>voxblox_ros</depend>
 
 </package>

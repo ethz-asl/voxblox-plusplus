@@ -9,6 +9,7 @@
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_tsdf_mesh_integrator.h>
+#include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
@@ -17,6 +18,7 @@
 #include <std_srvs/Empty.h>
 #include <tf/transform_listener.h>
 #include <voxblox/io/mesh_ply.h>
+#include <voxblox_ros/conversions.h>
 
 namespace voxblox_gsm {
 
@@ -32,6 +34,8 @@ class Controller {
   void advertiseMeshTopic(ros::Publisher* mesh_pub);
 
   void advertiseObjectTopic(ros::Publisher* object_pub);
+
+  void advertiseGsmUpdateTopic(ros::Publisher* gsm_update_pub);
 
   void validateMergedObjectService(
       ros::ServiceServer* validate_merged_object_srv);
@@ -74,6 +78,7 @@ class Controller {
 
   ros::Publisher* mesh_pub_;
   ros::Publisher* object_pub_;
+  ros::Publisher* gsm_update_pub_;
   ros::Timer update_mesh_timer_;
 
   size_t callback_count_;
