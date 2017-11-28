@@ -206,8 +206,8 @@ void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
 void Controller::advertiseObjectTopic(ros::Publisher* object_pub) {
   CHECK_NOTNULL(object_pub);
   *object_pub =
-      node_handle_private_->advertise<visualization_msgs::MarkerArray>("mesh",
-                                                                       1, true);
+      node_handle_private_->advertise<visualization_msgs::Marker>(
+          "segment_meshes", 1, true);
 
   object_pub_ = object_pub;
 }
@@ -639,8 +639,6 @@ void Controller::publishObjects() {
     //     label_layer, kSerializeOnlyUpdated,
     //     &gsm_update_msg.object.label_layer);
 
-    // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
-
     gsm_update_msg.label = label;
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
@@ -671,6 +669,27 @@ void Controller::publishObjects() {
       merges_to_publish_.erase(merged_label_it);
     }
     gsm_update_pub_->publish(gsm_update_msg);
+    // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
+
+    // Generate mesh for visualization purposes.
+    std::shared_ptr<voxblox::MeshLayer> mesh_layer;
+    mesh_layer.reset(new voxblox::MeshLayer(tsdf_layer.block_size()));
+    // mesh_layer.reset(new voxblox::MeshLayer(map_->block_size()));
+    voxblox::MeshLabelIntegrator mesh_integrator(
+        mesh_config_, &tsdf_layer, &label_layer, mesh_layer.get());
+    constexpr bool only_mesh_updated_blocks = false;
+    constexpr bool clear_updated_flag = true;
+    mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                   clear_updated_flag);
+
+    visualization_msgs::Marker segment_marker;
+    fillMarkerWithMesh(mesh_layer, voxblox::ColorMode::kColor,
+                       &segment_marker);
+    static const std::string kWorldFrameName = "world";
+    segment_marker.header.frame_id = kWorldFrameName;
+    if (segment_marker.points.size() > 0) {
+      object_pub_->publish(segment_marker);
+    }
     all_published_segments_.insert(label);
   }
   segment_labels_to_publish_.clear();
