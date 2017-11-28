@@ -31,6 +31,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   typedef AnyIndexHashMapType<AlignedVector<size_t>>::type VoxelMap;
+  typedef std::map<Label, int> LabelCounterMap;
+  typedef std::map<Label, LabelCounterMap> LabelToLabelCounterMap;
 
   struct LabelTsdfConfig {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -116,16 +118,17 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
             label2 = label1;
             label1 = tmp;
           }
-          auto pairs = pairwise_confidence_.find(label1);
+          LabelToLabelCounterMap::iterator pairs =
+              pairwise_confidence_.find(label1);
           if (pairs != pairwise_confidence_.end()) {
-            auto confidence = pairs->second.find(label2);
+            LabelCounterMap::iterator confidence = pairs->second.find(label2);
             if (confidence != pairs->second.end()) {
               ++confidence->second;
             } else {
               pairs->second.emplace(label2, 1);
             }
           } else {
-            std::map<Label, int> confidence_pair;
+            LabelCounterMap confidence_pair;
             confidence_pair.emplace(label2, 1);
             pairwise_confidence_.emplace(label1, confidence_pair);
           }
@@ -243,24 +246,21 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
-  // TODO(grinvalm): find a way to do bookkeping of the
-  // voxel counts in a multithreaded scenario
-  // without blocking the parallelism with mutexes.
-
-  //  // Increase or decrease the voxel count for a label.
-  //  // TODO(grinvalm): when count for a label goes to 0
-  //  // remove label from label_count.
-  //  inline void changeLabelCount(const Label label, int count,
-  //                               std::lock_guard<std::mutex> lock) {
-  //    auto label_count = labels_count_map_.find(label);
-  //    if (label_count != labels_count_map_.end()) {
-  //      label_count->second = label_count->second + count;
-  //    } else {
-  //      if (label != 0u) {
-  //        labels_count_map_.insert(std::make_pair(label, count));
-  //      }
-  //    }
-  //  }
+  // Increase or decrease the voxel count for a label.
+  inline void changeLabelCount(const Label label, int count) {
+    auto label_count_it = labels_count_map_.find(label);
+    if (label_count_it != labels_count_map_.end()) {
+      label_count_it->second = label_count_it->second + count;
+      if (label_count_it->second <= 0) {
+        labels_count_map_.erase(label_count_it);
+      }
+    } else {
+      if (label != 0u) {
+        DCHECK(count > 0);
+        labels_count_map_.insert(std::make_pair(label, count));
+      }
+    }
+  }
 
   // Will return a pointer to a voxel located at global_voxel_idx in the label
   // layer. Thread safe.
@@ -365,8 +365,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         updated_labels_.insert(label);
         updated_labels_.insert(label_voxel->label);
 
-        //        changeLabelCount(label, 1, lock);
-        //        changeLabelCount(label_voxel->label, -1, lock);
+        changeLabelCount(label, 1);
+        changeLabelCount(label_voxel->label, -1);
 
         label_voxel->label = label;
         label_voxel->label_confidence = confidence;
@@ -538,6 +538,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     insertion_timer.Stop();
   }
 
+  // Not thread safe.
   void swapLabels(Label old_label, Label new_label) {
     BlockIndexList all_label_blocks;
     label_layer_->getAllAllocatedBlocks(&all_label_blocks);
@@ -550,8 +551,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         LabelVoxel& voxel = block->getVoxelByLinearIndex(i);
         if (voxel.label == old_label) {
           voxel.label = new_label;
-          //          changeLabelCount(new_label, 1);
-          //          changeLabelCount(old_label, -1);
+          changeLabelCount(new_label, 1);
+          changeLabelCount(old_label, -1);
 
           block->updated() = true;
         }
@@ -573,7 +574,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       std::vector<voxblox::Label>* segment_labels_to_publish) {
     resetCurrentFrameUpdatedLabelsAge();
 
-    for (auto label_age_pair_it = labels_to_publish_.begin();
+    for (LabelCounterMap::iterator label_age_pair_it =
+             labels_to_publish_.begin();
          label_age_pair_it != labels_to_publish_.end();
          /* no increment */) {
       // Increase age of a label to publish;
@@ -588,10 +590,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
+  // Not thread safe.
   void mergeLabels(std::map<Label, std::set<Label>>* merges_to_publish) {
     if (label_tsdf_config_.enable_pairwise_confidence_merging) {
-      for (auto& confidence_map : pairwise_confidence_) {
-        for (auto confidence_pair_it = confidence_map.second.begin();
+      for (std::pair<Label, LabelCounterMap> confidence_map :
+           pairwise_confidence_) {
+        for (LabelCounterMap::iterator confidence_pair_it =
+                 confidence_map.second.begin();
              confidence_pair_it != confidence_map.second.end();
              /* no increment */) {
           if (confidence_pair_it->second >
@@ -609,17 +614,23 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
             confidence_map.second.erase(confidence_pair_it++);
 
             // Delete any staged segment publishing for overridden label.
-            auto label_age_pair_it = labels_to_publish_.find(old_label);
+            LabelCounterMap::iterator label_age_pair_it =
+                labels_to_publish_.find(old_label);
             if (label_age_pair_it != labels_to_publish_.end()) {
               labels_to_publish_.erase(old_label);
             }
             updated_labels_.erase(old_label);
 
+            // Store the happened merge.
             std::map<Label, std::set<Label>>::iterator label_it =
                 merges_to_publish->find(new_label);
             if (label_it != merges_to_publish->end()) {
+              // If the new_label already incorporated other labels
+              // just add the just incorporated old_label to this list.
               label_it->second.emplace(old_label);
             } else {
+              // If the new_label hasn't incorporated any other labels yet
+              // create a new list and only add the just incorporated old_label.
               std::set<Label> incorporated_labels;
               incorporated_labels.emplace(old_label);
               merges_to_publish->emplace(new_label, incorporated_labels);
@@ -641,7 +652,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // for which the voxel count is greater than 0.
   std::vector<Label> getLabelsList() {
     std::vector<Label> labels;
-    for (auto& label_count_pair : labels_count_map_) {
+    for (std::pair<Label, int> label_count_pair : labels_count_map_) {
       if (label_count_pair.second > 0) {
         labels.push_back(label_count_pair.first);
       }
@@ -654,16 +665,15 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   Layer<LabelVoxel>* label_layer_;
 
   // Temporary block storage, used to hold blocks that need to be created
-  // while
-  // integrating a new pointcloud
+  // while integrating a new pointcloud.
   std::mutex temp_label_block_mutex_;
   Layer<LabelVoxel>::BlockHashMap temp_label_block_map_;
 
   Label* highest_label_;
-  std::map<Label, int> labels_count_map_;
+  LabelCounterMap labels_count_map_;
 
   // Pairwise confidence merging settings.
-  std::map<Label, std::map<Label, int>> pairwise_confidence_;
+  LabelToLabelCounterMap pairwise_confidence_;
 
   // We need to prevent simultaneous access to the voxels in the map. We could
   // put a single mutex on the map or on the blocks, but as voxel updating is
@@ -679,7 +689,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   std::mutex updated_labels_mutex_;
   std::set<Label> updated_labels_;
 
-  std::map<Label, int> labels_to_publish_;
+  LabelCounterMap labels_to_publish_;
 };
 
 }  // namespace voxblox

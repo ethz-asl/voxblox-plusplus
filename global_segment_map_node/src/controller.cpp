@@ -14,6 +14,7 @@
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
+#include <voxblox/core/common.h>
 #include <voxblox_ros/mesh_vis.h>
 
 #include <boost/filesystem.hpp>
@@ -262,7 +263,8 @@ void Controller::segmentPointCloudCallback(
   // segment messages from a certain frame have arrived.
   // Since segments from the same frame all have the same timestamp,
   // the start of a new frame is detected when the message timestamp changes.
-  // TODO(grinvalm): need additional check for the last frame to be integrated.
+  // TODO(grinvalm): need additional check for the last frame to be
+  // integrated.
   if (segment_point_cloud_msg->header.stamp != last_segment_msg_timestamp_) {
     ROS_INFO("Deciding labels for %lu pointclouds.",
              segments_to_integrate_.size());
@@ -534,7 +536,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   // too small to result in any polygon. Find a fix, maybe with a size
   // threshold.
 
-  for (auto& label : labels) {
+  for (voxblox::Label label : labels) {
     voxblox::Layer<voxblox::TsdfVoxel> tsdf_layer(map_config_.voxel_size,
                                                   map_config_.voxels_per_side);
     voxblox::Layer<voxblox::LabelVoxel> label_layer(
@@ -545,22 +547,28 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     voxblox::MeshLayer mesh_layer(map_->block_size());
     voxblox::MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer,
                                                  &label_layer, &mesh_layer);
+
     constexpr bool only_mesh_updated_blocks = false;
     constexpr bool clear_updated_flag = true;
-    mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
+    mesh_integrator.generateMesh(only_mesh_updated_blocks, clear_updated_flag);
 
-    boost::filesystem::path segments_dir("segments");
-    boost::filesystem::create_directory(segments_dir);
+    voxblox::Mesh::Ptr combined_mesh = voxblox::aligned_shared<voxblox::Mesh>(
+        mesh_layer.block_size(), voxblox::Point::Zero());
+    mesh_layer.combineMesh(combined_mesh);
 
-    std::string mesh_filename =
-        "segments/voxblox_gsm_mesh_label_" + std::to_string(label) + ".ply";
+    if (combined_mesh->vertices.size() > 0) {
+      boost::filesystem::path segments_dir("segments");
+      boost::filesystem::create_directory(segments_dir);
 
-    bool success = voxblox::outputMeshLayerAsPly(mesh_filename, mesh_layer);
-    if (success) {
-      ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
-    } else {
-      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
+      std::string mesh_filename =
+          "segments/voxblox_gsm_mesh_label_" + std::to_string(label) + ".ply";
+
+      bool success = voxblox::outputMeshAsPly(mesh_filename, *combined_mesh);
+      if (success) {
+        ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
+      } else {
+        ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
+      }
     }
   }
   return true;
@@ -569,6 +577,8 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 void Controller::extractSegmentLayers(
     voxblox::Label label, voxblox::Layer<voxblox::TsdfVoxel>* tsdf_layer,
     voxblox::Layer<voxblox::LabelVoxel>* label_layer) {
+  // TODO(grinvalm): find a less naive method to
+  // extract all blocks and voxels for a label.
   voxblox::BlockIndexList all_label_blocks;
   map_->getTsdfLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
 
@@ -702,8 +712,8 @@ bool Controller::lookupTransform(const std::string& from_frame,
   tf::StampedTransform tf_transform;
   ros::Time time_to_lookup = timestamp;
 
-  // If this transform isn't possible at the time, then try to just look up
-  // the latest (this is to work with bag files and static transform
+  // If this transform isn't possible at the time, then try to just look
+  // up the latest (this is to work with bag files and static transform
   // publisher, etc).
   if (!tf_listener_.canTransform(to_frame, from_frame, time_to_lookup)) {
     time_to_lookup = ros::Time(0);
