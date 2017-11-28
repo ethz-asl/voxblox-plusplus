@@ -11,10 +11,10 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <voxblox/core/common.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
-#include <voxblox/core/common.h>
 #include <voxblox_ros/mesh_vis.h>
 
 #include <boost/filesystem.hpp>
@@ -206,9 +206,8 @@ void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
 
 void Controller::advertiseObjectTopic(ros::Publisher* object_pub) {
   CHECK_NOTNULL(object_pub);
-  *object_pub =
-      node_handle_private_->advertise<visualization_msgs::Marker>(
-          "segment_meshes", 1, true);
+  *object_pub = node_handle_private_->advertise<visualization_msgs::Marker>(
+      "segment_meshes", 1, true);
 
   object_pub_ = object_pub;
 }
@@ -689,12 +688,10 @@ void Controller::publishObjects() {
         mesh_config_, &tsdf_layer, &label_layer, mesh_layer.get());
     constexpr bool only_mesh_updated_blocks = false;
     constexpr bool clear_updated_flag = true;
-    mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
+    mesh_integrator.generateMesh(only_mesh_updated_blocks, clear_updated_flag);
 
     visualization_msgs::Marker segment_marker;
-    fillMarkerWithMesh(mesh_layer, voxblox::ColorMode::kColor,
-                       &segment_marker);
+    fillMarkerWithMesh(mesh_layer, voxblox::ColorMode::kColor, &segment_marker);
     static const std::string kWorldFrameName = "world";
     segment_marker.header.frame_id = kWorldFrameName;
     if (segment_marker.points.size() > 0) {
