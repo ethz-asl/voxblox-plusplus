@@ -307,7 +307,7 @@ bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
 
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
-  ROS_INFO("Segment pointcloud callback n.%u", ++callback_count_);
+  ROS_INFO("Segment pointcloud callback n.%zu", ++callback_count_);
   ROS_INFO("Timestamp of segment: %f.",
            segment_point_cloud_msg->header.stamp.toSec());
 
