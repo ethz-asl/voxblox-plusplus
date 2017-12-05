@@ -282,7 +282,8 @@ bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
 
   constexpr bool kSerializeOnlyUpdated = false;
   voxblox::serializeLayerAsMsg<voxblox::TsdfVoxel>(
-      map_->getTsdfLayer(), kSerializeOnlyUpdated, &gsm_update_msg.object.tsdf_layer);
+      map_->getTsdfLayer(), kSerializeOnlyUpdated,
+      &gsm_update_msg.object.tsdf_layer);
   // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
   // yet, hence it doesn't work.
   // voxblox::serializeLayerAsMsg<voxblox::LabelVoxel>(
