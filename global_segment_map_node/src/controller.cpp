@@ -204,6 +204,16 @@ void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
   mesh_pub_ = mesh_pub;
 }
 
+void Controller::advertiseSceneTopic(ros::Publisher* scene_pub) {
+  CHECK_NOTNULL(scene_pub);
+  static const std::string kGsmSceneTopic = "scene";
+  constexpr int kGsmSceneQueueSize = 1;
+
+  *scene_pub = node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
+      kGsmSceneTopic, kGsmSceneQueueSize, true);
+  scene_pub_ = scene_pub;
+}
+
 void Controller::advertiseObjectTopic(ros::Publisher* object_pub) {
   CHECK_NOTNULL(object_pub);
   *object_pub = node_handle_private_->advertise<visualization_msgs::Marker>(
@@ -245,11 +255,54 @@ void Controller::advertiseGenerateMeshService(
       "generate_mesh", &Controller::generateMeshCallback, this);
 }
 
+void Controller::advertisePublishSceneService(
+    ros::ServiceServer* publish_scene_srv) {
+  CHECK_NOTNULL(publish_scene_srv);
+  static const std::string kAdvertisePublishSceneServiceName = "publish_scene";
+  *publish_scene_srv = node_handle_private_->advertiseService(
+      kAdvertisePublishSceneServiceName, &Controller::publishSceneCallback,
+      this);
+}
+
 void Controller::advertiseExtractSegmentsService(
     ros::ServiceServer* extract_segments_srv) {
   CHECK_NOTNULL(extract_segments_srv);
   *extract_segments_srv = node_handle_private_->advertiseService(
       "extract_segments", &Controller::extractSegmentsCallback, this);
+}
+
+bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
+                                      std_srvs::Empty::Response& response) {
+  CHECK_NOTNULL(scene_pub_);
+  modelify_msgs::GsmUpdate gsm_update_msg;
+
+  gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
+  static const std::string kGsmUpdateFrameId = "world";
+  gsm_update_msg.header.frame_id = kGsmUpdateFrameId;
+
+  constexpr bool kSerializeOnlyUpdated = false;
+  voxblox::serializeLayerAsMsg<voxblox::TsdfVoxel>(
+      map_->getTsdfLayer(), kSerializeOnlyUpdated, &gsm_update_msg.object.tsdf_layer);
+  // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
+  // yet, hence it doesn't work.
+  // voxblox::serializeLayerAsMsg<voxblox::LabelVoxel>(
+  //     map_->label_layer_, kSerializeOnlyUpdated,
+  //     &gsm_update_msg.object.label_layer);
+
+  gsm_update_msg.label = 0u;
+  gsm_update_msg.old_labels.clear();
+  geometry_msgs::Transform transform;
+  transform.translation.x = 0.0;
+  transform.translation.y = 0.0;
+  transform.translation.z = 0.0;
+  transform.rotation.w = 1.0;
+  transform.rotation.x = 0.0;
+  transform.rotation.y = 0.0;
+  transform.rotation.z = 0.0;
+  gsm_update_msg.transforms.clear();
+  gsm_update_msg.transforms.push_back(transform);
+  scene_pub_->publish(gsm_update_msg);
+  return true;
 }
 
 void Controller::segmentPointCloudCallback(

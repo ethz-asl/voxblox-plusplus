@@ -33,6 +33,8 @@ class Controller {
 
   void advertiseMeshTopic(ros::Publisher* mesh_pub);
 
+  void advertiseSceneTopic(ros::Publisher* scene_pub);
+
   void advertiseObjectTopic(ros::Publisher* object_pub);
 
   void advertiseGsmUpdateTopic(ros::Publisher* gsm_update_pub);
@@ -41,6 +43,8 @@ class Controller {
       ros::ServiceServer* validate_merged_object_srv);
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
+
+  void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
   void advertiseExtractSegmentsService(
       ros::ServiceServer* extract_segments_srv);
@@ -52,6 +56,9 @@ class Controller {
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
   bool generateMeshCallback(std_srvs::Empty::Request& request,
+                            std_srvs::Empty::Response& response);
+
+  bool publishSceneCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
 
   bool validateMergedObjectCallback(
@@ -77,6 +84,7 @@ class Controller {
   ros::Time last_segment_msg_timestamp_;
 
   ros::Publisher* mesh_pub_;
+  ros::Publisher* scene_pub_;
   ros::Publisher* object_pub_;
   ros::Publisher* gsm_update_pub_;
   ros::Timer update_mesh_timer_;

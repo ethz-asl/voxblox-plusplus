@@ -24,6 +24,9 @@ int main(int argc, char** argv) {
   ros::Publisher mesh_publisher;
   controller.advertiseMeshTopic(&mesh_publisher);
 
+  ros::Publisher scene_publisher;
+  controller.advertiseSceneTopic(&scene_publisher);
+
   ros::Publisher object_publisher;
   controller.advertiseObjectTopic(&object_publisher);
 
@@ -32,6 +35,9 @@ int main(int argc, char** argv) {
 
   ros::ServiceServer generate_mesh_srv;
   controller.advertiseGenerateMeshService(&generate_mesh_srv);
+
+  ros::ServiceServer publish_scene_srv;
+  controller.advertisePublishSceneService(&publish_scene_srv);
 
   ros::ServiceServer extract_segments_srv;
   controller.advertiseExtractSegmentsService(&extract_segments_srv);
