@@ -396,8 +396,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
     ThreadSafeIndex index_getter(points_C.size());
 
-    bundleRays(T_G_C, points_C, colors, freespace_points, &index_getter,
-               &voxel_map, &clear_map);
+    bundleRays(T_G_C, points_C, freespace_points, &index_getter, &voxel_map,
+               &clear_map);
 
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
                   false, voxel_map, clear_map);
