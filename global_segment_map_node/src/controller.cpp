@@ -1,5 +1,7 @@
 // Copyright 2017 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
+#include "voxblox_gsm/controller.h"
+
 #include <cmath>
 #include <string>
 #include <unordered_set>
@@ -20,7 +22,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/thread.hpp>
 
-#include "voxblox_gsm/controller.h"
+#include "voxblox_gsm/conversions.h"
 
 namespace voxblox_gsm {
 
@@ -433,7 +435,6 @@ bool Controller::validateMergedObjectCallback(
     modelify_msgs::ValidateMergedObject::Response& response) {
   typedef voxblox::TsdfVoxel VoxelType;
   typedef voxblox::Transformation Transformation;
-  typedef kindr::minimal::RotationQuaternionTemplate<float> RotationQuaternion;
   typedef voxblox::Layer<VoxelType> Layer;
   // TODO(ff): Do the following afterwards in modelify.
   // - Check if merged object agrees with whole map (at all poses).
@@ -452,15 +453,8 @@ bool Controller::validateMergedObjectCallback(
   std::vector<Transformation> transforms_W_O;
   // TODO(ff): I guess transforms should be part of object and not of the
   // gsm_update.
-  for (geometry_msgs::Transform transform : request.gsm_update.transforms) {
-    RotationQuaternion quaternion(transform.rotation.w, transform.rotation.x,
-                                  transform.rotation.y, transform.rotation.z);
-    Eigen::Vector3f translation(transform.translation.x,
-                                transform.translation.y,
-                                transform.translation.z);
-    Transformation t(quaternion, translation);
-    transforms_W_O.emplace_back(quaternion, translation);
-  }
+  voxblox::voxblox_gsm::transformMsgs2Transformations(
+      request.gsm_update.transforms, &transforms_W_O);
 
   voxblox::utils::VoxelEvaluationMode voxel_evaluation_mode =
       voxblox::utils::VoxelEvaluationMode::kEvaluateAllVoxels;
