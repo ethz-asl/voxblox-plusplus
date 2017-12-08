@@ -451,14 +451,14 @@ bool Controller::validateMergedObjectCallback(
 
   // Extract transformations.
   std::vector<Transformation> transforms_W_O;
-  // TODO(ff): I guess transforms should be part of object and not of the
-  // gsm_update.
   voxblox::voxblox_gsm::transformMsgs2Transformations(
       request.gsm_update.transforms, &transforms_W_O);
 
   voxblox::utils::VoxelEvaluationMode voxel_evaluation_mode =
       voxblox::utils::VoxelEvaluationMode::kEvaluateAllVoxels;
-  voxblox::utils::VoxelEvaluationDetails voxel_evaluation_details;
+
+  std::vector<voxblox::utils::VoxelEvaluationDetails>
+      voxel_evaluation_details_vector;
   size_t idx = 0u;
   // Check if world TSDF layer agrees with merged object at all object poses.
   for (Transformation transform_W_O : transforms_W_O) {
@@ -469,27 +469,17 @@ bool Controller::validateMergedObjectCallback(
                                        transform_W_O.inverse(),
                                        merged_object_layer_W.get());
 
+    voxblox::utils::VoxelEvaluationDetails voxel_evaluation_details;
     // Evaluate the RMSE of the merged object layer in the world layer.
     voxblox::utils::evaluateLayersRmse(
         *(map_->getTsdfLayerPtr()), *merged_object_layer_W,
         voxel_evaluation_mode, &voxel_evaluation_details);
-    // TODO(ff): Move this to modelify_ros or voxblox_ros conversions.h.
-    response.voxel_evaluation_details[idx].rmse = voxel_evaluation_details.rmse;
-    response.voxel_evaluation_details[idx].max_error =
-        voxel_evaluation_details.max_error;
-    response.voxel_evaluation_details[idx].min_error =
-        voxel_evaluation_details.min_error;
-    response.voxel_evaluation_details[idx].num_evaluated_voxels =
-        voxel_evaluation_details.num_evaluated_voxels;
-    response.voxel_evaluation_details[idx].num_ignored_voxels =
-        voxel_evaluation_details.num_ignored_voxels;
-    response.voxel_evaluation_details[idx].num_overlapping_voxels =
-        voxel_evaluation_details.num_overlapping_voxels;
-    response.voxel_evaluation_details[idx].num_non_overlapping_voxels =
-        voxel_evaluation_details.num_non_overlapping_voxels;
+    voxel_evaluation_details_vector.push_back(voxel_evaluation_details);
     ++idx;
     CHECK_LT(idx, transforms_W_O.size());
   }
+  voxblox::voxblox_gsm::voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
+      voxel_evaluation_details_vector, &response.voxel_evaluation_details);
   return true;
 }
 
