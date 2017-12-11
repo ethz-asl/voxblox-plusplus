@@ -16,24 +16,20 @@ void evaluateLayerAtPoses(
     std::vector<utils::VoxelEvaluationDetails>*
         voxel_evaluation_details_vector) {
   CHECK_NOTNULL(voxel_evaluation_details_vector);
-  size_t idx = 0u;
   // Check if world TSDF layer agrees with merged object at all object poses.
   for (const Transformation& transform_W_O : transforms_W_O) {
     std::shared_ptr<Layer<VoxelType>> merged_object_layer_W;
 
     // Transform merged object into the world frame.
     transformLayer<VoxelType>(*merged_object_layer_O.get(),
-                                       transform_W_O.inverse(),
-                                       merged_object_layer_W.get());
+                              transform_W_O.inverse(),
+                              merged_object_layer_W.get());
 
     utils::VoxelEvaluationDetails voxel_evaluation_details;
     // Evaluate the RMSE of the merged object layer in the world layer.
-    utils::evaluateLayersRmse(
-        layer, *merged_object_layer_W,
-        voxel_evaluation_mode, &voxel_evaluation_details);
+    utils::evaluateLayersRmse(layer, *merged_object_layer_W,
+                              voxel_evaluation_mode, &voxel_evaluation_details);
     voxel_evaluation_details_vector->push_back(voxel_evaluation_details);
-    ++idx;
-    CHECK_LT(idx, transforms_W_O.size());
   }
 }
 }  // namespace voxblox
