@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_set>
 
+#include <global_segment_map/layer_evaluation.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <modelify/object_toolbox/object_toolbox.h>
@@ -434,7 +435,6 @@ bool Controller::validateMergedObjectCallback(
     modelify_msgs::ValidateMergedObject::Request& request,
     modelify_msgs::ValidateMergedObject::Response& response) {
   typedef voxblox::TsdfVoxel VoxelType;
-  typedef voxblox::Transformation Transformation;
   typedef voxblox::Layer<VoxelType> Layer;
   // TODO(ff): Do the following afterwards in modelify.
   // - Check if merged object agrees with whole map (at all poses).
@@ -450,34 +450,20 @@ bool Controller::validateMergedObjectCallback(
       << "Deserializing of TSDF layer from merged object message failed.";
 
   // Extract transformations.
-  std::vector<Transformation> transforms_W_O;
+  std::vector<voxblox::Transformation> transforms_W_O;
   voxblox::voxblox_gsm::transformMsgs2Transformations(
       request.gsm_update.transforms, &transforms_W_O);
 
-  voxblox::utils::VoxelEvaluationMode voxel_evaluation_mode =
+  const voxblox::utils::VoxelEvaluationMode voxel_evaluation_mode =
       voxblox::utils::VoxelEvaluationMode::kEvaluateAllVoxels;
 
   std::vector<voxblox::utils::VoxelEvaluationDetails>
       voxel_evaluation_details_vector;
-  size_t idx = 0u;
-  // Check if world TSDF layer agrees with merged object at all object poses.
-  for (Transformation transform_W_O : transforms_W_O) {
-    std::shared_ptr<Layer> merged_object_layer_W;
 
-    // Transform merged object into the world frame.
-    voxblox::transformLayer<VoxelType>(*merged_object_layer_O.get(),
-                                       transform_W_O.inverse(),
-                                       merged_object_layer_W.get());
+  voxblox::evaluateLayerAtPoses<VoxelType>(
+      voxel_evaluation_mode, map_->getTsdfLayer(), merged_object_layer_O,
+      transforms_W_O, &voxel_evaluation_details_vector);
 
-    voxblox::utils::VoxelEvaluationDetails voxel_evaluation_details;
-    // Evaluate the RMSE of the merged object layer in the world layer.
-    voxblox::utils::evaluateLayersRmse(
-        *(map_->getTsdfLayerPtr()), *merged_object_layer_W,
-        voxel_evaluation_mode, &voxel_evaluation_details);
-    voxel_evaluation_details_vector.push_back(voxel_evaluation_details);
-    ++idx;
-    CHECK_LT(idx, transforms_W_O.size());
-  }
   voxblox::voxblox_gsm::voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
       voxel_evaluation_details_vector, &response.voxel_evaluation_details);
   return true;
