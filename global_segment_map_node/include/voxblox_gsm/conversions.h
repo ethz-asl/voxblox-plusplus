@@ -14,26 +14,22 @@ inline void transformMsgs2Transformations(
     const std::vector<geometry_msgs::Transform>& transforms,
     std::vector<Transformation>* transformations) {
   CHECK_NOTNULL(transformations);
-  typedef kindr::minimal::RotationQuaternionTemplate<voxblox::FloatingPoint>
-      RotationQuaternion;
-  typedef Eigen::Matrix<voxblox::FloatingPoint, 3, 1> Vector3;
-  for (geometry_msgs::Transform transform : transforms) {
-    RotationQuaternion quaternion(transform.rotation.w, transform.rotation.x,
-                                  transform.rotation.y, transform.rotation.z);
-    Vector3 translation(transform.translation.x, transform.translation.y,
-                        transform.translation.z);
+  for (const geometry_msgs::Transform& transform : transforms) {
+    voxblox::Rotation quaternion(transform.rotation.w, transform.rotation.x,
+                                 transform.rotation.y, transform.rotation.z);
+    voxblox::Point translation(transform.translation.x, transform.translation.y,
+                               transform.translation.z);
     transformations->emplace_back(quaternion, translation);
   }
 }
 inline void voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
-    const std::vector<voxblox::utils::VoxelEvaluationDetails>
+    const std::vector<voxblox::utils::VoxelEvaluationDetails>&
         voxel_evaluation_details_vector,
     std::vector<modelify_msgs::VoxelEvaluationDetails>*
         voxel_evaluation_details_msgs) {
-  CHECK_NOTNULL(voxel_evaluation_details_msgs);
-  voxel_evaluation_details_msgs->clear();
+  CHECK_NOTNULL(voxel_evaluation_details_msgs)->clear();
 
-  for (const voxblox::utils::VoxelEvaluationDetails voxel_evaluation_details :
+  for (const voxblox::utils::VoxelEvaluationDetails& voxel_evaluation_details :
        voxel_evaluation_details_vector) {
     // TODO(ff): Move this to voxblox_ros conversions.h.
     modelify_msgs::VoxelEvaluationDetails voxel_evaluation_details_msg;
