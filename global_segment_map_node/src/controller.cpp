@@ -293,7 +293,7 @@ bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
   //     map_->label_layer_, kSerializeOnlyUpdated,
   //     &gsm_update_msg.object.label_layer);
 
-  gsm_update_msg.label = 0u;
+  gsm_update_msg.object.label = 0u;
   gsm_update_msg.old_labels.clear();
   geometry_msgs::Transform transform;
   transform.translation.x = 0.0;
@@ -303,8 +303,8 @@ bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
   transform.rotation.x = 0.0;
   transform.rotation.y = 0.0;
   transform.rotation.z = 0.0;
-  gsm_update_msg.transforms.clear();
-  gsm_update_msg.transforms.push_back(transform);
+  gsm_update_msg.object.transforms.clear();
+  gsm_update_msg.object.transforms.push_back(transform);
   scene_pub_->publish(gsm_update_msg);
   return true;
 }
@@ -452,7 +452,7 @@ bool Controller::validateMergedObjectCallback(
   // Extract transformations.
   std::vector<voxblox::Transformation> transforms_W_O;
   voxblox::voxblox_gsm::transformMsgs2Transformations(
-      request.gsm_update.transforms, &transforms_W_O);
+      request.gsm_update.object.transforms, &transforms_W_O);
 
   const voxblox::utils::VoxelEvaluationMode voxel_evaluation_mode =
       voxblox::utils::VoxelEvaluationMode::kEvaluateAllVoxels;
@@ -461,8 +461,9 @@ bool Controller::validateMergedObjectCallback(
       voxel_evaluation_details_vector;
 
   voxblox::evaluateLayerAtPoses<VoxelType>(
-      voxel_evaluation_mode, map_->getTsdfLayer(), merged_object_layer_O,
-      transforms_W_O, &voxel_evaluation_details_vector);
+      voxel_evaluation_mode, map_->getTsdfLayer(),
+      *(merged_object_layer_O.get()), transforms_W_O,
+      &voxel_evaluation_details_vector);
 
   voxblox::voxblox_gsm::voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
       voxel_evaluation_details_vector, &response.voxel_evaluation_details);
@@ -600,6 +601,8 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 void Controller::extractSegmentLayers(
     voxblox::Label label, voxblox::Layer<voxblox::TsdfVoxel>* tsdf_layer,
     voxblox::Layer<voxblox::LabelVoxel>* label_layer) {
+  CHECK_NOTNULL(tsdf_layer);
+  CHECK_NOTNULL(label_layer);
   // TODO(grinvalm): find a less naive method to
   // extract all blocks and voxels for a label.
   voxblox::BlockIndexList all_label_blocks;
@@ -610,28 +613,31 @@ void Controller::extractSegmentLayers(
         map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
     voxblox::Block<voxblox::LabelVoxel>::Ptr global_label_block =
         map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
+    voxblox::Block<voxblox::TsdfVoxel>::Ptr tsdf_block;
+    voxblox::Block<voxblox::LabelVoxel>::Ptr label_block;
 
     size_t vps = global_label_block->voxels_per_side();
     for (int i = 0; i < vps * vps * vps; i++) {
-      voxblox::LabelVoxel& global_label_voxel =
+      const voxblox::LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
-      if (global_label_voxel.label == label) {
-        voxblox::Block<voxblox::TsdfVoxel>::Ptr tsdf_block;
-        voxblox::Block<voxblox::LabelVoxel>::Ptr label_block;
-
+      if (global_label_voxel.label != label) {
+        continue;
+      }
+      if (!tsdf_block) {
         tsdf_block = tsdf_layer->allocateBlockPtrByIndex(block_index);
         label_block = label_layer->allocateBlockPtrByIndex(block_index);
-
-        voxblox::TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
-        voxblox::LabelVoxel& label_voxel =
-            label_block->getVoxelByLinearIndex(i);
-
-        voxblox::TsdfVoxel& global_tsdf_voxel =
-            global_tsdf_block->getVoxelByLinearIndex(i);
-
-        tsdf_voxel = global_tsdf_voxel;
-        label_voxel = global_label_voxel;
       }
+      CHECK(tsdf_block);
+      CHECK(label_block);
+
+      voxblox::TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
+      voxblox::LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
+
+      const voxblox::TsdfVoxel& global_tsdf_voxel =
+          global_tsdf_block->getVoxelByLinearIndex(i);
+
+      tsdf_voxel = global_tsdf_voxel;
+      label_voxel = global_label_voxel;
     }
   }
 }
@@ -641,11 +647,7 @@ void Controller::extractSegmentLayers(
 
 void Controller::publishObjects() {
   CHECK_NOTNULL(gsm_update_pub_);
-  modelify_msgs::GsmUpdate gsm_update_msg;
   // TODO(ff): Not sure if we want to use this or ros::Time::now();
-  gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
-  static const std::string kGsmUpdateFrameId = "world";
-  gsm_update_msg.header.frame_id = kGsmUpdateFrameId;
 
   for (voxblox::Label label : segment_labels_to_publish_) {
     // Extract the TSDF and label layers corresponding to this label.
@@ -663,7 +665,12 @@ void Controller::publishObjects() {
     voxblox::utils::centerBlocksOfLayer<voxblox::LabelVoxel>(
         &label_layer, &origin_shifted_label_layer_W);
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
+
+    modelify_msgs::GsmUpdate gsm_update_msg;
     constexpr bool kSerializeOnlyUpdated = false;
+    gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
+    static const std::string kGsmUpdateFrameId = "world";
+    gsm_update_msg.header.frame_id = kGsmUpdateFrameId;
     voxblox::serializeLayerAsMsg<voxblox::TsdfVoxel>(
         tsdf_layer, kSerializeOnlyUpdated, &gsm_update_msg.object.tsdf_layer);
     // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
@@ -672,7 +679,7 @@ void Controller::publishObjects() {
     //     label_layer, kSerializeOnlyUpdated,
     //     &gsm_update_msg.object.label_layer);
 
-    gsm_update_msg.label = label;
+    gsm_update_msg.object.label = label;
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
     transform.translation.x = origin_shifted_tsdf_layer_W[0];
@@ -682,8 +689,8 @@ void Controller::publishObjects() {
     transform.rotation.x = 0.;
     transform.rotation.y = 0.;
     transform.rotation.z = 0.;
-    gsm_update_msg.transforms.clear();
-    gsm_update_msg.transforms.push_back(transform);
+    gsm_update_msg.object.transforms.clear();
+    gsm_update_msg.object.transforms.push_back(transform);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
