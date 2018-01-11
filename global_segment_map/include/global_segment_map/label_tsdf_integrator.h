@@ -329,7 +329,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       label_layer_->insertBlock(temp_label_block_pair);
     }
 
-    temp_block_map_.clear();
+    temp_label_block_map_.clear();
   }
 
   inline void updateLabelVoxel(const Point& point_G, const Label& label,
