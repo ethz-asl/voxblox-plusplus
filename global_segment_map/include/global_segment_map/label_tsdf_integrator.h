@@ -266,10 +266,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // layer. Thread safe.
   // Takes in the last_block_idx and last_block to prevent unneeded map lookups.
   // If the block this voxel would be in has not been allocated, a block in
-  // temp_block_map_ is created/accessed and a voxel from this map is returned
-  // instead. Unlike the layer, accessing temp_block_map_ is controlled via a
-  // mutex allowing it to grow during integration.
-  // These temporary blocks can be merged into the layer later by calling
+  // temp_label_block_map_ is created/accessed and a voxel from this map is
+  // returned instead. Unlike the layer, accessing temp_label_block_map_ is
+  // controlled via a mutex allowing it to grow during integration. These
+  // temporary blocks can be merged into the layer later by calling
   // updateLayerWithStoredBlocks()
   LabelVoxel* allocateStorageAndGetLabelVoxelPtr(
       const VoxelIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
@@ -329,7 +329,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       label_layer_->insertBlock(temp_label_block_pair);
     }
 
-    temp_block_map_.clear();
+    temp_label_block_map_.clear();
   }
 
   inline void updateLabelVoxel(const Point& point_G, const Label& label,
