@@ -134,13 +134,16 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       tf_listener_(ros::Duration(100)) {
   CHECK_NOTNULL(node_handle_private_);
 
+  // map_config_.voxel_size = 0.005f;
   map_config_.voxel_size = 0.01f;
   map_config_.voxels_per_side = 8u;
   map_.reset(new voxblox::LabelTsdfMap(map_config_));
 
   voxblox::LabelTsdfIntegrator::Config integrator_config;
   integrator_config.voxel_carving_enabled = false;
-  integrator_config.default_truncation_distance = map_config_.voxel_size * 2.0;
+  // integrator_config.voxel_carving_enabled = true;
+  integrator_config.allow_clear = true;
+  integrator_config.default_truncation_distance = map_config_.voxel_size * 4.0;
 
   std::string method("merged");
   node_handle_private_->param("method", method, method);
@@ -153,6 +156,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   }
 
   voxblox::LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
+  label_tsdf_integrator_config.enable_pairwise_confidence_merging = false;
 
   integrator_.reset(new voxblox::LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
@@ -369,7 +373,9 @@ void Controller::segmentPointCloudCallback(
   // Look up transform from camera frame to world frame.
   voxblox::Transformation T_G_C;
   std::string world_frame_id = "world";
+  // std::string world_frame_id = "/vicon";
   std::string camera_frame_id = "/scenenet_camera_frame";
+  // std::string camera_frame_id = "/camera_rgb_optical_frame";
   // TODO(grinvalm): nicely parametrize the frames.
   //  std::string camera_frame_id = segment_point_cloud_msg->header.frame_id;
   //  std::string camera_frame_id = "/openni_depth_optical_frame";
