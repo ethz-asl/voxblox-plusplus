@@ -440,7 +440,7 @@ void Controller::segmentPointCloudCallback(
 bool Controller::validateMergedObjectCallback(
     modelify_msgs::ValidateMergedObject::Request& request,
     modelify_msgs::ValidateMergedObject::Response& response) {
-  typedef voxblox::TsdfVoxel TsdfTsdfVoxelType;
+  typedef voxblox::TsdfVoxel TsdfVoxelType;
   typedef voxblox::Layer<TsdfVoxelType> TsdfLayer;
   // TODO(ff): Do the following afterwards in modelify.
   // - Check if merged object agrees with whole map (at all poses).
