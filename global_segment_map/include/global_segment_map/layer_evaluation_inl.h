@@ -38,7 +38,7 @@ void evaluateLayerAtPoses(
 template <typename VoxelType>
 void evaluateLayerAtPoses(
     const utils::VoxelEvaluationMode& voxel_evaluation_mode,
-    const Layer<VoxelType>& tsdf_layer,
+    const Layer<VoxelType>& layer,
     const Layer<VoxelType>& merged_object_layer_O,
     const modelify::TransformationVector& transforms_W_O,
     std::vector<utils::VoxelEvaluationDetails>*
@@ -48,7 +48,7 @@ void evaluateLayerAtPoses(
   for (modelify::Transformation transform_W_O : transforms_W_O) {
     kindr_transforms_W_O.emplace_back(transform_W_O);
   }
-  evaluateLayerAtPoses(voxel_evaluation_mode, tsdf_layer, merged_object_layer_O,
+  evaluateLayerAtPoses(voxel_evaluation_mode, layer, merged_object_layer_O,
                        kindr_transforms_W_O, voxel_evaluation_details_vector);
 }
 

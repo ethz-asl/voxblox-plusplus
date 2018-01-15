@@ -440,8 +440,8 @@ void Controller::segmentPointCloudCallback(
 bool Controller::validateMergedObjectCallback(
     modelify_msgs::ValidateMergedObject::Request& request,
     modelify_msgs::ValidateMergedObject::Response& response) {
-  typedef voxblox::TsdfVoxel VoxelType;
-  typedef voxblox::Layer<VoxelType> Layer;
+  typedef voxblox::TsdfVoxel TsdfTsdfVoxelType;
+  typedef voxblox::Layer<TsdfVoxelType> TsdfLayer;
   // TODO(ff): Do the following afterwards in modelify.
   // - Check if merged object agrees with whole map (at all poses).
   // - If it doesn't agree at all poses try the merging again with the
@@ -450,7 +450,7 @@ bool Controller::validateMergedObjectCallback(
   // the others in a list not to merge with the other merged ones
 
   // Extract TSDF layer of merged object.
-  std::shared_ptr<Layer> merged_object_layer_O;
+  std::shared_ptr<TsdfLayer> merged_object_layer_O;
   CHECK(voxblox::deserializeMsgToLayer(request.gsm_update.object.tsdf_layer,
                                        merged_object_layer_O.get()))
       << "Deserializing of TSDF layer from merged object message failed.";
@@ -466,7 +466,7 @@ bool Controller::validateMergedObjectCallback(
   std::vector<voxblox::utils::VoxelEvaluationDetails>
       voxel_evaluation_details_vector;
 
-  voxblox::evaluateLayerAtPoses<VoxelType>(
+  voxblox::evaluateLayerAtPoses<TsdfVoxelType>(
       voxel_evaluation_mode, map_->getTsdfLayer(),
       *(merged_object_layer_O.get()), transforms_W_O,
       &voxel_evaluation_details_vector);
