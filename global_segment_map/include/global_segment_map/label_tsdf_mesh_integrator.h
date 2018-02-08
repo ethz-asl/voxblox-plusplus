@@ -26,13 +26,15 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         visualize_confidence(visualize_confidence) {}
 
   // Generates mesh for the tsdf layer.
-  void generateMesh(bool only_mesh_updated_blocks, bool clear_updated_flag) {
+  bool generateMesh(bool only_mesh_updated_blocks, bool clear_updated_flag) {
     BlockIndexList all_tsdf_blocks;
     BlockIndexList all_label_blocks;
     if (only_mesh_updated_blocks) {
       sdf_layer_mutable_->getAllUpdatedBlocks(&all_tsdf_blocks);
       // TODO(grinvalm) unique union of block indices here.
       label_layer_->getAllUpdatedBlocks(&all_label_blocks);
+      if (all_label_blocks.size() == 0u && all_tsdf_blocks.size() == 0u)
+        return false;
     } else {
       sdf_layer_mutable_->getAllAllocatedBlocks(&all_tsdf_blocks);
     }
@@ -54,6 +56,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     for (std::thread& thread : integration_threads) {
       thread.join();
     }
+    return true;
   }
 
   void generateMeshBlocksFunction(const BlockIndexList& all_tsdf_blocks,
