@@ -703,6 +703,17 @@ void Controller::publishObjects(const bool publish_all) {
       continue;
     }
 
+
+    // Convert to origin and extract translation.
+    voxblox::Point origin_shifted_tsdf_layer_W;
+    voxblox::utils::centerBlocksOfLayer<voxblox::TsdfVoxel>(
+        &tsdf_layer, &origin_shifted_tsdf_layer_W);
+    // TODO(ff): If this is time consuming we can omit this step.
+    voxblox::Point origin_shifted_label_layer_W;
+    voxblox::utils::centerBlocksOfLayer<voxblox::LabelVoxel>(
+        &label_layer, &origin_shifted_label_layer_W);
+    CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
+
     // Extract surfel cloud from layer.
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
@@ -714,15 +725,6 @@ void Controller::publishObjects(const bool publish_all) {
       continue;
     }
 
-    // Convert to origin and extract translation.
-    voxblox::Point origin_shifted_tsdf_layer_W;
-    voxblox::utils::centerBlocksOfLayer<voxblox::TsdfVoxel>(
-        &tsdf_layer, &origin_shifted_tsdf_layer_W);
-    // TODO(ff): If this is time consuming we can omit this step.
-    voxblox::Point origin_shifted_label_layer_W;
-    voxblox::utils::centerBlocksOfLayer<voxblox::LabelVoxel>(
-        &label_layer, &origin_shifted_label_layer_W);
-    CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
 
     modelify_msgs::GsmUpdate gsm_update_msg;
     constexpr bool kSerializeOnlyUpdated = false;
