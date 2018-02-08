@@ -1,7 +1,7 @@
 // Copyright 2017 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
-#include <glog/logging.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 #include <ros/ros.h>
 
 #include "voxblox_gsm/controller.h"
@@ -17,7 +17,7 @@ int main(int argc, char** argv) {
   ros::NodeHandle node_handle;
   ros::NodeHandle node_handle_private("~");
 
-  voxblox_gsm::Controller controller(&node_handle_private);
+  voxblox::voxblox_gsm::Controller controller(&node_handle_private);
 
   ros::Subscriber segment_point_cloud_sub;
   controller.subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);

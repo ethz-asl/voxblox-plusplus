@@ -25,6 +25,7 @@
 
 #include "voxblox_gsm/conversions.h"
 
+namespace voxblox {
 namespace voxblox_gsm {
 
 enum Method { kSimple = 0, kMerged, kMergedDiscard };
@@ -702,6 +703,17 @@ void Controller::publishObjects(const bool publish_all) {
       continue;
     }
 
+    // Extract surfel cloud from layer.
+    pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
+        new pcl::PointCloud<pcl::PointSurfel>());
+    convertVoxelGridToPointCloud(tsdf_layer, surfel_cloud);
+
+    if (surfel_cloud->empty()) {
+      LOG(WARNING) << "Labelled segment does not contain enough data to "
+                      "extract a surface -> skipping!";
+      continue;
+    }
+
     // Convert to origin and extract translation.
     voxblox::Point origin_shifted_tsdf_layer_W;
     voxblox::utils::centerBlocksOfLayer<voxblox::TsdfVoxel>(
@@ -737,6 +749,7 @@ void Controller::publishObjects(const bool publish_all) {
     transform.rotation.z = 0.;
     gsm_update_msg.object.transforms.clear();
     gsm_update_msg.object.transforms.push_back(transform);
+    pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
@@ -807,3 +820,4 @@ bool Controller::lookupTransform(const std::string& from_frame,
 }
 
 }  // namespace voxblox_gsm
+}  // namespace voxblox

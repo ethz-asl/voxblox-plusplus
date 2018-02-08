@@ -20,6 +20,7 @@
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
 
+namespace voxblox {
 namespace voxblox_gsm {
 
 class Controller {
@@ -120,5 +121,6 @@ class Controller {
   std::map<voxblox::Label, std::set<voxblox::Label>> merges_to_publish_;
 };
 }  // namespace voxblox_gsm
+}  // namespace voxblox
 
 #endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
