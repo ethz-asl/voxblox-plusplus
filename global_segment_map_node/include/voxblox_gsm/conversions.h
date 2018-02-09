@@ -51,8 +51,8 @@ inline void voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
 
 inline void convertVoxelGridToPointCloud(
     const voxblox::Layer<voxblox::TsdfVoxel>& tsdf_voxels,
-    pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud) {
-  CHECK(surfel_cloud);
+    pcl::PointCloud<pcl::PointSurfel>* surfel_cloud) {
+  CHECK_NOTNULL(surfel_cloud);
 
   voxblox::MeshIntegrator<voxblox::TsdfVoxel>::Config mesh_config;
   voxblox::MeshLayer::Ptr mesh_layer(

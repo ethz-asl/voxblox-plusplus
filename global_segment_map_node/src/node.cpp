@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
   ros::ServiceServer extract_segments_srv;
   controller.advertiseExtractSegmentsService(&extract_segments_srv);
 
-  constexpr double kNoUpdateTimeout = 20.0;
+  constexpr double kNoUpdateTimeout = 5.0;
   while (ros::ok() && !controller.noNewUpdatesReceived(kNoUpdateTimeout)) {
     ros::spinOnce();
   }

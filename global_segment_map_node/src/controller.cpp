@@ -703,7 +703,6 @@ void Controller::publishObjects(const bool publish_all) {
       continue;
     }
 
-
     // Convert to origin and extract translation.
     voxblox::Point origin_shifted_tsdf_layer_W;
     voxblox::utils::centerBlocksOfLayer<voxblox::TsdfVoxel>(
@@ -717,14 +716,13 @@ void Controller::publishObjects(const bool publish_all) {
     // Extract surfel cloud from layer.
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
-    convertVoxelGridToPointCloud(tsdf_layer, surfel_cloud);
+    convertVoxelGridToPointCloud(tsdf_layer, surfel_cloud.get());
 
     if (surfel_cloud->empty()) {
       LOG(WARNING) << "Labelled segment does not contain enough data to "
                       "extract a surface -> skipping!";
       continue;
     }
-
 
     modelify_msgs::GsmUpdate gsm_update_msg;
     constexpr bool kSerializeOnlyUpdated = false;

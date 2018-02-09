@@ -1,0 +1,13 @@
+---
+Language: Cpp
+BasedOnStyle: Google
+ColumnLimit: 80
+PointerAlignment: Left
+DerivePointerAlignment: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+---
+Language: Proto
+BasedOnStyle: Google
+...
