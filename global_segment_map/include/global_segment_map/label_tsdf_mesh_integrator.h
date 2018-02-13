@@ -131,7 +131,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           label_block.computeVoxelIndexFromCoordinates(vertex);
       if (label_block.isValidVoxelIndex(voxel_index)) {
         const LabelVoxel& voxel = label_block.getVoxelByVoxelIndex(voxel_index);
-
         Color color;
         if (visualize_confidence) {
           // Scale values to range (0.0, 1.0).

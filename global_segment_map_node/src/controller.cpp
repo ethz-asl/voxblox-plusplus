@@ -33,7 +33,7 @@ boost::mutex updateMeshMutex;
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
-void visualizeMesh(const voxblox::MeshLayer &mesh_layer) {
+void visualizeMesh(const voxblox::MeshLayer& mesh_layer) {
   boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
       new pcl::visualization::PCLVisualizer("GSM viewer"));
   viewer->setBackgroundColor(0, 0, 0);
@@ -66,28 +66,28 @@ void visualizeMesh(const voxblox::MeshLayer &mesh_layer) {
       size_t v = 0u;
       voxblox::BlockIndexList mesh_indices;
       mesh_layer.getAllAllocatedMeshes(&mesh_indices);
-      for (const voxblox::BlockIndex &block_index : mesh_indices) {
+      for (const voxblox::BlockIndex& block_index : mesh_indices) {
         voxblox::Mesh::ConstPtr mesh =
             mesh_layer.getMeshPtrByIndex(block_index);
 
-        for (const voxblox::Point &vert : mesh->vertices) {
+        for (const voxblox::Point& vert : mesh->vertices) {
           combined_mesh.vertices.push_back(vert);
           combined_mesh.indices.push_back(v++);
         }
 
-        for (const voxblox::Color &color : mesh->colors) {
+        for (const voxblox::Color& color : mesh->colors) {
           combined_mesh.colors.push_back(color);
         }
 
-        for (const voxblox::Point &normal : mesh->normals) {
+        for (const voxblox::Point& normal : mesh->normals) {
           normals.points.push_back(
               pcl::Normal(normal(0), normal(1), normal(2)));
         }
       }
 
       size_t vert_idx = 0;
-      for (const voxblox::Point &vert : combined_mesh.vertices) {
-        const voxblox::Color &color = combined_mesh.colors[vert_idx];
+      for (const voxblox::Point& vert : combined_mesh.vertices) {
+        const voxblox::Color& color = combined_mesh.colors[vert_idx];
         pcl::PointXYZRGB point = pcl::PointXYZRGB(color.r, color.g, color.b);
         point.x = vert(0);
         point.y = vert(1);
@@ -128,7 +128,7 @@ void visualizeMesh(const voxblox::MeshLayer &mesh_layer) {
   }
 }
 
-Controller::Controller(ros::NodeHandle *node_handle_private)
+Controller::Controller(ros::NodeHandle* node_handle_private)
     : node_handle_private_(node_handle_private),
       // Increased time limit for lookup in the past of tf messages
       // to give some slack to the pipeline and not lose any messages.
@@ -190,7 +190,7 @@ Controller::Controller(ros::NodeHandle *node_handle_private)
 Controller::~Controller() {}
 
 void Controller::subscribeSegmentPointCloudTopic(
-    ros::Subscriber *segment_point_cloud_sub) {
+    ros::Subscriber* segment_point_cloud_sub) {
   CHECK_NOTNULL(segment_point_cloud_sub);
   // TODO(grinvalm): parametrize this.
   std::string segment_point_cloud_topic = "/scenenn_node/object_segment";
@@ -205,7 +205,7 @@ void Controller::subscribeSegmentPointCloudTopic(
       this);
 }
 
-void Controller::advertiseMeshTopic(ros::Publisher *mesh_pub) {
+void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
   CHECK_NOTNULL(mesh_pub);
   *mesh_pub = node_handle_private_->advertise<visualization_msgs::MarkerArray>(
       "mesh", 1, true);
@@ -213,7 +213,7 @@ void Controller::advertiseMeshTopic(ros::Publisher *mesh_pub) {
   mesh_pub_ = mesh_pub;
 }
 
-void Controller::advertiseSceneTopic(ros::Publisher *scene_pub) {
+void Controller::advertiseSceneTopic(ros::Publisher* scene_pub) {
   CHECK_NOTNULL(scene_pub);
   static const std::string kGsmSceneTopic = "scene";
   constexpr int kGsmSceneQueueSize = 1;
@@ -223,7 +223,7 @@ void Controller::advertiseSceneTopic(ros::Publisher *scene_pub) {
   scene_pub_ = scene_pub;
 }
 
-void Controller::advertiseObjectTopic(ros::Publisher *object_pub) {
+void Controller::advertiseObjectTopic(ros::Publisher* object_pub) {
   CHECK_NOTNULL(object_pub);
   *object_pub = node_handle_private_->advertise<visualization_msgs::Marker>(
       "segment_meshes", 1, true);
@@ -231,7 +231,7 @@ void Controller::advertiseObjectTopic(ros::Publisher *object_pub) {
   object_pub_ = object_pub;
 }
 
-void Controller::advertiseGsmUpdateTopic(ros::Publisher *gsm_update_pub) {
+void Controller::advertiseGsmUpdateTopic(ros::Publisher* gsm_update_pub) {
   CHECK_NOTNULL(gsm_update_pub);
   static const std::string kGsmUpdateTopic = "gsm_update";
   // TODO(ff): Reduce this value, once we know some reasonable limit.
@@ -243,7 +243,7 @@ void Controller::advertiseGsmUpdateTopic(ros::Publisher *gsm_update_pub) {
 }
 
 void Controller::validateMergedObjectService(
-    ros::ServiceServer *validate_merged_object_srv) {
+    ros::ServiceServer* validate_merged_object_srv) {
   CHECK_NOTNULL(validate_merged_object_srv);
   static const std::string kValidateMergedObjectTopicRosParam =
       "validate_merged_object";
@@ -258,14 +258,14 @@ void Controller::validateMergedObjectService(
 }
 
 void Controller::advertiseGenerateMeshService(
-    ros::ServiceServer *generate_mesh_srv) {
+    ros::ServiceServer* generate_mesh_srv) {
   CHECK_NOTNULL(generate_mesh_srv);
   *generate_mesh_srv = node_handle_private_->advertiseService(
       "generate_mesh", &Controller::generateMeshCallback, this);
 }
 
 void Controller::advertisePublishSceneService(
-    ros::ServiceServer *publish_scene_srv) {
+    ros::ServiceServer* publish_scene_srv) {
   CHECK_NOTNULL(publish_scene_srv);
   static const std::string kAdvertisePublishSceneServiceName = "publish_scene";
   *publish_scene_srv = node_handle_private_->advertiseService(
@@ -274,14 +274,14 @@ void Controller::advertisePublishSceneService(
 }
 
 void Controller::advertiseExtractSegmentsService(
-    ros::ServiceServer *extract_segments_srv) {
+    ros::ServiceServer* extract_segments_srv) {
   CHECK_NOTNULL(extract_segments_srv);
   *extract_segments_srv = node_handle_private_->advertiseService(
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
-bool Controller::publishSceneCallback(std_srvs::Empty::Request &request,
-                                      std_srvs::Empty::Response &response) {
+bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
+                                      std_srvs::Empty::Response& response) {
   CHECK_NOTNULL(scene_pub_);
   modelify_msgs::GsmUpdate gsm_update_msg;
 
@@ -316,7 +316,7 @@ bool Controller::publishSceneCallback(std_srvs::Empty::Request &request,
 }
 
 void Controller::segmentPointCloudCallback(
-    const sensor_msgs::PointCloud2::Ptr &segment_point_cloud_msg) {
+    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Message timestamps are used to detect when all
   // segment messages from a certain frame have arrived.
   // Since segments from the same frame all have the same timestamp,
@@ -339,59 +339,32 @@ void Controller::segmentPointCloudCallback(
 
     constexpr bool kIsFreespacePointcloud = false;
 
-    bool mergePointClouds = false;
+    start = ros::WallTime::now();
 
-    if (mergePointClouds) {
-      // ROS_INFO("Merging %lu pointclouds.", segments_to_integrate_.size());
-      // start = ros::WallTime::now();
-      //
-      // for (const auto &segment : segments_to_integrate_) {
-      //   integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-      //                                    segment->colors_, segment->labels_,
-      //                                    kIsFreespacePointcloud);
-      // }
-      //
-      // end = ros::WallTime::now();
-      // ROS_INFO("Finished merging pointclouds in %f seconds.",
-      //          (end - start).toSec());
-      //
-      // ROS_INFO("Integrating the merged pointcloud with %f points.",
-      //          segments_to_integrate_.size());
-      // start = ros::WallTime::now();
-      //
-      // integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-      //                                  segment->colors_, segment->labels_,
-      //                                  kIsFreespacePointcloud);
-      //
-      // end = ros::WallTime::now();
-      // ROS_INFO("Finished integrating in %f seconds.", (end - start).toSec());
-
-    } else {
-      start = ros::WallTime::now();
-
-      for (const auto &segment : segments_to_integrate_) {
-        integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                         segment->colors_, segment->labels_,
-                                         kIsFreespacePointcloud);
-      }
-
-      end = ros::WallTime::now();
-      ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
-               segments_to_integrate_.size(), (end - start).toSec());
+    for (const auto& segment : segments_to_integrate_) {
+      integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                       segment->colors_, segment->labels_,
+                                       kIsFreespacePointcloud);
     }
+
+    end = ros::WallTime::now();
+    ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
+             segments_to_integrate_.size(), (end - start).toSec());
+
     start = ros::WallTime::now();
 
     integrator_->mergeLabels(&merges_to_publish_);
     integrator_->getLabelsToPublish(&segment_labels_to_publish_);
 
     end = ros::WallTime::now();
-    ROS_INFO("Finished merging segments and fetching the ones to publish in %f "
-             "seconds.",
-             (end - start).toSec());
+    ROS_INFO(
+        "Finished merging segments and fetching the ones to publish in %f "
+        "seconds.",
+        (end - start).toSec());
     start = ros::WallTime::now();
 
     segment_label_candidates.clear();
-    for (voxblox::Segment *segment : segments_to_integrate_) {
+    for (voxblox::Segment* segment : segments_to_integrate_) {
       delete segment;
     }
     segments_to_integrate_.clear();
@@ -418,7 +391,7 @@ void Controller::segmentPointCloudCallback(
 
   if (lookupTransform(camera_frame_id, world_frame_id,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {
-    voxblox::Segment *segment = new voxblox::Segment();
+    voxblox::Segment* segment = new voxblox::Segment();
     segments_to_integrate_.push_back(segment);
 
     // Convert the PCL pointcloud into voxblox format.
@@ -471,8 +444,8 @@ void Controller::segmentPointCloudCallback(
 }
 
 bool Controller::validateMergedObjectCallback(
-    modelify_msgs::ValidateMergedObject::Request &request,
-    modelify_msgs::ValidateMergedObject::Response &response) {
+    modelify_msgs::ValidateMergedObject::Request& request,
+    modelify_msgs::ValidateMergedObject::Response& response) {
   typedef voxblox::TsdfVoxel TsdfVoxelType;
   typedef voxblox::Layer<TsdfVoxelType> TsdfLayer;
   // TODO(ff): Do the following afterwards in modelify.
@@ -510,8 +483,8 @@ bool Controller::validateMergedObjectCallback(
 }
 
 bool Controller::generateMeshCallback(
-    std_srvs::Empty::Request &request,
-    std_srvs::Empty::Response &response) { // NOLINT
+    std_srvs::Empty::Request& request,
+    std_srvs::Empty::Response& response) {  // NOLINT
   voxblox::timing::Timer generate_mesh_timer("mesh/generate");
   boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
   const bool clear_mesh = true;
@@ -564,7 +537,7 @@ bool Controller::generateMeshCallback(
   return true;
 }
 
-void Controller::updateMeshEvent(const ros::TimerEvent &e) {
+void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
   bool updated = false;
 
@@ -590,8 +563,8 @@ void Controller::updateMeshEvent(const ros::TimerEvent &e) {
   publish_mesh_timer.Stop();
 }
 
-bool Controller::extractSegmentsCallback(std_srvs::Empty::Request &request,
-                                         std_srvs::Empty::Response &response) {
+bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
+                                         std_srvs::Empty::Response& response) {
   // Get list of all labels in the map.
   std::vector<voxblox::Label> labels = integrator_->getLabelsList();
 
@@ -639,8 +612,8 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request &request,
 }
 
 void Controller::extractSegmentLayers(
-    voxblox::Label label, voxblox::Layer<voxblox::TsdfVoxel> *tsdf_layer,
-    voxblox::Layer<voxblox::LabelVoxel> *label_layer) {
+    voxblox::Label label, voxblox::Layer<voxblox::TsdfVoxel>* tsdf_layer,
+    voxblox::Layer<voxblox::LabelVoxel>* label_layer) {
   CHECK_NOTNULL(tsdf_layer);
   CHECK_NOTNULL(label_layer);
   // TODO(grinvalm): find a less naive method to
@@ -648,7 +621,7 @@ void Controller::extractSegmentLayers(
   voxblox::BlockIndexList all_label_blocks;
   map_->getTsdfLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
 
-  for (const voxblox::BlockIndex &block_index : all_label_blocks) {
+  for (const voxblox::BlockIndex& block_index : all_label_blocks) {
     voxblox::Block<voxblox::TsdfVoxel>::Ptr global_tsdf_block =
         map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
     voxblox::Block<voxblox::LabelVoxel>::Ptr global_label_block =
@@ -658,8 +631,9 @@ void Controller::extractSegmentLayers(
 
     size_t vps = global_label_block->voxels_per_side();
     for (int i = 0; i < vps * vps * vps; i++) {
-      const voxblox::LabelVoxel &global_label_voxel =
+      const voxblox::LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
+
       if (global_label_voxel.label != label) {
         continue;
       }
@@ -670,10 +644,10 @@ void Controller::extractSegmentLayers(
       CHECK(tsdf_block);
       CHECK(label_block);
 
-      voxblox::TsdfVoxel &tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
-      voxblox::LabelVoxel &label_voxel = label_block->getVoxelByLinearIndex(i);
+      voxblox::TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
+      voxblox::LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
 
-      const voxblox::TsdfVoxel &global_tsdf_voxel =
+      const voxblox::TsdfVoxel& global_tsdf_voxel =
           global_tsdf_block->getVoxelByLinearIndex(i);
 
       tsdf_voxel = global_tsdf_voxel;
@@ -773,10 +747,10 @@ void Controller::publishObjects() {
   segment_labels_to_publish_.clear();
 }
 
-bool Controller::lookupTransform(const std::string &from_frame,
-                                 const std::string &to_frame,
-                                 const ros::Time &timestamp,
-                                 voxblox::Transformation *transform) {
+bool Controller::lookupTransform(const std::string& from_frame,
+                                 const std::string& to_frame,
+                                 const ros::Time& timestamp,
+                                 voxblox::Transformation* transform) {
   tf::StampedTransform tf_transform;
   ros::Time time_to_lookup = timestamp;
 
@@ -792,7 +766,7 @@ bool Controller::lookupTransform(const std::string &from_frame,
   try {
     tf_listener_.lookupTransform(to_frame, from_frame, time_to_lookup,
                                  tf_transform);
-  } catch (tf::TransformException &ex) {
+  } catch (tf::TransformException& ex) {
     LOG(ERROR) << "Error getting TF transform from sensor data: " << ex.what();
     return false;
   }
@@ -801,4 +775,4 @@ bool Controller::lookupTransform(const std::string &from_frame,
   return true;
 }
 
-} // namespace voxblox_gsm
+}  // namespace voxblox_gsm
