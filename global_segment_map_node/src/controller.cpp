@@ -168,8 +168,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   voxblox::LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
-  label_tsdf_integrator_config.pairwise_confidence_ratio_threshold = 0.2f;
-  label_tsdf_integrator_config.pairwise_confidence_threshold = 8;
+  label_tsdf_integrator_config.pairwise_confidence_ratio_threshold = 0.03f;
+  label_tsdf_integrator_config.pairwise_confidence_threshold = 2;
   label_tsdf_integrator_config.object_flushing_age_threshold =
       30000;  // TODO(ff): For the real tests probably set to 30 or something.
   label_tsdf_integrator_config.cap_confidence = false;
@@ -336,20 +336,13 @@ bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
 
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
-  ROS_INFO("Segment pointcloud callback n.%zu", ++callback_count_);
-  ROS_INFO("Timestamp of segment: %f.",
-           segment_point_cloud_msg->header.stamp.toSec());
-
-  received_first_message_ = true;
-  last_update_received_ = ros::Time::now();
-
   // Message timestamps are used to detect when all
   // segment messages from a certain frame have arrived.
   // Since segments from the same frame all have the same timestamp,
   // the start of a new frame is detected when the message timestamp changes.
   // TODO(grinvalm): need additional check for the last frame to be
   // integrated.
-  if (last_segment_msg_timestamp_ != ros::Time(0) &&
+  if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
@@ -401,7 +394,8 @@ void Controller::segmentPointCloudCallback(
 
     publishObjects();
   }
-
+  received_first_message_ = true;
+  last_update_received_ = ros::Time::now();
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
 
   // Look up transform from camera frame to world frame.
