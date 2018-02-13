@@ -25,11 +25,20 @@
 
 #include "voxblox_gsm/conversions.h"
 
+namespace voxblox {
 namespace voxblox_gsm {
 
 enum Method { kSimple = 0, kMerged, kMergedDiscard };
 bool updatedMesh;
 boost::mutex updateMeshMutex;
+
+bool Controller::noNewUpdatesReceived(const double no_update_timeout) const {
+  if (received_first_message_) {
+    return (ros::Time::now() - last_update_received_).toSec() >
+           no_update_timeout;
+  }
+  return false;
+}
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
@@ -132,7 +141,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     : node_handle_private_(node_handle_private),
       // Increased time limit for lookup in the past of tf messages
       // to give some slack to the pipeline and not lose any messages.
-      tf_listener_(ros::Duration(100)) {
+      tf_listener_(ros::Duration(100)),
+      received_first_message_(false) {
   CHECK_NOTNULL(node_handle_private_);
 
   // map_config_.voxel_size = 0.005f;
@@ -158,7 +168,12 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   voxblox::LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
-  label_tsdf_integrator_config.object_flushing_age_threshold = 30000;
+  label_tsdf_integrator_config.pairwise_confidence_ratio_threshold = 0.2f;
+  label_tsdf_integrator_config.pairwise_confidence_threshold = 8;
+  label_tsdf_integrator_config.object_flushing_age_threshold =
+      30000;  // TODO(ff): For the real tests probably set to 30 or something.
+  label_tsdf_integrator_config.cap_confidence = false;
+  label_tsdf_integrator_config.confidence_cap_value = 10;
 
   integrator_.reset(new voxblox::LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
@@ -280,8 +295,7 @@ void Controller::advertiseExtractSegmentsService(
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
-bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
-                                      std_srvs::Empty::Response& response) {
+void Controller::publishScene() {
   CHECK_NOTNULL(scene_pub_);
   modelify_msgs::GsmUpdate gsm_update_msg;
 
@@ -312,11 +326,23 @@ bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
   gsm_update_msg.object.transforms.clear();
   gsm_update_msg.object.transforms.push_back(transform);
   scene_pub_->publish(gsm_update_msg);
+}
+
+bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
+                                      std_srvs::Empty::Response& response) {
+  publishScene();
   return true;
 }
 
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
+  ROS_INFO("Segment pointcloud callback n.%zu", ++callback_count_);
+  ROS_INFO("Timestamp of segment: %f.",
+           segment_point_cloud_msg->header.stamp.toSec());
+
+  received_first_message_ = true;
+  last_update_received_ = ros::Time::now();
+
   // Message timestamps are used to detect when all
   // segment messages from a certain frame have arrived.
   // Since segments from the same frame all have the same timestamp,
@@ -381,8 +407,9 @@ void Controller::segmentPointCloudCallback(
   // Look up transform from camera frame to world frame.
   voxblox::Transformation T_G_C;
   std::string world_frame_id = "world";
+  // std::string world_frame_id = "/vicon";
+  // std::string camera_frame_id = "/scenenet_camera_frame";
   std::string camera_frame_id = "/scenenn_camera_frame";
-  // std::string camera_frame_id = segment_point_cloud_msg->header.frame_id;
   // std::string camera_frame_id = "/camera_rgb_optical_frame";
   // TODO(grinvalm): nicely parametrize the frames.
   //  std::string camera_frame_id = segment_point_cloud_msg->header.frame_id;
@@ -659,17 +686,34 @@ void Controller::extractSegmentLayers(
 // TODO(ff): Create this somewhere:
 // void serializeGsmAsMsg(const map&, const label&, const parent_labels&, msg*);
 
-void Controller::publishObjects() {
+void Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(gsm_update_pub_);
   // TODO(ff): Not sure if we want to use this or ros::Time::now();
+  const std::vector<voxblox::Label>* labels_to_publish_ptr =
+      &segment_labels_to_publish_;
+  std::vector<voxblox::Label> all_labels;
+  if (publish_all) {
+    all_labels = integrator_->getLabelsList();
+    labels_to_publish_ptr = &all_labels;
+    LOG(INFO) << "Publishing all segments";
+  }
 
-  for (voxblox::Label label : segment_labels_to_publish_) {
+  for (const voxblox::Label& label : *labels_to_publish_ptr) {
     // Extract the TSDF and label layers corresponding to this label.
     voxblox::Layer<voxblox::TsdfVoxel> tsdf_layer(map_config_.voxel_size,
                                                   map_config_.voxels_per_side);
     voxblox::Layer<voxblox::LabelVoxel> label_layer(
         map_config_.voxel_size, map_config_.voxels_per_side);
     extractSegmentLayers(label, &tsdf_layer, &label_layer);
+
+    // Continue if tsdf_layer has little getNumberOfAllocatedBlocks.
+    // TODO(ff): Check what a reasonable size is for this.
+    constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
+    if (tsdf_layer.getNumberOfAllocatedBlocks() <
+        kMinNumberOfAllocatedBlocksToPublish) {
+      continue;
+    }
+
     // Convert to origin and extract translation.
     voxblox::Point origin_shifted_tsdf_layer_W;
     voxblox::utils::centerBlocksOfLayer<voxblox::TsdfVoxel>(
@@ -679,6 +723,17 @@ void Controller::publishObjects() {
     voxblox::utils::centerBlocksOfLayer<voxblox::LabelVoxel>(
         &label_layer, &origin_shifted_label_layer_W);
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
+
+    // Extract surfel cloud from layer.
+    pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
+        new pcl::PointCloud<pcl::PointSurfel>());
+    convertVoxelGridToPointCloud(tsdf_layer, surfel_cloud.get());
+
+    if (surfel_cloud->empty()) {
+      LOG(WARNING) << "Labelled segment does not contain enough data to "
+                      "extract a surface -> skipping!";
+      continue;
+    }
 
     modelify_msgs::GsmUpdate gsm_update_msg;
     constexpr bool kSerializeOnlyUpdated = false;
@@ -705,6 +760,7 @@ void Controller::publishObjects() {
     transform.rotation.z = 0.;
     gsm_update_msg.object.transforms.clear();
     gsm_update_msg.object.transforms.push_back(transform);
+    pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
@@ -776,3 +832,4 @@ bool Controller::lookupTransform(const std::string& from_frame,
 }
 
 }  // namespace voxblox_gsm
+}  // namespace voxblox

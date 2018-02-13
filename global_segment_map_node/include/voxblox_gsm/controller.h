@@ -20,6 +20,7 @@
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
 
+namespace voxblox {
 namespace voxblox_gsm {
 
 class Controller {
@@ -51,6 +52,12 @@ class Controller {
 
   void updateMeshEvent(const ros::TimerEvent& e);
 
+  void publishScene();
+
+  void publishObjects(const bool publish_all = false);
+
+  bool noNewUpdatesReceived(const double no_update_timeout) const;
+
  private:
   void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
@@ -68,8 +75,6 @@ class Controller {
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
 
-  void publishObjects();
-
   void extractSegmentLayers(voxblox::Label label,
                             voxblox::Layer<voxblox::TsdfVoxel>* tsdf_layer,
                             voxblox::Layer<voxblox::LabelVoxel>* label_layer);
@@ -82,6 +87,11 @@ class Controller {
 
   tf::TransformListener tf_listener_;
   ros::Time last_segment_msg_timestamp_;
+
+  // Shutdown logic: if no messages are received for X amount of time, shut down
+  // node.
+  bool received_first_message_;
+  ros::Time last_update_received_;
 
   ros::Publisher* mesh_pub_;
   ros::Publisher* scene_pub_;
@@ -111,5 +121,6 @@ class Controller {
   std::map<voxblox::Label, std::set<voxblox::Label>> merges_to_publish_;
 };
 }  // namespace voxblox_gsm
+}  // namespace voxblox
 
 #endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_

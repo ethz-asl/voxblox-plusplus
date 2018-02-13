@@ -24,7 +24,7 @@ void evaluateLayerAtPoses(
         merged_object_layer_O.voxels_per_side());
 
     // Transform merged object into the world frame.
-    transformLayer<VoxelType>(merged_object_layer_O, transform_W_O.inverse(),
+    transformLayer<VoxelType>(merged_object_layer_O, transform_W_O,
                               &merged_object_layer_W);
 
     utils::VoxelEvaluationDetails voxel_evaluation_details;
@@ -45,7 +45,7 @@ void evaluateLayerAtPoses(
         voxel_evaluation_details_vector) {
   CHECK_NOTNULL(voxel_evaluation_details_vector);
   std::vector<Transformation> kindr_transforms_W_O;
-  for (modelify::Transformation transform_W_O : transforms_W_O) {
+  for (const modelify::Transformation& transform_W_O : transforms_W_O) {
     kindr_transforms_W_O.emplace_back(transform_W_O);
   }
   evaluateLayerAtPoses(voxel_evaluation_mode, layer, merged_object_layer_O,

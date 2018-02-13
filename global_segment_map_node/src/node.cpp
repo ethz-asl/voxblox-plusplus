@@ -1,19 +1,23 @@
 // Copyright 2017 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
+#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <ros/ros.h>
 
 #include "voxblox_gsm/controller.h"
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging("gsm_node");
-
   ros::init(argc, argv, "gsm_node");
+  google::InitGoogleLogging(argv[0]);
+  google::ParseCommandLineFlags(&argc, &argv, false);
+  google::InstallFailureSignalHandler();
+
+  LOG(INFO) << "Running GSM...";
 
   ros::NodeHandle node_handle;
   ros::NodeHandle node_handle_private("~");
 
-  voxblox_gsm::Controller controller(&node_handle_private);
+  voxblox::voxblox_gsm::Controller controller(&node_handle_private);
 
   ros::Subscriber segment_point_cloud_sub;
   controller.subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
@@ -42,6 +46,13 @@ int main(int argc, char** argv) {
   ros::ServiceServer extract_segments_srv;
   controller.advertiseExtractSegmentsService(&extract_segments_srv);
 
-  ros::spin();
+  constexpr double kNoUpdateTimeout = 5.0;
+  while (ros::ok() && !controller.noNewUpdatesReceived(kNoUpdateTimeout)) {
+    ros::spinOnce();
+  }
+  LOG(INFO) << "Shutting down";
+  controller.publishScene();
+  constexpr bool kPublishAllSegments = true;
+  controller.publishObjects(kPublishAllSegments);
   return 0;
 }
