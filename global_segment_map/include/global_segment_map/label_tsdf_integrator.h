@@ -55,6 +55,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // Experiments showed that capped confidence value
     // only introduces artifacts in planar regions.
     // Cap confidence settings.
+    // TODO(grinvalm): remove or handle this stuff.
     bool cap_confidence = false;
     int confidence_cap_value = 10;
 
@@ -151,10 +152,17 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   }
 
   void updateVoxelLabelAndConfidence(LabelVoxel* label_voxel) {
+    updateVoxelLabelAndConfidence(0u, label_voxel);
+  }
+
+  void updateVoxelLabelAndConfidence(const Label& preferred_label,
+                                     LabelVoxel* label_voxel) {
     Label max_label = 0u;
     LabelConfidence max_confidence = 0.0f;
     for (const LabelCount& label_count : label_voxel->label_count) {
-      if (label_count.label_confidence > max_confidence) {
+      if (label_count.label_confidence > max_confidence ||
+          (label_count.label == preferred_label && preferred_label != 0u &&
+           label_count.label_confidence == max_confidence)) {
         max_confidence = label_count.label_confidence;
         max_label = label_count.label;
       }
@@ -174,7 +182,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
             label_count.label_confidence + confidence;
         updated = true;
         break;
-      } else {
+      }
+    }
+    if (updated == false) {
+      for (LabelCount& label_count : label_voxel->label_count) {
         if (label_count.label == 0u) {
           // This is the first allocated but unused index in the map
           // in which the new entry should be added.
@@ -318,13 +329,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Will return a pointer to a voxel located at global_voxel_idx in the label
   // layer. Thread safe.
-  // Takes in the last_block_idx and last_block to prevent unneeded map lookups.
-  // If the block this voxel would be in has not been allocated, a block in
-  // temp_label_block_map_ is created/accessed and a voxel from this map is
-  // returned instead. Unlike the layer, accessing temp_label_block_map_ is
-  // controlled via a mutex allowing it to grow during integration. These
-  // temporary blocks can be merged into the layer later by calling
-  // updateLayerWithStoredBlocks()
+  // Takes in the last_block_idx and last_block to prevent unneeded map
+  // lookups. If the block this voxel would be in has not been allocated, a
+  // block in temp_label_block_map_ is created/accessed and a voxel from this
+  // map is returned instead. Unlike the layer, accessing
+  // temp_label_block_map_ is controlled via a mutex allowing it to grow
+  // during integration. These temporary blocks can be merged into the layer
+  // later by calling updateLayerWithStoredBlocks()
   LabelVoxel* allocateStorageAndGetLabelVoxelPtr(
       const VoxelIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
       BlockIndex* last_block_idx) {
@@ -403,7 +414,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
     Label previous_label = label_voxel->label;
     addVoxelLabelConfidence(label, confidence, label_voxel);
-    updateVoxelLabelAndConfidence(label_voxel);
+    updateVoxelLabelAndConfidence(label, label_voxel);
     Label new_label = label_voxel->label;
 
     if (new_label != previous_label) {
@@ -627,7 +638,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
           // Add old_label confidence, if any, to new_label confidence.
           addVoxelLabelConfidence(new_label, old_label_confidence, &voxel);
         }
-        updateVoxelLabelAndConfidence(&voxel);
+        updateVoxelLabelAndConfidence(new_label, &voxel);
         Label updated_label = voxel.label;
 
         if (updated_label != previous_label) {
