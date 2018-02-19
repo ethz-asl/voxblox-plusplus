@@ -503,12 +503,9 @@ bool Controller::validateMergedObjectCallback(
   return true;
 }
 
-bool Controller::generateMeshCallback(
-    std_srvs::Empty::Request& request,
-    std_srvs::Empty::Response& response) {  // NOLINT
+void Controller::generateMesh(bool clear_mesh) {  // NOLINT
   voxblox::timing::Timer generate_mesh_timer("mesh/generate");
   boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
-  const bool clear_mesh = true;
   if (clear_mesh) {
     constexpr bool only_mesh_updated_blocks = false;
     constexpr bool clear_updated_flag = true;
@@ -555,6 +552,13 @@ bool Controller::generateMeshCallback(
 
   ROS_INFO_STREAM("Mesh Timings: " << std::endl
                                    << voxblox::timing::Timing::Print());
+}
+
+bool Controller::generateMeshCallback(
+    std_srvs::Empty::Request& request,
+    std_srvs::Empty::Response& response) {  // NOLINT
+  constexpr bool kClearMesh = true;
+  generateMesh(kClearMesh);
   return true;
 }
 
