@@ -197,8 +197,16 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     }
     if (updated == false) {
-      LOG(FATAL) << "Out-of-memory for storing labels and confidences for this "
-                    "voxel. Please increse size of array.";
+      label_voxel->label_count[0].label = 10000u;
+      label_voxel->label_count[0].label_confidence = 500.0f;
+
+      // for (LabelCount& label_count : label_voxel->label_count) {
+      //   LOG(ERROR) << label_count.label << " " <<
+      //   label_count.label_confidence;
+      // }
+      // LOG(FATAL) << "Out-of-memory for storing labels and confidences for
+      // this "
+      //               "voxel. Please increse size of array.";
     }
   }
 
@@ -439,7 +447,15 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void integratePointCloud(const Transformation& T_G_C,
                            const Pointcloud& points_C, const Colors& colors,
                            const Labels& labels, const bool freespace_points) {
-    DCHECK_EQ(points_C.size(), colors.size());
+    CHECK_EQ(points_C.size(), colors.size());
+    CHECK_EQ(points_C.size(), labels.size());
+    CHECK_GE(labels.size(), 0u);
+    Label label1 = labels[0];
+    for (Label checked_label : labels) {
+      if (checked_label != label1) {
+        LOG(FATAL) << "FOUND HERE";
+      }
+    }
 
     timing::Timer integrate_timer("integrate");
 

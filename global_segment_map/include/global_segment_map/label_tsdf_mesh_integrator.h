@@ -88,6 +88,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       color = label_color_map_it->second;
     } else {
       color = randomColor();
+      color.r = 0;
       label_color_map_.insert(std::pair<Label, Color>(label, color));
     }
     return color;
@@ -138,7 +139,16 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           color =
               rainbowColorMap(voxel.label_confidence / expected_max_confidence);
         } else {
-          color = getColorFromLabel(voxel.label);
+          if (voxel.label == 10000u) {
+            color.a = 255;
+
+            color.r = 255;
+            color.b = 0;
+            color.g = 0;
+
+          } else {
+            color = getColorFromLabel(voxel.label);
+          }
         }
         mesh->colors[i] = color;
       } else {
@@ -149,7 +159,16 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         if (visualize_confidence) {
           color = rainbowColorMap(voxel.label_confidence / 100);
         } else {
-          color = getColorFromLabel(voxel.label);
+          if (voxel.label == 10000u) {
+            color.a = 255;
+
+            color.r = 255;
+            color.b = 0;
+            color.g = 0;
+
+          } else {
+            color = getColorFromLabel(voxel.label);
+          }
         }
         mesh->colors[i] = color;
       }

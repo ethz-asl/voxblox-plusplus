@@ -154,7 +154,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_config.voxel_carving_enabled = false;
   // integrator_config.voxel_carving_enabled = true;
   integrator_config.allow_clear = true;
-  integrator_config.default_truncation_distance = map_config_.voxel_size * 2.0;
+  integrator_config.default_truncation_distance = map_config_.voxel_size * 10.0;
+  integrator_config.max_ray_length_m = 2.5;
 
   std::string method("merged");
   node_handle_private_->param("method", method, method);
@@ -168,8 +169,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   voxblox::LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
-  label_tsdf_integrator_config.pairwise_confidence_ratio_threshold = 0.03f;
-  label_tsdf_integrator_config.pairwise_confidence_threshold = 2;
+  label_tsdf_integrator_config.pairwise_confidence_ratio_threshold = 0.2f;
+  label_tsdf_integrator_config.pairwise_confidence_threshold = 10;
   label_tsdf_integrator_config.object_flushing_age_threshold =
       30000;  // TODO(ff): For the real tests probably set to 30 or something.
   label_tsdf_integrator_config.cap_confidence = false;
@@ -392,7 +393,7 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Cleared candidates and memory in %f seconds.",
              (end - start).toSec());
 
-    publishObjects();
+    // publishObjects();
   }
   received_first_message_ = true;
   last_update_received_ = ros::Time::now();

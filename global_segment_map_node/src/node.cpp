@@ -47,12 +47,13 @@ int main(int argc, char** argv) {
   controller.advertiseExtractSegmentsService(&extract_segments_srv);
 
   constexpr double kNoUpdateTimeout = 5.0;
-  while (ros::ok() && !controller.noNewUpdatesReceived(kNoUpdateTimeout)) {
+  // !controller.noNewUpdatesReceived(kNoUpdateTimeout)
+  while (ros::ok()) {
     ros::spinOnce();
   }
   LOG(INFO) << "Shutting down";
-  controller.publishScene();
+  // controller.publishScene();
   constexpr bool kPublishAllSegments = true;
-  controller.publishObjects(kPublishAllSegments);
+  // controller.publishObjects(kPublishAllSegments);
   return 0;
 }
