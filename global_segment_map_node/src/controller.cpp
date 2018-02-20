@@ -42,7 +42,7 @@ bool Controller::noNewUpdatesReceived(const double no_update_timeout) const {
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
-void visualizeMesh(const voxblox::MeshLayer& mesh_layer) {
+void visualizeMesh(const MeshLayer& mesh_layer) {
   boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
       new pcl::visualization::PCLVisualizer("GSM viewer"));
   viewer->setBackgroundColor(0, 0, 0);
@@ -68,35 +68,33 @@ void visualizeMesh(const voxblox::MeshLayer& mesh_layer) {
       normals.points.clear();
       cloud.points.clear();
 
-      voxblox::Mesh combined_mesh(mesh_layer.block_size(),
-                                  voxblox::Point::Zero());
+      Mesh combined_mesh(mesh_layer.block_size(), Point::Zero());
 
       // Combine everything in the layer into one giant combined mesh.
       size_t v = 0u;
-      voxblox::BlockIndexList mesh_indices;
+      BlockIndexList mesh_indices;
       mesh_layer.getAllAllocatedMeshes(&mesh_indices);
-      for (const voxblox::BlockIndex& block_index : mesh_indices) {
-        voxblox::Mesh::ConstPtr mesh =
-            mesh_layer.getMeshPtrByIndex(block_index);
+      for (const BlockIndex& block_index : mesh_indices) {
+        Mesh::ConstPtr mesh = mesh_layer.getMeshPtrByIndex(block_index);
 
-        for (const voxblox::Point& vert : mesh->vertices) {
+        for (const Point& vert : mesh->vertices) {
           combined_mesh.vertices.push_back(vert);
           combined_mesh.indices.push_back(v++);
         }
 
-        for (const voxblox::Color& color : mesh->colors) {
+        for (const Color& color : mesh->colors) {
           combined_mesh.colors.push_back(color);
         }
 
-        for (const voxblox::Point& normal : mesh->normals) {
+        for (const Point& normal : mesh->normals) {
           normals.points.push_back(
               pcl::Normal(normal(0), normal(1), normal(2)));
         }
       }
 
       size_t vert_idx = 0;
-      for (const voxblox::Point& vert : combined_mesh.vertices) {
-        const voxblox::Color& color = combined_mesh.colors[vert_idx];
+      for (const Point& vert : combined_mesh.vertices) {
+        const Color& color = combined_mesh.colors[vert_idx];
         pcl::PointXYZRGB point = pcl::PointXYZRGB(color.r, color.g, color.b);
         point.x = vert(0);
         point.y = vert(1);
@@ -148,9 +146,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   // map_config_.voxel_size = 0.005f;
   map_config_.voxel_size = 0.01f;
   map_config_.voxels_per_side = 8u;
-  map_.reset(new voxblox::LabelTsdfMap(map_config_));
+  map_.reset(new LabelTsdfMap(map_config_));
 
-  voxblox::LabelTsdfIntegrator::Config integrator_config;
+  LabelTsdfIntegrator::Config integrator_config;
   integrator_config.voxel_carving_enabled = false;
   // integrator_config.voxel_carving_enabled = true;
   integrator_config.allow_clear = true;
@@ -167,23 +165,23 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     integrator_config.enable_anti_grazing = false;
   }
 
-  voxblox::LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
+  LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
   label_tsdf_integrator_config.pairwise_confidence_ratio_threshold = 0.2f;
-  label_tsdf_integrator_config.pairwise_confidence_threshold = 10;
+  label_tsdf_integrator_config.pairwise_confidence_threshold = 30;
   label_tsdf_integrator_config.object_flushing_age_threshold =
       30000;  // TODO(ff): For the real tests probably set to 30 or something.
   label_tsdf_integrator_config.cap_confidence = false;
   label_tsdf_integrator_config.confidence_cap_value = 10;
 
-  integrator_.reset(new voxblox::LabelTsdfIntegrator(
+  integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
       map_->getLabelLayerPtr(), map_->getHighestLabelPtr()));
 
-  mesh_layer_.reset(new voxblox::MeshLayer(map_->block_size()));
-  mesh_integrator_.reset(new voxblox::MeshLabelIntegrator(
-      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_layer_.get()));
+  mesh_layer_.reset(new MeshLayer(map_->block_size()));
+  mesh_integrator_.reset(
+      new MeshLabelIntegrator(mesh_config_, map_->getTsdfLayerPtr(),
+                              map_->getLabelLayerPtr(), mesh_layer_.get()));
 
   // If set, use a timer to progressively integrate the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -305,12 +303,11 @@ void Controller::publishScene() {
   gsm_update_msg.header.frame_id = kGsmUpdateFrameId;
 
   constexpr bool kSerializeOnlyUpdated = false;
-  voxblox::serializeLayerAsMsg<voxblox::TsdfVoxel>(
-      map_->getTsdfLayer(), kSerializeOnlyUpdated,
-      &gsm_update_msg.object.tsdf_layer);
+  serializeLayerAsMsg<TsdfVoxel>(map_->getTsdfLayer(), kSerializeOnlyUpdated,
+                                 &gsm_update_msg.object.tsdf_layer);
   // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
   // yet, hence it doesn't work.
-  // voxblox::serializeLayerAsMsg<voxblox::LabelVoxel>(
+  // serializeLayerAsMsg<LabelVoxel>(
   //     map_->label_layer_, kSerializeOnlyUpdated,
   //     &gsm_update_msg.object.label_layer);
 
@@ -351,7 +348,8 @@ void Controller::segmentPointCloudCallback(
     ros::WallTime start = ros::WallTime::now();
 
     integrator_->decideLabelPointClouds(&segments_to_integrate_,
-                                        &segment_label_candidates);
+                                        &segment_label_candidates,
+                                        &segment_merge_candidates_);
 
     ros::WallTime end = ros::WallTime::now();
     ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
@@ -383,8 +381,9 @@ void Controller::segmentPointCloudCallback(
         (end - start).toSec());
     start = ros::WallTime::now();
 
+    segment_merge_candidates_.clear();
     segment_label_candidates.clear();
-    for (voxblox::Segment* segment : segments_to_integrate_) {
+    for (Segment* segment : segments_to_integrate_) {
       delete segment;
     }
     segments_to_integrate_.clear();
@@ -400,7 +399,7 @@ void Controller::segmentPointCloudCallback(
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
 
   // Look up transform from camera frame to world frame.
-  voxblox::Transformation T_G_C;
+  Transformation T_G_C;
   std::string world_frame_id = "world";
   // std::string world_frame_id = "/vicon";
   // std::string camera_frame_id = "/scenenet_camera_frame";
@@ -413,7 +412,7 @@ void Controller::segmentPointCloudCallback(
 
   if (lookupTransform(camera_frame_id, world_frame_id,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {
-    voxblox::Segment* segment = new voxblox::Segment();
+    Segment* segment = new Segment();
     segments_to_integrate_.push_back(segment);
 
     // Convert the PCL pointcloud into voxblox format.
@@ -440,36 +439,35 @@ void Controller::segmentPointCloudCallback(
         continue;
       }
 
-      segment->points_C_.push_back(voxblox::Point(point_cloud.points[i].x,
-                                                  point_cloud.points[i].y,
-                                                  point_cloud.points[i].z));
+      segment->points_C_.push_back(Point(point_cloud.points[i].x,
+                                         point_cloud.points[i].y,
+                                         point_cloud.points[i].z));
 
       segment->colors_.push_back(
-          voxblox::Color(point_cloud.points[i].r, point_cloud.points[i].g,
-                         point_cloud.points[i].b, point_cloud.points[i].a));
+          Color(point_cloud.points[i].r, point_cloud.points[i].g,
+                point_cloud.points[i].b, point_cloud.points[i].a));
     }
 
     segment->T_G_C_ = T_G_C;
 
     ros::WallTime start = ros::WallTime::now();
-    integrator_->computeSegmentLabelCandidates(segment,
-                                               &segment_label_candidates);
+    integrator_->computeSegmentLabelCandidates(
+        segment, &segment_label_candidates, &segment_merge_candidates_);
 
     ros::WallTime end = ros::WallTime::now();
     ROS_INFO(
         "Computed label candidates for a pointcloud of size %lu in %f seconds.",
         segment->points_C_.size(), (end - start).toSec());
 
-    ROS_INFO_STREAM("Timings: " << std::endl
-                                << voxblox::timing::Timing::Print());
+    ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
   }
 }
 
 bool Controller::validateMergedObjectCallback(
     modelify_msgs::ValidateMergedObject::Request& request,
     modelify_msgs::ValidateMergedObject::Response& response) {
-  typedef voxblox::TsdfVoxel TsdfVoxelType;
-  typedef voxblox::Layer<TsdfVoxelType> TsdfLayer;
+  typedef TsdfVoxel TsdfVoxelType;
+  typedef Layer<TsdfVoxelType> TsdfLayer;
   // TODO(ff): Do the following afterwards in modelify.
   // - Check if merged object agrees with whole map (at all poses).
   // - If it doesn't agree at all poses try the merging again with the
@@ -479,27 +477,26 @@ bool Controller::validateMergedObjectCallback(
 
   // Extract TSDF layer of merged object.
   std::shared_ptr<TsdfLayer> merged_object_layer_O;
-  CHECK(voxblox::deserializeMsgToLayer(request.gsm_update.object.tsdf_layer,
-                                       merged_object_layer_O.get()))
+  CHECK(deserializeMsgToLayer(request.gsm_update.object.tsdf_layer,
+                              merged_object_layer_O.get()))
       << "Deserializing of TSDF layer from merged object message failed.";
 
   // Extract transformations.
-  std::vector<voxblox::Transformation> transforms_W_O;
-  voxblox::voxblox_gsm::transformMsgs2Transformations(
+  std::vector<Transformation> transforms_W_O;
+  voxblox_gsm::transformMsgs2Transformations(
       request.gsm_update.object.transforms, &transforms_W_O);
 
-  const voxblox::utils::VoxelEvaluationMode voxel_evaluation_mode =
-      voxblox::utils::VoxelEvaluationMode::kEvaluateAllVoxels;
+  const utils::VoxelEvaluationMode voxel_evaluation_mode =
+      utils::VoxelEvaluationMode::kEvaluateAllVoxels;
 
-  std::vector<voxblox::utils::VoxelEvaluationDetails>
-      voxel_evaluation_details_vector;
+  std::vector<utils::VoxelEvaluationDetails> voxel_evaluation_details_vector;
 
-  voxblox::evaluateLayerAtPoses<TsdfVoxelType>(
+  evaluateLayerAtPoses<TsdfVoxelType>(
       voxel_evaluation_mode, map_->getTsdfLayer(),
       *(merged_object_layer_O.get()), transforms_W_O,
       &voxel_evaluation_details_vector);
 
-  voxblox::voxblox_gsm::voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
+  voxblox_gsm::voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
       voxel_evaluation_details_vector, &response.voxel_evaluation_details);
   return true;
 }
@@ -507,7 +504,7 @@ bool Controller::validateMergedObjectCallback(
 bool Controller::generateMeshCallback(
     std_srvs::Empty::Request& request,
     std_srvs::Empty::Response& response) {  // NOLINT
-  voxblox::timing::Timer generate_mesh_timer("mesh/generate");
+  timing::Timer generate_mesh_timer("mesh/generate");
   boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
   const bool clear_mesh = true;
   if (clear_mesh) {
@@ -523,13 +520,12 @@ bool Controller::generateMeshCallback(
   }
   generate_mesh_timer.Stop();
 
-  voxblox::timing::Timer publish_mesh_timer("mesh/publish");
+  timing::Timer publish_mesh_timer("mesh/publish");
   visualization_msgs::MarkerArray marker_array;
   marker_array.markers.resize(1);
-  fillMarkerWithMesh(mesh_layer_, voxblox::ColorMode::kColor,
-                     &marker_array.markers[0]);
+  fillMarkerWithMesh(mesh_layer_, ColorMode::kColor, &marker_array.markers[0]);
   // TODO(grinvalm): world frame param.
-  voxblox::ColorMode color_mode_ = voxblox::ColorMode::kColor;
+  ColorMode color_mode_ = ColorMode::kColor;
   std::string world_frame_ = "world";
   marker_array.markers[0].header.frame_id = world_frame_;
   mesh_pub_->publish(marker_array);
@@ -540,7 +536,7 @@ bool Controller::generateMeshCallback(
   std::string mesh_filename_ = "voxblox_gsm_mesh.ply";
 
   if (!mesh_filename_.empty()) {
-    voxblox::timing::Timer output_mesh_timer("mesh/output");
+    timing::Timer output_mesh_timer("mesh/output");
     bool success = outputMeshLayerAsPly(mesh_filename_, *mesh_layer_);
     output_mesh_timer.Stop();
     if (success) {
@@ -554,8 +550,7 @@ bool Controller::generateMeshCallback(
   updatedMesh = true;
   updateMeshLock.unlock();
 
-  ROS_INFO_STREAM("Mesh Timings: " << std::endl
-                                   << voxblox::timing::Timing::Print());
+  ROS_INFO_STREAM("Mesh Timings: " << std::endl << timing::Timing::Print());
   return true;
 }
 
@@ -563,7 +558,7 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
   bool updated = false;
 
-  voxblox::timing::Timer generate_mesh_timer("mesh/update");
+  timing::Timer generate_mesh_timer("mesh/update");
   constexpr bool only_mesh_updated_blocks = true;
   constexpr bool clear_updated_flag = true;
   updatedMesh = mesh_integrator_->generateMesh(only_mesh_updated_blocks,
@@ -574,11 +569,10 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   generate_mesh_timer.Stop();
 
   // TODO(helenol): also think about how to update markers incrementally?
-  voxblox::timing::Timer publish_mesh_timer("mesh/publish");
+  timing::Timer publish_mesh_timer("mesh/publish");
   visualization_msgs::MarkerArray marker_array;
   marker_array.markers.resize(1);
-  fillMarkerWithMesh(mesh_layer_, voxblox::ColorMode::kColor,
-                     &marker_array.markers[0]);
+  fillMarkerWithMesh(mesh_layer_, ColorMode::kColor, &marker_array.markers[0]);
   marker_array.markers[0].header.frame_id = "world";
   mesh_pub_->publish(marker_array);
 
@@ -588,31 +582,31 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
 bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
                                          std_srvs::Empty::Response& response) {
   // Get list of all labels in the map.
-  std::vector<voxblox::Label> labels = integrator_->getLabelsList();
+  std::vector<Label> labels = integrator_->getLabelsList();
 
   // TODO(grinvalm): there are more segments extracted than there really are.
   // Seems like their voxel count is greater than 0, but when meshed they are
   // too small to result in any polygon. Find a fix, maybe with a size
   // threshold.
 
-  for (voxblox::Label label : labels) {
-    voxblox::Layer<voxblox::TsdfVoxel> tsdf_layer(map_config_.voxel_size,
-                                                  map_config_.voxels_per_side);
-    voxblox::Layer<voxblox::LabelVoxel> label_layer(
-        map_config_.voxel_size, map_config_.voxels_per_side);
+  for (Label label : labels) {
+    Layer<TsdfVoxel> tsdf_layer(map_config_.voxel_size,
+                                map_config_.voxels_per_side);
+    Layer<LabelVoxel> label_layer(map_config_.voxel_size,
+                                  map_config_.voxels_per_side);
     // Extract the TSDF and label layers corresponding to a segment.
     extractSegmentLayers(label, &tsdf_layer, &label_layer);
 
-    voxblox::MeshLayer mesh_layer(map_->block_size());
-    voxblox::MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer,
-                                                 &label_layer, &mesh_layer);
+    MeshLayer mesh_layer(map_->block_size());
+    MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer, &label_layer,
+                                        &mesh_layer);
 
     constexpr bool only_mesh_updated_blocks = false;
     constexpr bool clear_updated_flag = true;
     mesh_integrator.generateMesh(only_mesh_updated_blocks, clear_updated_flag);
 
-    voxblox::Mesh::Ptr combined_mesh = voxblox::aligned_shared<voxblox::Mesh>(
-        mesh_layer.block_size(), voxblox::Point::Zero());
+    Mesh::Ptr combined_mesh =
+        aligned_shared<Mesh>(mesh_layer.block_size(), Point::Zero());
     mesh_layer.combineMesh(combined_mesh);
 
     if (combined_mesh->vertices.size() > 0) {
@@ -622,7 +616,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
       std::string mesh_filename =
           "segments/voxblox_gsm_mesh_label_" + std::to_string(label) + ".ply";
 
-      bool success = voxblox::outputMeshAsPly(mesh_filename, *combined_mesh);
+      bool success = outputMeshAsPly(mesh_filename, *combined_mesh);
       if (success) {
         ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
       } else {
@@ -633,27 +627,26 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   return true;
 }
 
-void Controller::extractSegmentLayers(
-    voxblox::Label label, voxblox::Layer<voxblox::TsdfVoxel>* tsdf_layer,
-    voxblox::Layer<voxblox::LabelVoxel>* label_layer) {
+void Controller::extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
+                                      Layer<LabelVoxel>* label_layer) {
   CHECK_NOTNULL(tsdf_layer);
   CHECK_NOTNULL(label_layer);
   // TODO(grinvalm): find a less naive method to
   // extract all blocks and voxels for a label.
-  voxblox::BlockIndexList all_label_blocks;
+  BlockIndexList all_label_blocks;
   map_->getTsdfLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
 
-  for (const voxblox::BlockIndex& block_index : all_label_blocks) {
-    voxblox::Block<voxblox::TsdfVoxel>::Ptr global_tsdf_block =
+  for (const BlockIndex& block_index : all_label_blocks) {
+    Block<TsdfVoxel>::Ptr global_tsdf_block =
         map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
-    voxblox::Block<voxblox::LabelVoxel>::Ptr global_label_block =
+    Block<LabelVoxel>::Ptr global_label_block =
         map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
-    voxblox::Block<voxblox::TsdfVoxel>::Ptr tsdf_block;
-    voxblox::Block<voxblox::LabelVoxel>::Ptr label_block;
+    Block<TsdfVoxel>::Ptr tsdf_block;
+    Block<LabelVoxel>::Ptr label_block;
 
     size_t vps = global_label_block->voxels_per_side();
     for (int i = 0; i < vps * vps * vps; i++) {
-      const voxblox::LabelVoxel& global_label_voxel =
+      const LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
 
       if (global_label_voxel.label != label) {
@@ -666,10 +659,10 @@ void Controller::extractSegmentLayers(
       CHECK(tsdf_block);
       CHECK(label_block);
 
-      voxblox::TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
-      voxblox::LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
+      TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
+      LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
 
-      const voxblox::TsdfVoxel& global_tsdf_voxel =
+      const TsdfVoxel& global_tsdf_voxel =
           global_tsdf_block->getVoxelByLinearIndex(i);
 
       tsdf_voxel = global_tsdf_voxel;
@@ -684,21 +677,20 @@ void Controller::extractSegmentLayers(
 void Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(gsm_update_pub_);
   // TODO(ff): Not sure if we want to use this or ros::Time::now();
-  const std::vector<voxblox::Label>* labels_to_publish_ptr =
-      &segment_labels_to_publish_;
-  std::vector<voxblox::Label> all_labels;
+  const std::vector<Label>* labels_to_publish_ptr = &segment_labels_to_publish_;
+  std::vector<Label> all_labels;
   if (publish_all) {
     all_labels = integrator_->getLabelsList();
     labels_to_publish_ptr = &all_labels;
     LOG(INFO) << "Publishing all segments";
   }
 
-  for (const voxblox::Label& label : *labels_to_publish_ptr) {
+  for (const Label& label : *labels_to_publish_ptr) {
     // Extract the TSDF and label layers corresponding to this label.
-    voxblox::Layer<voxblox::TsdfVoxel> tsdf_layer(map_config_.voxel_size,
-                                                  map_config_.voxels_per_side);
-    voxblox::Layer<voxblox::LabelVoxel> label_layer(
-        map_config_.voxel_size, map_config_.voxels_per_side);
+    Layer<TsdfVoxel> tsdf_layer(map_config_.voxel_size,
+                                map_config_.voxels_per_side);
+    Layer<LabelVoxel> label_layer(map_config_.voxel_size,
+                                  map_config_.voxels_per_side);
     extractSegmentLayers(label, &tsdf_layer, &label_layer);
 
     // Continue if tsdf_layer has little getNumberOfAllocatedBlocks.
@@ -710,13 +702,13 @@ void Controller::publishObjects(const bool publish_all) {
     }
 
     // Convert to origin and extract translation.
-    voxblox::Point origin_shifted_tsdf_layer_W;
-    voxblox::utils::centerBlocksOfLayer<voxblox::TsdfVoxel>(
-        &tsdf_layer, &origin_shifted_tsdf_layer_W);
+    Point origin_shifted_tsdf_layer_W;
+    utils::centerBlocksOfLayer<TsdfVoxel>(&tsdf_layer,
+                                          &origin_shifted_tsdf_layer_W);
     // TODO(ff): If this is time consuming we can omit this step.
-    voxblox::Point origin_shifted_label_layer_W;
-    voxblox::utils::centerBlocksOfLayer<voxblox::LabelVoxel>(
-        &label_layer, &origin_shifted_label_layer_W);
+    Point origin_shifted_label_layer_W;
+    utils::centerBlocksOfLayer<LabelVoxel>(&label_layer,
+                                           &origin_shifted_label_layer_W);
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
 
     // Extract surfel cloud from layer.
@@ -735,11 +727,11 @@ void Controller::publishObjects(const bool publish_all) {
     gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
     static const std::string kGsmUpdateFrameId = "world";
     gsm_update_msg.header.frame_id = kGsmUpdateFrameId;
-    voxblox::serializeLayerAsMsg<voxblox::TsdfVoxel>(
-        tsdf_layer, kSerializeOnlyUpdated, &gsm_update_msg.object.tsdf_layer);
+    serializeLayerAsMsg<TsdfVoxel>(tsdf_layer, kSerializeOnlyUpdated,
+                                   &gsm_update_msg.object.tsdf_layer);
     // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
     // yet, hence it doesn't work.
-    // voxblox::serializeLayerAsMsg<voxblox::LabelVoxel>(
+    // serializeLayerAsMsg<LabelVoxel>(
     //     label_layer, kSerializeOnlyUpdated,
     //     &gsm_update_msg.object.label_layer);
 
@@ -765,7 +757,7 @@ void Controller::publishObjects(const bool publish_all) {
     }
     auto merged_label_it = merges_to_publish_.find(label);
     if (merged_label_it != merges_to_publish_.end()) {
-      for (voxblox::Label merged_label : merged_label_it->second) {
+      for (Label merged_label : merged_label_it->second) {
         if (all_published_segments_.find(merged_label) !=
             all_published_segments_.end()) {
           gsm_update_msg.old_labels.push_back(merged_label);
@@ -777,17 +769,17 @@ void Controller::publishObjects(const bool publish_all) {
     // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
 
     // Generate mesh for visualization purposes.
-    std::shared_ptr<voxblox::MeshLayer> mesh_layer;
-    mesh_layer.reset(new voxblox::MeshLayer(tsdf_layer.block_size()));
-    // mesh_layer.reset(new voxblox::MeshLayer(map_->block_size()));
-    voxblox::MeshLabelIntegrator mesh_integrator(
-        mesh_config_, &tsdf_layer, &label_layer, mesh_layer.get());
+    std::shared_ptr<MeshLayer> mesh_layer;
+    mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
+    // mesh_layer.reset(new MeshLayer(map_->block_size()));
+    MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer, &label_layer,
+                                        mesh_layer.get());
     constexpr bool only_mesh_updated_blocks = false;
     constexpr bool clear_updated_flag = true;
     mesh_integrator.generateMesh(only_mesh_updated_blocks, clear_updated_flag);
 
     visualization_msgs::Marker segment_marker;
-    fillMarkerWithMesh(mesh_layer, voxblox::ColorMode::kColor, &segment_marker);
+    fillMarkerWithMesh(mesh_layer, ColorMode::kColor, &segment_marker);
     static const std::string kWorldFrameName = "world";
     segment_marker.header.frame_id = kWorldFrameName;
     if (segment_marker.points.size() > 0) {
@@ -801,7 +793,7 @@ void Controller::publishObjects(const bool publish_all) {
 bool Controller::lookupTransform(const std::string& from_frame,
                                  const std::string& to_frame,
                                  const ros::Time& timestamp,
-                                 voxblox::Transformation* transform) {
+                                 Transformation* transform) {
   tf::StampedTransform tf_transform;
   ros::Time time_to_lookup = timestamp;
 

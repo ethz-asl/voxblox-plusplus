@@ -75,13 +75,12 @@ class Controller {
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
 
-  void extractSegmentLayers(voxblox::Label label,
-                            voxblox::Layer<voxblox::TsdfVoxel>* tsdf_layer,
-                            voxblox::Layer<voxblox::LabelVoxel>* label_layer);
+  void extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
+                            Layer<LabelVoxel>* label_layer);
 
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
-                       voxblox::Transformation* transform);
+                       Transformation* transform);
 
   ros::NodeHandle* node_handle_private_;
 
@@ -101,24 +100,24 @@ class Controller {
 
   size_t integrated_frames_count_;
 
-  voxblox::LabelTsdfMap::Config map_config_;
+  LabelTsdfMap::Config map_config_;
 
-  std::shared_ptr<voxblox::LabelTsdfMap> map_;
-  std::shared_ptr<voxblox::LabelTsdfIntegrator> integrator_;
+  std::shared_ptr<LabelTsdfMap> map_;
+  std::shared_ptr<LabelTsdfIntegrator> integrator_;
 
-  voxblox::MeshLabelIntegrator::Config mesh_config_;
+  MeshLabelIntegrator::Config mesh_config_;
 
-  std::shared_ptr<voxblox::MeshLayer> mesh_layer_;
-  std::shared_ptr<voxblox::MeshLabelIntegrator> mesh_integrator_;
+  std::shared_ptr<MeshLayer> mesh_layer_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_integrator_;
 
-  std::vector<voxblox::Segment*> segments_to_integrate_;
-  std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>
-      segment_label_candidates;
+  std::vector<Segment*> segments_to_integrate_;
+  std::map<Label, std::map<Segment*, size_t>> segment_label_candidates;
+  std::map<Segment*, std::vector<Label>> segment_merge_candidates_;
 
-  std::set<voxblox::Label> all_published_segments_;
-  std::vector<voxblox::Label> segment_labels_to_publish_;
+  std::set<Label> all_published_segments_;
+  std::vector<Label> segment_labels_to_publish_;
 
-  std::map<voxblox::Label, std::set<voxblox::Label>> merges_to_publish_;
+  std::map<Label, std::set<Label>> merges_to_publish_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox
