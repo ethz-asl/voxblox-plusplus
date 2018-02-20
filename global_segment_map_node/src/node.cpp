@@ -52,7 +52,9 @@ int main(int argc, char** argv) {
     ros::spinOnce();
   }
   LOG(INFO) << "Shutting down";
-  // controller.publishScene();
+  constexpr bool kClearMesh = true;
+  controller.generateMesh(kClearMesh);
+  controller.publishScene();
   constexpr bool kPublishAllSegments = true;
   // controller.publishObjects(kPublishAllSegments);
   return 0;

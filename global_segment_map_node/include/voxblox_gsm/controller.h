@@ -54,6 +54,8 @@ class Controller {
 
   void publishScene();
 
+  void generateMesh(bool clear_mesh);
+
   void publishObjects(const bool publish_all = false);
 
   bool noNewUpdatesReceived(const double no_update_timeout) const;
