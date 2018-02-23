@@ -66,7 +66,7 @@ inline void convertVoxelGridToPointCloud(
 
   voxblox::Mesh::Ptr mesh = voxblox::aligned_shared<voxblox::Mesh>(
       mesh_layer->block_size(), voxblox::Point::Zero());
-  mesh_layer->combineMesh(mesh);
+  mesh_layer->getMesh(mesh);
 
   size_t vert_idx = 0u;
   for (const voxblox::Point& vert : mesh->vertices) {

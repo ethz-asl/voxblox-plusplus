@@ -250,14 +250,20 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       const Point point_G = segment->T_G_C_ * point_C;
 
       // Get the corresponding voxel by 3D position in world frame.
-      Layer<LabelVoxel>::BlockType::ConstPtr block_ptr =
+      Layer<LabelVoxel>::BlockType::ConstPtr label_block_ptr =
           label_layer_->getBlockPtrByCoordinates(point_G);
+      // Get the corresponding voxel by 3D position in world frame.
+      Layer<TsdfVoxel>::BlockType::ConstPtr tsdf_block_ptr =
+          layer_->getBlockPtrByCoordinates(point_G);
 
-      if (block_ptr != nullptr) {
-        const LabelVoxel& voxel = block_ptr->getVoxelByCoordinates(point_G);
+      if (label_block_ptr != nullptr) {
+        const LabelVoxel& label_voxel =
+            label_block_ptr->getVoxelByCoordinates(point_G);
+        const TsdfVoxel& tsdf_voxel =
+            tsdf_block_ptr->getVoxelByCoordinates(point_G);
         Label label = 0u;
-        label = getNextUnassignedLabel(voxel, assigned_labels);
-        if (label != 0u) {
+        label = getNextUnassignedLabel(label_voxel, assigned_labels);
+        if (label != 0u && std::abs(tsdf_voxel.distance) < 1.0 * voxel_size_) {
           // Do not consider allocated but unobserved voxels
           // which have label == 0.
           candidate_label_exists = true;
@@ -613,20 +619,20 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
           global_voxel_idx, &label_block, &block_idx, &existed_before);
 
-      // updateLabelVoxel(merged_point_G, merged_label, label_voxel,
-      //                  merged_label_confidence);
+      updateLabelVoxel(merged_point_G, merged_label, label_voxel,
+                       merged_label_confidence);
 
-      if (std::abs(sdf) > 1.0 * voxel_size_) {
-        // LOG(FATAL) << "THIS SHOULD NOT HAPPEN!";
-        if (!existed_before) {
-          merged_label = 0u;
-          updateLabelVoxel(merged_point_G, merged_label, label_voxel,
-                           merged_label_confidence);
-        }
-      } else {
-        updateLabelVoxel(merged_point_G, merged_label, label_voxel,
-                         merged_label_confidence);
-      }
+      // if (std::abs(sdf) > 1.0 * voxel_size_) {
+      //   // LOG(FATAL) << "THIS SHOULD NOT HAPPEN!";
+      //   if (!existed_before) {
+      //     merged_label = 0u;
+      //     updateLabelVoxel(merged_point_G, merged_label, label_voxel,
+      //                      merged_label_confidence);
+      //   }
+      // } else {
+      //   updateLabelVoxel(merged_point_G, merged_label, label_voxel,
+      //                    merged_label_confidence);
+      // }
     }
   }
 

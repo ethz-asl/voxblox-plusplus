@@ -540,7 +540,7 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 
   if (!mesh_filename_.empty()) {
     timing::Timer output_mesh_timer("mesh/output");
-    bool success = outputMeshLayerAsPly(mesh_filename_, *mesh_layer_);
+    bool success = outputMeshLayerAsPly(mesh_filename_, false, *mesh_layer_);
     output_mesh_timer.Stop();
     if (success) {
       ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
@@ -617,7 +617,9 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 
     Mesh::Ptr combined_mesh =
         aligned_shared<Mesh>(mesh_layer.block_size(), Point::Zero());
-    mesh_layer.combineMesh(combined_mesh);
+    mesh_layer.getMesh(combined_mesh);
+    // mesh_layer.combineMesh(combined_mesh);
+    // getMesh() getConnectedMesh(, 0.001);
 
     if (combined_mesh->vertices.size() > 0) {
       boost::filesystem::path segments_dir("segments");
