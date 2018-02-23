@@ -59,7 +59,7 @@ void visualizeMesh(const MeshLayer& mesh_layer) {
   pcl::PointCloud<pcl::Normal>::ConstPtr normals_ptr(&normals);
 
   while (!viewer->wasStopped()) {
-    constexpr int updateIntervalms = 1;
+    constexpr int updateIntervalms = 1000;
     viewer->spinOnce(updateIntervalms);
 
     boost::mutex::scoped_lock updatedMeshLock(updateMeshMutex);
@@ -152,7 +152,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_config.voxel_carving_enabled = false;
   // integrator_config.voxel_carving_enabled = true;
   integrator_config.allow_clear = true;
-  integrator_config.default_truncation_distance = map_config_.voxel_size * 10.0;
+  integrator_config.default_truncation_distance = map_config_.voxel_size * 5.0;
   integrator_config.max_ray_length_m = 2.5;
 
   std::string method("merged");
@@ -167,7 +167,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
-  label_tsdf_integrator_config.pairwise_confidence_ratio_threshold = 0.2f;
+  label_tsdf_integrator_config.pairwise_confidence_ratio_threshold =
+      0.2f;  // 0.08 and 20 was ok until 1200
   label_tsdf_integrator_config.pairwise_confidence_threshold = 30;
   label_tsdf_integrator_config.object_flushing_age_threshold =
       30000;  // TODO(ff): For the real tests probably set to 30 or something.
@@ -184,7 +185,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
                               map_->getLabelLayerPtr(), mesh_layer_.get()));
 
   // If set, use a timer to progressively integrate the mesh.
-  double update_mesh_every_n_sec = 0.0;
+  double update_mesh_every_n_sec = 1.0;
 
   if (update_mesh_every_n_sec > 0.0) {
     update_mesh_timer_ = node_handle_private_->createTimer(
@@ -194,7 +195,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   integrated_frames_count_ = 0u;
 
-  bool interactiveViewer = false;
+  bool interactiveViewer = true;
   if (interactiveViewer) {
     boost::thread visualizerThread(visualizeMesh, boost::ref(*mesh_layer_));
   }
@@ -328,7 +329,11 @@ void Controller::publishScene() {
 
 bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
                                       std_srvs::Empty::Response& response) {
+  constexpr bool kClearMesh = true;
+  generateMesh(kClearMesh);
   publishScene();
+  constexpr bool kPublishAllSegments = true;
+  publishObjects(kPublishAllSegments);
   return true;
 }
 
@@ -517,17 +522,18 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
   }
   generate_mesh_timer.Stop();
 
-  timing::Timer publish_mesh_timer("mesh/publish");
-  visualization_msgs::MarkerArray marker_array;
-  marker_array.markers.resize(1);
-  fillMarkerWithMesh(mesh_layer_, ColorMode::kColor, &marker_array.markers[0]);
-  // TODO(grinvalm): world frame param.
-  ColorMode color_mode_ = ColorMode::kColor;
-  std::string world_frame_ = "world";
-  marker_array.markers[0].header.frame_id = world_frame_;
-  mesh_pub_->publish(marker_array);
-
-  publish_mesh_timer.Stop();
+  // timing::Timer publish_mesh_timer("mesh/publish");
+  // visualization_msgs::MarkerArray marker_array;
+  // marker_array.markers.resize(1);
+  // fillMarkerWithMesh(mesh_layer_, ColorMode::kColor,
+  // &marker_array.markers[0]);
+  // // TODO(grinvalm): world frame param.
+  // ColorMode color_mode_ = ColorMode::kColor;
+  // std::string world_frame_ = "world";
+  // marker_array.markers[0].header.frame_id = world_frame_;
+  // mesh_pub_->publish(marker_array);
+  //
+  // publish_mesh_timer.Stop();
 
   // TODO(grinvalm): param.
   std::string mesh_filename_ = "voxblox_gsm_mesh.ply";
@@ -573,15 +579,15 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
 
   generate_mesh_timer.Stop();
 
-  // TODO(helenol): also think about how to update markers incrementally?
-  timing::Timer publish_mesh_timer("mesh/publish");
-  visualization_msgs::MarkerArray marker_array;
-  marker_array.markers.resize(1);
-  fillMarkerWithMesh(mesh_layer_, ColorMode::kColor, &marker_array.markers[0]);
-  marker_array.markers[0].header.frame_id = "world";
-  mesh_pub_->publish(marker_array);
+  // // TODO(helenol): also think about how to update markers incrementally?
+  // timing::Timer publish_mesh_timer("mesh/publish");
+  // visualization_msgs::MarkerArray marker_array;
+  // marker_array.markers.resize(1);
+  // fillMarkerWithMesh(mesh_layer_, ColorMode::kColor,
+  // &marker_array.markers[0]); marker_array.markers[0].header.frame_id =
+  // "world"; mesh_pub_->publish(marker_array);
 
-  publish_mesh_timer.Stop();
+  // publish_mesh_timer.Stop();
 }
 
 bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
@@ -593,7 +599,6 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   // Seems like their voxel count is greater than 0, but when meshed they are
   // too small to result in any polygon. Find a fix, maybe with a size
   // threshold.
-
   for (Label label : labels) {
     Layer<TsdfVoxel> tsdf_layer(map_config_.voxel_size,
                                 map_config_.voxels_per_side);
