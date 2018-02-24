@@ -47,8 +47,7 @@ int main(int argc, char** argv) {
   controller.advertiseExtractSegmentsService(&extract_segments_srv);
 
   constexpr double kNoUpdateTimeout = 5.0;
-  // !controller.noNewUpdatesReceived(kNoUpdateTimeout)
-  while (ros::ok()) {
+  while (ros::ok() && !controller.noNewUpdatesReceived(kNoUpdateTimeout)) {
     ros::spinOnce();
   }
   LOG(INFO) << "Shutting down";
@@ -56,6 +55,6 @@ int main(int argc, char** argv) {
   controller.generateMesh(kClearMesh);
   controller.publishScene();
   constexpr bool kPublishAllSegments = true;
-  // controller.publishObjects(kPublishAllSegments);
+  controller.publishObjects(kPublishAllSegments);
   return 0;
 }
