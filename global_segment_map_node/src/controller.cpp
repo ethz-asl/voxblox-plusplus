@@ -152,7 +152,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_config.voxel_carving_enabled = false;
   // integrator_config.voxel_carving_enabled = true;
   integrator_config.allow_clear = true;
-  integrator_config.default_truncation_distance = map_config_.voxel_size * 10.0;
+  integrator_config.default_truncation_distance = map_config_.voxel_size * 5.0;
   integrator_config.max_ray_length_m = 2.5;
 
   std::string method("merged");
@@ -403,7 +403,7 @@ void Controller::segmentPointCloudCallback(
   std::string world_frame_id = "world";
   // std::string world_frame_id = "/vicon";
   // std::string camera_frame_id = "/scenenet_camera_frame";
-  std::string camera_frame_id = "/scenenn_camera_frame";
+  std::string camera_frame_id = "/depth";
   // std::string camera_frame_id = "/camera_rgb_optical_frame";
   // TODO(grinvalm): nicely parametrize the frames.
   //  std::string camera_frame_id = segment_point_cloud_msg->header.frame_id;
@@ -612,7 +612,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 
     Mesh::Ptr combined_mesh =
         aligned_shared<Mesh>(mesh_layer.block_size(), Point::Zero());
-    mesh_layer.combineMesh(combined_mesh);
+    mesh_layer.getMesh(combined_mesh);
 
     if (combined_mesh->vertices.size() > 0) {
       boost::filesystem::path segments_dir("segments");
