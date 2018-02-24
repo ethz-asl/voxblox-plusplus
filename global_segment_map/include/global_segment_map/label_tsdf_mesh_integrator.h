@@ -82,6 +82,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
   Color getColorFromLabel(const Label& label) {
     Color color;
+    // CHECK_NE(label, 0u);
     auto label_color_map_it = label_color_map_.find(label);
 
     if (label_color_map_it != label_color_map_.end()) {
@@ -107,14 +108,17 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       LOG(ERROR) << "Trying to mesh a non-existent block at index: "
                  << block_index.transpose();
       return;
-    } else if (!(tsdf_block && label_block)) {
-      LOG(FATAL) << "Block allocation differs between the two layers.";
+      //   // TODO(grinvalm) : is it fine to have different layer situations?
+      // } else if (!(tsdf_block && label_block)) {
+      //   LOG(FATAL) << "Block allocation differs between the two layers.";
     }
 
     extractBlockMesh(tsdf_block, mesh);
     // Update colors if needed.
     if (config_.use_color) {
-      updateMeshColor(*label_block, mesh.get());
+      if (label_block) {
+        updateMeshColor(*label_block, mesh.get());
+      }
     }
   }
 
@@ -138,7 +142,16 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           color =
               rainbowColorMap(voxel.label_confidence / expected_max_confidence);
         } else {
-          color = getColorFromLabel(voxel.label);
+          if (voxel.label == 1000u) {
+            color.a = 255;
+
+            color.r = 255;
+            color.b = 0;
+            color.g = 0;
+          } else {
+            color = getColorFromLabel(voxel.label);
+            // color.r = 0;
+          }
         }
         mesh->colors[i] = color;
       } else {
