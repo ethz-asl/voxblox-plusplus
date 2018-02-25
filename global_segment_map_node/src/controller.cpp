@@ -618,8 +618,14 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     Mesh::Ptr combined_mesh =
         aligned_shared<Mesh>(mesh_layer.block_size(), Point::Zero());
     mesh_layer.getMesh(combined_mesh);
-    // mesh_layer.combineMesh(combined_mesh);
-    // getMesh() getConnectedMesh(, 0.001);
+
+    // TODO(Margarita): There is now this new convenience function in voxblox.
+    // It probably makes sense to add the same in GSM and not have to create and
+    // call the mesh integrator and mesh layer every time.
+
+    // static constexpr bool kConnectedMesh = false;
+    // voxblox::Mesh mesh;
+    // voxblox::io::convertLayerToMesh(tsdf_voxels, &mesh, kConnectedMesh);
 
     if (combined_mesh->vertices.size() > 0) {
       boost::filesystem::path segments_dir("segments");
