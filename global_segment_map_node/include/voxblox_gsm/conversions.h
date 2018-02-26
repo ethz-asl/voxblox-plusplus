@@ -54,38 +54,28 @@ inline void convertVoxelGridToPointCloud(
     pcl::PointCloud<pcl::PointSurfel>* surfel_cloud) {
   CHECK_NOTNULL(surfel_cloud);
 
-  voxblox::MeshIntegrator<voxblox::TsdfVoxel>::Config mesh_config;
-  voxblox::MeshLayer::Ptr mesh_layer(
-      new voxblox::MeshLayer(tsdf_voxels.block_size()));
-  voxblox::MeshIntegrator<voxblox::TsdfVoxel> mesh_integrator(
-      mesh_config, tsdf_voxels, mesh_layer.get());
-
-  constexpr bool kOnlyMeshUpdatedBlocks = false;
-  constexpr bool kClearUpdatedFlag = false;
-  mesh_integrator.generateMesh(kOnlyMeshUpdatedBlocks, kClearUpdatedFlag);
-
-  voxblox::Mesh::Ptr mesh = voxblox::aligned_shared<voxblox::Mesh>(
-      mesh_layer->block_size(), voxblox::Point::Zero());
-  mesh_layer->getMesh(mesh);
+  static constexpr bool kConnectedMesh = false;
+  voxblox::Mesh mesh;
+  voxblox::io::convertLayerToMesh(tsdf_voxels, &mesh, kConnectedMesh);
 
   surfel_cloud->reserve(mesh->vertices.size());
 
   size_t vert_idx = 0u;
-  for (const voxblox::Point& vert : mesh->vertices) {
+  for (const voxblox::Point& vert : mesh.vertices) {
     pcl::PointSurfel point;
     point.x = vert(0);
     point.y = vert(1);
     point.z = vert(2);
 
-    if (mesh->hasColors()) {
-      const voxblox::Color& color = mesh->colors[vert_idx];
+    if (mesh.hasColors()) {
+      const voxblox::Color& color = mesh.colors[vert_idx];
       point.r = static_cast<int>(color.r);
       point.g = static_cast<int>(color.g);
       point.b = static_cast<int>(color.b);
     }
 
-    if (mesh->hasNormals()) {
-      const voxblox::Point& normal = mesh->normals[vert_idx];
+    if (mesh.hasNormals()) {
+      const voxblox::Point& normal = mesh.normals[vert_idx];
       point.normal_x = normal(0);
       point.normal_y = normal(1);
       point.normal_z = normal(2);
