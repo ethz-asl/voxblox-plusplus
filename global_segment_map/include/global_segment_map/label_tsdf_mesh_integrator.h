@@ -22,7 +22,17 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
                       Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
                       bool visualize_confidence = false)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
-        label_layer_(CHECK_NOTNULL(label_layer)),
+        label_layer_mutable_(CHECK_NOTNULL(label_layer)),
+        label_layer_const_(CHECK_NOTNULL(label_layer)),
+        visualize_confidence(visualize_confidence) {}
+
+  MeshLabelIntegrator(const MeshIntegrator::Config& config,
+                      const Layer<TsdfVoxel>& tsdf_layer,
+                      const Layer<LabelVoxel>& label_layer,
+                      MeshLayer* mesh_layer, bool visualize_confidence = false)
+      : MeshIntegrator(config, tsdf_layer, mesh_layer),
+        label_layer_mutable_(nullptr),
+        label_layer_const_(CHECK_NOTNULL(&label_layer)),
         visualize_confidence(visualize_confidence) {}
 
   // Generates mesh for the tsdf layer.
@@ -30,13 +40,13 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     BlockIndexList all_tsdf_blocks;
     BlockIndexList all_label_blocks;
     if (only_mesh_updated_blocks) {
-      sdf_layer_mutable_->getAllUpdatedBlocks(&all_tsdf_blocks);
+      sdf_layer_const_->getAllUpdatedBlocks(&all_tsdf_blocks);
       // TODO(grinvalm) unique union of block indices here.
-      label_layer_->getAllUpdatedBlocks(&all_label_blocks);
+      label_layer_const_->getAllUpdatedBlocks(&all_label_blocks);
       if (all_label_blocks.size() == 0u && all_tsdf_blocks.size() == 0u)
         return false;
     } else {
-      sdf_layer_mutable_->getAllAllocatedBlocks(&all_tsdf_blocks);
+      sdf_layer_const_->getAllAllocatedBlocks(&all_tsdf_blocks);
     }
 
     // Allocate all the mesh memory
@@ -70,7 +80,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       typename Block<TsdfVoxel>::Ptr tsdf_block =
           sdf_layer_mutable_->getBlockPtrByIndex(block_idx);
       typename Block<LabelVoxel>::Ptr label_block =
-          label_layer_->getBlockPtrByIndex(block_idx);
+          label_layer_mutable_->getBlockPtrByIndex(block_idx);
 
       updateMeshForBlock(block_idx);
       if (clear_updated_flag) {
@@ -100,17 +110,17 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     // This block should already exist, otherwise it makes no sense to update
     // the mesh for it. ;)
     Block<TsdfVoxel>::ConstPtr tsdf_block =
-        sdf_layer_mutable_->getBlockPtrByIndex(block_index);
+        sdf_layer_const_->getBlockPtrByIndex(block_index);
     Block<LabelVoxel>::ConstPtr label_block =
-        label_layer_->getBlockPtrByIndex(block_index);
+        label_layer_const_->getBlockPtrByIndex(block_index);
 
     if (!tsdf_block && !label_block) {
       LOG(ERROR) << "Trying to mesh a non-existent block at index: "
                  << block_index.transpose();
       return;
-      //   // TODO(grinvalm) : is it fine to have different layer situations?
-      // } else if (!(tsdf_block && label_block)) {
-      //   LOG(FATAL) << "Block allocation differs between the two layers.";
+      // TODO(grinvalm) : is it fine to have different layer situations?
+    } else if (!(tsdf_block && label_block)) {
+      LOG(FATAL) << "Block allocation differs between the two layers.";
     }
 
     extractBlockMesh(tsdf_block, mesh);
@@ -156,7 +166,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         mesh->colors[i] = color;
       } else {
         const typename Block<LabelVoxel>::ConstPtr neighbor_block =
-            label_layer_->getBlockPtrByCoordinates(vertex);
+            label_layer_const_->getBlockPtrByCoordinates(vertex);
         const LabelVoxel& voxel = neighbor_block->getVoxelByCoordinates(vertex);
         Color color;
         if (visualize_confidence) {
@@ -170,7 +180,12 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   }
 
  protected:
-  Layer<LabelVoxel>* label_layer_;
+  // Having both a const and a mutable pointer to the layer allows this
+  // integrator to work both with a const layer (in case you don't want to clear
+  // the updated flag) and mutable layer (in case you do want to clear the
+  // updated flag).
+  Layer<LabelVoxel>* label_layer_mutable_;
+  const Layer<LabelVoxel>* label_layer_const_;
 
   // Flag to choose whether the mesh color
   // encodes the labels or the label confidences.

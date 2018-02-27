@@ -49,52 +49,29 @@ void visualizeMesh(const MeshLayer& mesh_layer) {
   viewer->addCoordinateSystem(0.2);
   viewer->initCameraParameters();
   // TODO(grinvalm): find some general default parameters.
-  viewer->setCameraPosition(1.4812, 0.338258, 0.96422, -0.238669, -0.785343,
-                            -0.571204);
-  viewer->setCameraClipDistances(0.0106586, 10.6586);
+  // 066 position
+  viewer->setCameraPosition(-0.258698, 2.4965, 2.50443, -0.40446, 0.988025,
+                            0.279138, -0.0487525, 0.828238, -0.558252);
+  viewer->setCameraClipDistances(1.35139, 6.41007);
 
   pcl::PointCloud<pcl::PointXYZRGB> cloud;
   pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr cloud_ptr(&cloud);
-  pcl::PointCloud<pcl::Normal> normals;
-  pcl::PointCloud<pcl::Normal>::ConstPtr normals_ptr(&normals);
 
   while (!viewer->wasStopped()) {
+    voxblox::Mesh mesh;
     constexpr int updateIntervalms = 1000;
     viewer->spinOnce(updateIntervalms);
 
     boost::mutex::scoped_lock updatedMeshLock(updateMeshMutex);
 
     if (updatedMesh) {
-      normals.points.clear();
       cloud.points.clear();
 
-      Mesh combined_mesh(mesh_layer.block_size(), Point::Zero());
-
-      // Combine everything in the layer into one giant combined mesh.
-      size_t v = 0u;
-      BlockIndexList mesh_indices;
-      mesh_layer.getAllAllocatedMeshes(&mesh_indices);
-      for (const BlockIndex& block_index : mesh_indices) {
-        Mesh::ConstPtr mesh = mesh_layer.getMeshPtrByIndex(block_index);
-
-        for (const Point& vert : mesh->vertices) {
-          combined_mesh.vertices.push_back(vert);
-          combined_mesh.indices.push_back(v++);
-        }
-
-        for (const Color& color : mesh->colors) {
-          combined_mesh.colors.push_back(color);
-        }
-
-        for (const Point& normal : mesh->normals) {
-          normals.points.push_back(
-              pcl::Normal(normal(0), normal(1), normal(2)));
-        }
-      }
+      mesh_layer.getMesh(&mesh);
 
       size_t vert_idx = 0;
-      for (const Point& vert : combined_mesh.vertices) {
-        const Color& color = combined_mesh.colors[vert_idx];
+      for (const Point& vert : mesh.vertices) {
+        const Color& color = mesh.colors[vert_idx];
         pcl::PointXYZRGB point = pcl::PointXYZRGB(color.r, color.g, color.b);
         point.x = vert(0);
         point.y = vert(1);
@@ -104,29 +81,26 @@ void visualizeMesh(const MeshLayer& mesh_layer) {
         vert_idx++;
       }
 
-      pcl::PointCloud<pcl::PointXYZRGBNormal> cloud_with_normals;
-      pcl::concatenateFields(cloud, normals, cloud_with_normals);
-
       pcl::PCLPointCloud2 pcl_pc;
-      pcl::toPCLPointCloud2(cloud_with_normals, pcl_pc);
+      pcl::toPCLPointCloud2(cloud, pcl_pc);
 
       std::vector<pcl::Vertices> polygons;
 
-      for (size_t i = 0u; i < combined_mesh.indices.size(); i += 3u) {
+      for (size_t i = 0u; i < mesh.indices.size(); i += 3u) {
         pcl::Vertices face;
         for (int j = 0; j < 3; j++) {
-          face.vertices.push_back(combined_mesh.indices.at(i + j));
+          face.vertices.push_back(mesh.indices.at(i + j));
         }
         polygons.push_back(face);
       }
 
-      pcl::PolygonMesh mesh;
-      mesh.cloud = pcl_pc;
-      mesh.polygons = polygons;
+      pcl::PolygonMesh polygon_mesh;
+      polygon_mesh.cloud = pcl_pc;
+      polygon_mesh.polygons = polygons;
 
       viewer->removePolygonMesh("meshes");
-      if (!viewer->updatePolygonMesh(mesh, "meshes")) {
-        viewer->addPolygonMesh(mesh, "meshes", 0);
+      if (!viewer->updatePolygonMesh(polygon_mesh, "meshes")) {
+        viewer->addPolygonMesh(polygon_mesh, "meshes", 0);
       }
 
       updatedMesh = false;
@@ -408,7 +382,7 @@ void Controller::segmentPointCloudCallback(
   std::string world_frame_id = "world";
   // std::string world_frame_id = "/vicon";
   // std::string camera_frame_id = "/scenenet_camera_frame";
-  std::string camera_frame_id = "/depth";
+  std::string camera_frame_id = "/scenenn_camera_frame";
   // std::string camera_frame_id = "/camera_rgb_optical_frame";
   // TODO(grinvalm): nicely parametrize the frames.
   //  std::string camera_frame_id = segment_point_cloud_msg->header.frame_id;
@@ -594,47 +568,26 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
                                          std_srvs::Empty::Response& response) {
   // Get list of all labels in the map.
   std::vector<Label> labels = integrator_->getLabelsList();
+  voxblox::Mesh segment_mesh;
+  static constexpr bool kConnectedMesh = false;
 
-  // TODO(grinvalm): there are more segments extracted than there really are.
-  // Seems like their voxel count is greater than 0, but when meshed they are
-  // too small to result in any polygon. Find a fix, maybe with a size
-  // threshold.
   for (Label label : labels) {
-    Layer<TsdfVoxel> tsdf_layer(map_config_.voxel_size,
-                                map_config_.voxels_per_side);
-    Layer<LabelVoxel> label_layer(map_config_.voxel_size,
-                                  map_config_.voxels_per_side);
+    Layer<TsdfVoxel> segment_tsdf_layer(map_config_.voxel_size,
+                                        map_config_.voxels_per_side);
+    Layer<LabelVoxel> segment_label_layer(map_config_.voxel_size,
+                                          map_config_.voxels_per_side);
     // Extract the TSDF and label layers corresponding to a segment.
-    extractSegmentLayers(label, &tsdf_layer, &label_layer);
+    extractSegmentLayers(label, &segment_tsdf_layer, &segment_label_layer);
 
-    MeshLayer mesh_layer(map_->block_size());
-    MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer, &label_layer,
-                                        &mesh_layer);
-
-    constexpr bool only_mesh_updated_blocks = false;
-    constexpr bool clear_updated_flag = true;
-    mesh_integrator.generateMesh(only_mesh_updated_blocks, clear_updated_flag);
-
-    Mesh::Ptr combined_mesh =
-        aligned_shared<Mesh>(mesh_layer.block_size(), Point::Zero());
-    mesh_layer.getMesh(combined_mesh);
-
-    // TODO(Margarita): There is now this new convenience function in voxblox.
-    // It probably makes sense to add the same in GSM and not have to create and
-    // call the mesh integrator and mesh layer every time.
-
-    // static constexpr bool kConnectedMesh = false;
-    // voxblox::Mesh mesh;
-    // voxblox::io::convertLayerToMesh(tsdf_voxels, &mesh, kConnectedMesh);
-
-    if (combined_mesh->vertices.size() > 0) {
+    if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
+                                     &segment_mesh, kConnectedMesh)) {
       boost::filesystem::path segments_dir("segments");
       boost::filesystem::create_directory(segments_dir);
 
       std::string mesh_filename =
           "segments/voxblox_gsm_mesh_label_" + std::to_string(label) + ".ply";
 
-      bool success = outputMeshAsPly(mesh_filename, *combined_mesh);
+      bool success = outputMeshAsPly(mesh_filename, segment_mesh);
       if (success) {
         ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
       } else {

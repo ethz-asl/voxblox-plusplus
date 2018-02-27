@@ -7,6 +7,7 @@
 #include <modelify_msgs/VoxelEvaluationDetails.h>
 #include <pcl/point_types.h>
 #include <voxblox/core/common.h>
+#include <voxblox/io/sdf_ply.h>
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -56,9 +57,9 @@ inline void convertVoxelGridToPointCloud(
 
   static constexpr bool kConnectedMesh = false;
   voxblox::Mesh mesh;
-  voxblox::io::convertLayerToMesh(tsdf_voxels, &mesh, kConnectedMesh);
+  io::convertLayerToMesh(tsdf_voxels, &mesh, kConnectedMesh);
 
-  surfel_cloud->reserve(mesh->vertices.size());
+  surfel_cloud->reserve(mesh.vertices.size());
 
   size_t vert_idx = 0u;
   for (const voxblox::Point& vert : mesh.vertices) {
@@ -90,6 +91,32 @@ inline void convertVoxelGridToPointCloud(
   surfel_cloud->is_dense = true;
   surfel_cloud->width = surfel_cloud->points.size();
   surfel_cloud->height = 1u;
+}
+
+bool convertTsdfLabelLayersToMesh(
+    const Layer<TsdfVoxel>& tsdf_layer, const Layer<LabelVoxel>& label_layer,
+    voxblox::Mesh* mesh, const bool connected_mesh = true,
+    const FloatingPoint vertex_proximity_threshold = 1e-10) {
+  CHECK_NOTNULL(mesh);
+
+  MeshLabelIntegrator::Config mesh_config;
+  MeshLayer mesh_layer(tsdf_layer.block_size());
+  MeshLabelIntegrator mesh_integrator(mesh_config, tsdf_layer, label_layer,
+                                      &mesh_layer);
+
+  // Generate mesh layer.
+  constexpr bool only_mesh_updated_blocks = false;
+  constexpr bool clear_updated_flag = false;
+  mesh_integrator.generateMesh(only_mesh_updated_blocks, clear_updated_flag);
+
+  // Extract mesh from mesh layer, either by simply concatenating all meshes
+  // (there is one per block) or by connecting them.
+  if (connected_mesh) {
+    mesh_layer.getConnectedMesh(mesh, vertex_proximity_threshold);
+  } else {
+    mesh_layer.getMesh(mesh);
+  }
+  return mesh->size() > 0u;
 }
 
 }  // namespace voxblox_gsm

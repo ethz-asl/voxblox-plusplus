@@ -47,6 +47,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // TODO (grinvalm): maybe use a relative measure, not absolue voxel count.
     size_t label_count_threshold_ = 20;
 
+    float back_propagation_sdf_factor_ = 1.0;
+
     bool enable_pairwise_confidence_merging = true;
     float pairwise_confidence_ratio_threshold = 0.03f;
     int pairwise_confidence_threshold = 2;
@@ -263,7 +265,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
             tsdf_block_ptr->getVoxelByCoordinates(point_G);
         Label label = 0u;
         label = getNextUnassignedLabel(label_voxel, assigned_labels);
-        if (label != 0u && std::abs(tsdf_voxel.distance) < 1.0 * voxel_size_) {
+        if (label != 0u &&
+            std::abs(tsdf_voxel.distance) <
+                label_tsdf_config_.back_propagation_sdf_factor_ * voxel_size_) {
           // Do not consider allocated but unobserved voxels
           // which have label == 0.
           candidate_label_exists = true;
@@ -408,10 +412,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // later by calling updateLayerWithStoredBlocks()
   LabelVoxel* allocateStorageAndGetLabelVoxelPtr(
       const VoxelIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
-      BlockIndex* last_block_idx, bool* existed_before) {
+      BlockIndex* last_block_idx) {
     DCHECK(last_block != nullptr);
     DCHECK(last_block_idx != nullptr);
-    DCHECK(existed_before != nullptr);
 
     const BlockIndex block_idx = getBlockIndexFromGlobalVoxelIndex(
         global_voxel_idx, voxels_per_side_inv_);
@@ -424,7 +427,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // If no block at this location currently exists, we allocate a temporary
     // voxel that will be merged into the map later
     if (*last_block == nullptr) {
-      *existed_before = false;
       // To allow temp_label_block_map_ to grow we can only let
       // one thread in at once
       std::lock_guard<std::mutex> lock(temp_label_block_mutex_);
@@ -446,8 +448,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
         *last_block = insert_status.first->second;
       }
-    } else {
-      *existed_before = true;
     }
 
     (*last_block)->updated() = true;
@@ -609,30 +609,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       updateTsdfVoxel(origin, merged_point_G, global_voxel_idx, merged_color,
                       merged_weight, tsdf_voxel);
 
-      const Point voxel_center =
-          getCenterPointFromGridIndex(global_voxel_idx, voxel_size_);
-      const float sdf = computeDistance(origin, merged_point_G, voxel_center);
-
-      bool existed_before = true;
-
       Block<LabelVoxel>::Ptr label_block = nullptr;
       LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
-          global_voxel_idx, &label_block, &block_idx, &existed_before);
+          global_voxel_idx, &label_block, &block_idx);
 
       updateLabelVoxel(merged_point_G, merged_label, label_voxel,
                        merged_label_confidence);
-
-      // if (std::abs(sdf) > 1.0 * voxel_size_) {
-      //   // LOG(FATAL) << "THIS SHOULD NOT HAPPEN!";
-      //   if (!existed_before) {
-      //     merged_label = 0u;
-      //     updateLabelVoxel(merged_point_G, merged_label, label_voxel,
-      //                      merged_label_confidence);
-      //   }
-      // } else {
-      //   updateLabelVoxel(merged_point_G, merged_label, label_voxel,
-      //                    merged_label_confidence);
-      // }
     }
   }
 
