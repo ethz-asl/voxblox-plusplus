@@ -120,18 +120,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   // Load all ROS params.
   std::string method("merged");
   node_handle_private_->param<std::string>("method", method, method);
-  std::string depth_registered_topic("/camera/depth_registered/image_raw");
-  node_handle_private_->param<std::string>(
-      "depth_registered_topic", depth_registered_topic, depth_registered_topic);
-  std::string rgb_topic("/camera/rgb/image_raw");
-  node_handle_private_->param<std::string>("rgb_topic", rgb_topic, rgb_topic);
-  std::string depth_camera_info_topic("/camera/depth_registered/camera_info");
-  node_handle_private_->param<std::string>("depth_camera_info_topic",
-                                           depth_camera_info_topic,
-                                           depth_camera_info_topic);
-  std::string rgb_camera_info_topic("/camera/rgb/camera_info");
-  node_handle_private_->param<std::string>(
-      "rgb_camera_info_topic", rgb_camera_info_topic, rgb_camera_info_topic);
+
   FloatingPoint voxel_size = 0.01f;
   node_handle_private_->param<FloatingPoint>("voxel_size", voxel_size,
                                              voxel_size);
