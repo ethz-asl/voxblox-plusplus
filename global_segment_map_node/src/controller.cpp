@@ -117,20 +117,70 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       received_first_message_(false) {
   CHECK_NOTNULL(node_handle_private_);
 
-  // map_config_.voxel_size = 0.005f;
-  map_config_.voxel_size = 0.01f;
-  map_config_.voxels_per_side = 8u;
+  // Load all ROS params.
+  std::string method("merged");
+  node_handle_private_->param<std::string>("method", method, method);
+  std::string depth_registered_topic("/camera/depth_registered/image_raw");
+  node_handle_private_->param<std::string>(
+      "depth_registered_topic", depth_registered_topic, depth_registered_topic);
+  std::string rgb_topic("/camera/rgb/image_raw");
+  node_handle_private_->param<std::string>("rgb_topic", rgb_topic, rgb_topic);
+  std::string depth_camera_info_topic("/camera/depth_registered/camera_info");
+  node_handle_private_->param<std::string>("depth_camera_info_topic",
+                                           depth_camera_info_topic,
+                                           depth_camera_info_topic);
+  std::string rgb_camera_info_topic("/camera/rgb/camera_info");
+  node_handle_private_->param<std::string>(
+      "rgb_camera_info_topic", rgb_camera_info_topic, rgb_camera_info_topic);
+  FloatingPoint voxel_size = 0.01f;
+  node_handle_private_->param<FloatingPoint>("voxel_size", voxel_size,
+                                             voxel_size);
+  int voxels_per_side = 8u;
+  node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
+                                   voxels_per_side);
+  FloatingPoint truncation_distance_factor = 5.0f;
+  node_handle_private_->param<FloatingPoint>("truncation_distance_factor",
+                                             truncation_distance_factor,
+                                             truncation_distance_factor);
+  bool voxel_carving = false;
+  node_handle_private_->param<bool>("voxel_carving", voxel_carving,
+                                    voxel_carving);
+  FloatingPoint max_ray_length_m = 2.5f;
+  node_handle_private_->param<FloatingPoint>(
+      "max_ray_length_m", max_ray_length_m, max_ray_length_m);
+  FloatingPoint pairwise_confidence_ratio_threshold =
+      0.2f;  // 0.08 and 20 was ok until 1200
+  node_handle_private_->param<FloatingPoint>(
+      "pairwise_confidence_ratio_threshold",
+      pairwise_confidence_ratio_threshold, pairwise_confidence_ratio_threshold);
+  int pairwise_confidence_threshold = 30;
+  node_handle_private_->param<int>("pairwise_confidence_threshold",
+                                   pairwise_confidence_threshold,
+                                   pairwise_confidence_threshold);
+  int object_flushing_age_threshold =
+      30000;  // TODO(ff): For the real tests probably set to 30 or something.
+  node_handle_private_->param<int>("object_flushing_age_threshold",
+                                   object_flushing_age_threshold,
+                                   object_flushing_age_threshold);
+  bool cap_confidence = false;
+  node_handle_private_->param<bool>("cap_confidence", cap_confidence,
+                                    cap_confidence);
+  int cap_confidence_value = 10;
+  node_handle_private_->param<int>("cap_confidence_value", cap_confidence_value,
+                                   cap_confidence_value);
+
+  map_config_.voxel_size = voxel_size;
+  map_config_.voxels_per_side = voxels_per_side;
   map_.reset(new LabelTsdfMap(map_config_));
 
   LabelTsdfIntegrator::Config integrator_config;
-  integrator_config.voxel_carving_enabled = false;
+  integrator_config.voxel_carving_enabled = voxel_carving;
   // integrator_config.voxel_carving_enabled = true;
   integrator_config.allow_clear = true;
-  integrator_config.default_truncation_distance = map_config_.voxel_size * 5.0;
-  integrator_config.max_ray_length_m = 2.5;
+  integrator_config.default_truncation_distance =
+      map_config_.voxel_size * truncation_distance_factor;
+  integrator_config.max_ray_length_m = max_ray_length_m;
 
-  std::string method("merged");
-  node_handle_private_->param("method", method, method);
   if (method.compare("merged") == 0) {
     integrator_config.enable_anti_grazing = false;
   } else if (method.compare("merged_discard") == 0) {
@@ -142,12 +192,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
   label_tsdf_integrator_config.pairwise_confidence_ratio_threshold =
-      0.2f;  // 0.08 and 20 was ok until 1200
-  label_tsdf_integrator_config.pairwise_confidence_threshold = 30;
+      pairwise_confidence_ratio_threshold;
+  label_tsdf_integrator_config.pairwise_confidence_threshold =
+      pairwise_confidence_threshold;
   label_tsdf_integrator_config.object_flushing_age_threshold =
-      30000;  // TODO(ff): For the real tests probably set to 30 or something.
-  label_tsdf_integrator_config.cap_confidence = false;
-  label_tsdf_integrator_config.confidence_cap_value = 10;
+      object_flushing_age_threshold;
+  label_tsdf_integrator_config.cap_confidence = cap_confidence;
+  label_tsdf_integrator_config.confidence_cap_value = cap_confidence_value;
 
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
@@ -169,7 +220,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   integrated_frames_count_ = 0u;
 
-  bool interactiveViewer = true;
+  bool interactiveViewer = false;
   if (interactiveViewer) {
     boost::thread visualizerThread(visualizeMesh, boost::ref(*mesh_layer_));
   }
@@ -181,8 +232,8 @@ Controller::~Controller() {}
 void Controller::subscribeSegmentPointCloudTopic(
     ros::Subscriber* segment_point_cloud_sub) {
   CHECK_NOTNULL(segment_point_cloud_sub);
-  // TODO(grinvalm): parametrize this.
-  std::string segment_point_cloud_topic = "/scenenn_node/object_segment";
+  std::string segment_point_cloud_topic =
+      "/depth_segmentation_node/object_segment";
   node_handle_private_->param<std::string>("segment_point_cloud_topic",
                                            segment_point_cloud_topic,
                                            segment_point_cloud_topic);
@@ -204,11 +255,13 @@ void Controller::advertiseMeshTopic(ros::Publisher* mesh_pub) {
 
 void Controller::advertiseSceneTopic(ros::Publisher* scene_pub) {
   CHECK_NOTNULL(scene_pub);
-  static const std::string kGsmSceneTopic = "scene";
+  std::string scene_gsm_update_topic = "scene";
+  node_handle_private_->param<std::string>(
+      "scene_gsm_update_topic", scene_gsm_update_topic, scene_gsm_update_topic);
   constexpr int kGsmSceneQueueSize = 1;
 
   *scene_pub = node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
-      kGsmSceneTopic, kGsmSceneQueueSize, true);
+      scene_gsm_update_topic, kGsmSceneQueueSize, true);
   scene_pub_ = scene_pub;
 }
 
@@ -222,12 +275,15 @@ void Controller::advertiseObjectTopic(ros::Publisher* object_pub) {
 
 void Controller::advertiseGsmUpdateTopic(ros::Publisher* gsm_update_pub) {
   CHECK_NOTNULL(gsm_update_pub);
-  static const std::string kGsmUpdateTopic = "gsm_update";
+  std::string segment_gsm_update_topic = "gsm_update";
+  node_handle_private_->param<std::string>("segment_gsm_update_topic",
+                                           segment_gsm_update_topic,
+                                           segment_gsm_update_topic);
   // TODO(ff): Reduce this value, once we know some reasonable limit.
   constexpr int kGsmUpdateQueueSize = 2000;
 
   *gsm_update_pub = node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
-      kGsmUpdateTopic, kGsmUpdateQueueSize, true);
+      segment_gsm_update_topic, kGsmUpdateQueueSize, true);
   gsm_update_pub_ = gsm_update_pub;
 }
 
@@ -274,8 +330,10 @@ void Controller::publishScene() {
   modelify_msgs::GsmUpdate gsm_update_msg;
 
   gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
-  static const std::string kGsmUpdateFrameId = "world";
-  gsm_update_msg.header.frame_id = kGsmUpdateFrameId;
+  std::string world_frame_id("world");
+  node_handle_private_->param<std::string>("world_frame_id", world_frame_id,
+                                           world_frame_id);
+  gsm_update_msg.header.frame_id = world_frame_id;
 
   constexpr bool kSerializeOnlyUpdated = false;
   serializeLayerAsMsg<TsdfVoxel>(map_->getTsdfLayer(), kSerializeOnlyUpdated,
@@ -379,15 +437,12 @@ void Controller::segmentPointCloudCallback(
 
   // Look up transform from camera frame to world frame.
   Transformation T_G_C;
-  std::string world_frame_id = "world";
-  // std::string world_frame_id = "/vicon";
-  // std::string camera_frame_id = "/scenenet_camera_frame";
-  std::string camera_frame_id = "/scenenn_camera_frame";
-  // std::string camera_frame_id = "/camera_rgb_optical_frame";
-  // TODO(grinvalm): nicely parametrize the frames.
-  //  std::string camera_frame_id = segment_point_cloud_msg->header.frame_id;
-  //  std::string camera_frame_id = "/openni_depth_optical_frame";
-  //  std::string camera_frame_id = "/camera_depth_optical_frame";
+  std::string world_frame_id("world");
+  node_handle_private_->param<std::string>("world_frame_id", world_frame_id,
+                                           world_frame_id);
+  std::string camera_frame_id("camera_rgb_optical_frame");
+  node_handle_private_->param<std::string>("camera_frame_id", camera_frame_id,
+                                           camera_frame_id);
 
   if (lookupTransform(camera_frame_id, world_frame_id,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {

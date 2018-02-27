@@ -1,0 +1,49 @@
+<launch>
+  <arg name="scene_gsm_update_topic" default="scene"/>
+  <arg name="segment_gsm_update_topic" default="gsm_update"/>
+  <arg name="segment_point_cloud_topic" default="/depth_segmentation_node/object_segment"/>
+  <arg name="depth_registered_topic" default="/camera/depth_registered/image_raw"/>
+  <arg name="rgb_topic" default="/camera/rgb/image_raw" />
+  <arg name="depth_camera_info_topic" default="/camera/depth/camera_info" />
+  <arg name="rgb_camera_info_topic" default="/camera/rgb/camera_info" />
+  <arg name="validate_merged_object" default="validate_merged_object"/>
+  <arg name="world_frame_id" default="world"/>
+  <arg name="camera_frame_id" default="depth"/>
+  <arg name="voxel_size" default="0.01"/>
+  <arg name="voxels_per_side" default="8"/>
+  <arg name="truncation_distance_factor" default="5.0"/>
+  <arg name="voxel_carving" default="false"/>
+  <arg name="max_ray_length_m" default="2.5"/>
+  <arg name="pairwise_confidence_ratio_threshold" default="0.2"/>
+  <arg name="pairwise_confidence_threshold" default="30"/>
+  <arg name="object_flushing_age_threshold" default="30000"/>
+  <arg name="cap_confidence" default="false"/>
+  <arg name="cap_confidence_value" default="10"/>
+
+
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+    <rosparam param="scene_gsm_update_topic" subst_value="True">$(arg scene_gsm_update_topic)</rosparam>
+    <rosparam param="segment_gsm_update_topic" subst_value="True">$(arg segment_gsm_update_topic)</rosparam>
+    <rosparam param="segment_point_cloud_topic" subst_value="True">$(arg segment_point_cloud_topic)</rosparam>
+    <rosparam param="depth_registered_topic" subst_value="True">$(arg depth_registered_topic)</rosparam>
+    <rosparam param="rgb_topic" subst_value="True">$(arg rgb_topic)</rosparam>
+    <rosparam param="depth_camera_info_topic" subst_value="True">$(arg depth_camera_info_topic)</rosparam>
+    <rosparam param="rgb_camera_info_topic" subst_value="True">$(arg rgb_camera_info_topic)</rosparam>
+    <rosparam param="validate_merged_object" subst_value="True">$(arg validate_merged_object)</rosparam>
+    <rosparam param="world_frame_id" subst_value="True">$(arg world_frame_id)</rosparam>
+    <rosparam param="camera_frame_id" subst_value="True">$(arg camera_frame_id)</rosparam>
+    <rosparam param="depth_registered_topic" subst_value="True">$(arg depth_registered_topic)</rosparam>
+    <rosparam param="depth_camera_info_topic" subst_value="True">$(arg depth_camera_info_topic)</rosparam>
+    <rosparam param="rgb_camera_info_topic" subst_value="True">$(arg rgb_camera_info_topic)</rosparam>
+    <rosparam param="voxel_size" subst_value="True">$(arg voxel_size)</rosparam>
+    <rosparam param="voxels_per_side" subst_value="True">$(arg voxels_per_side)</rosparam>
+    <rosparam param="truncation_distance_factor" subst_value="True">$(arg truncation_distance_factor)</rosparam>
+    <rosparam param="voxel_carving" subst_value="True">$(arg voxel_carving)</rosparam>
+    <rosparam param="max_ray_length_m" subst_value="True">$(arg max_ray_length_m)</rosparam>
+    <rosparam param="pairwise_confidence_ratio_threshold" subst_value="True">$(arg pairwise_confidence_ratio_threshold)</rosparam>
+    <rosparam param="pairwise_confidence_threshold" subst_value="True">$(arg pairwise_confidence_threshold)</rosparam>
+    <rosparam param="object_flushing_age_threshold" subst_value="True">$(arg object_flushing_age_threshold)</rosparam>
+    <rosparam param="cap_confidence" subst_value="True">$(arg cap_confidence)</rosparam>
+    <rosparam param="cap_confidence_value" subst_value="True">$(arg cap_confidence_value)</rosparam>
+  </node>
+</launch>
