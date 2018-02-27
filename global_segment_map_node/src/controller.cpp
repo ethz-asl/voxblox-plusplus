@@ -408,6 +408,7 @@ void Controller::segmentPointCloudCallback(
   std::string world_frame_id = "world";
   // std::string world_frame_id = "/vicon";
   // std::string camera_frame_id = "/scenenet_camera_frame";
+  // std::string camera_frame_id = "/firefly/vi_sensor/camera_depth_optical_center_link";
   std::string camera_frame_id = "/depth";
   // std::string camera_frame_id = "/camera_rgb_optical_frame";
   // TODO(grinvalm): nicely parametrize the frames.
@@ -617,7 +618,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 
     Mesh::Ptr combined_mesh =
         aligned_shared<Mesh>(mesh_layer.block_size(), Point::Zero());
-    mesh_layer.getMesh(combined_mesh);
+    mesh_layer.getMesh(combined_mesh.get());
 
     // TODO(Margarita): There is now this new convenience function in voxblox.
     // It probably makes sense to add the same in GSM and not have to create and

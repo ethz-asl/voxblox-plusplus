@@ -7,6 +7,7 @@
 #include <modelify_msgs/VoxelEvaluationDetails.h>
 #include <pcl/point_types.h>
 #include <voxblox/core/common.h>
+#include <voxblox/io/sdf_ply.h>
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -58,7 +59,7 @@ inline void convertVoxelGridToPointCloud(
   voxblox::Mesh mesh;
   voxblox::io::convertLayerToMesh(tsdf_voxels, &mesh, kConnectedMesh);
 
-  surfel_cloud->reserve(mesh->vertices.size());
+  surfel_cloud->reserve(mesh.vertices.size());
 
   size_t vert_idx = 0u;
   for (const voxblox::Point& vert : mesh.vertices) {
