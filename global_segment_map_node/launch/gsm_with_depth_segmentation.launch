@@ -1,0 +1,24 @@
+<launch>
+  <arg name="depth_registered_topic" default="/camera/depth_registered/image_raw"/>
+  <!-- For Tango datasets, use this! -->
+  <!-- <arg name="depth_registered_topic" default="/camera/depth/image_raw"/> -->
+  <arg name="rgb_topic" default="/camera/rgb/image_raw" />
+  <arg name="depth_camera_info_topic" default="/camera/depth/camera_info" />
+  <arg name="rgb_camera_info_topic" default="/camera/rgb/camera_info" />
+
+  <arg name="depth_segmentation_params_name" default="$(find depth_segmentation)/cfg/tango_coconut_config.yaml"/>
+  <rosparam command="load" file="$(arg depth_segmentation_params_name)" />
+
+  <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="screen">
+    <remap from="/camera/depth_registered/image_raw" to="$(arg depth_registered_topic)" />
+    <remap from="/camera/rgb/image_raw" to="$(arg rgb_topic)" />
+    <remap from="/camera/depth/camera_info" to="$(arg depth_camera_info_topic)" />
+    <remap from="/camera/rgb/camera_info" to="$(arg rgb_camera_info_topic)" />
+  </node>
+
+  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
+
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+    <rosparam command="load" file="$(arg gsm_node_params_name)" />
+  </node>
+</launch>
