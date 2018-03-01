@@ -99,7 +99,7 @@ bool convertTsdfLabelLayersToMesh(
     const FloatingPoint vertex_proximity_threshold = 1e-10) {
   CHECK_NOTNULL(mesh);
 
-  MeshLabelIntegrator::Config mesh_config;
+  MeshIntegratorConfig mesh_config;
   MeshLayer mesh_layer(tsdf_layer.block_size());
   MeshLabelIntegrator mesh_integrator(mesh_config, tsdf_layer, label_layer,
                                       &mesh_layer);

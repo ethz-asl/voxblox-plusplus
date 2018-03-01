@@ -107,7 +107,7 @@ class Controller {
   std::shared_ptr<LabelTsdfMap> map_;
   std::shared_ptr<LabelTsdfIntegrator> integrator_;
 
-  MeshLabelIntegrator::Config mesh_config_;
+  MeshIntegratorConfig mesh_config_;
 
   std::shared_ptr<MeshLayer> mesh_layer_;
   std::shared_ptr<MeshLabelIntegrator> mesh_integrator_;

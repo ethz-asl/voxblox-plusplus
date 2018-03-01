@@ -17,7 +17,7 @@ namespace voxblox {
 
 class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
  public:
-  MeshLabelIntegrator(const MeshIntegrator::Config& config,
+  MeshLabelIntegrator(const MeshIntegratorConfig& config,
                       Layer<TsdfVoxel>* tsdf_layer,
                       Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
                       bool visualize_confidence = false)
@@ -26,7 +26,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         label_layer_const_(CHECK_NOTNULL(label_layer)),
         visualize_confidence(visualize_confidence) {}
 
-  MeshLabelIntegrator(const MeshIntegrator::Config& config,
+  MeshLabelIntegrator(const MeshIntegratorConfig& config,
                       const Layer<TsdfVoxel>& tsdf_layer,
                       const Layer<LabelVoxel>& label_layer,
                       MeshLayer* mesh_layer, bool visualize_confidence = false)
