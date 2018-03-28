@@ -45,24 +45,18 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     // TODO (grinvalm): maybe use a relative measure, not absolue voxel count.
-    size_t label_count_threshold_ = 20;
-
-    float back_propagation_sdf_factor_ = 1.0;
+    // Minimum number of label voxels count for label propagation.
+    size_t min_label_voxel_count = 20;
+    // Factor determining the label propagation truncation distance.
+    float label_propagation_td_factor = 1.0;
 
     bool enable_pairwise_confidence_merging = true;
-    float pairwise_confidence_ratio_threshold = 0.03f;
-    int pairwise_confidence_threshold = 2;
+    float pairwise_confidence_ratio_threshold = 0.2f;
+    int pairwise_confidence_count_threshold = 30;
 
     // Number of frames after which the updated
     // objects are published.
     int object_flushing_age_threshold = 3;
-
-    // Experiments showed that capped confidence value
-    // only introduces artifacts in planar regions.
-    // Cap confidence settings.
-    // TODO(grinvalm): remove or handle this stuff.
-    bool cap_confidence = false;
-    int confidence_cap_value = 10;
 
     // Distance-based log-normal distribution of label confidence weights.
     bool enable_confidence_weight_dropoff = false;
@@ -229,9 +223,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     }
     if (updated == false) {
-      // label_voxel->label_count[0].label = 1000u;
-      // label_voxel->label_count[0].label_confidence = 10000.0f;
-
       LOG(FATAL) << "Out-of-memory for storing labels and confidences for this "
                     "voxel. Please increse size of array.";
     }
@@ -267,7 +258,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         label = getNextUnassignedLabel(label_voxel, assigned_labels);
         if (label != 0u &&
             std::abs(tsdf_voxel.distance) <
-                label_tsdf_config_.back_propagation_sdf_factor_ * voxel_size_) {
+                label_tsdf_config_.label_propagation_td_factor * voxel_size_) {
           // Do not consider allocated but unobserved voxels
           // which have label == 0.
           candidate_label_exists = true;
@@ -313,7 +304,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       for (auto segment_it = label_it->second.begin();
            segment_it != label_it->second.end(); segment_it++) {
         if (segment_it->second > max_count &&
-            segment_it->second > label_tsdf_config_.label_count_threshold_ &&
+            segment_it->second > label_tsdf_config_.min_label_voxel_count &&
             labelled_segments.find(segment_it->first) ==
                 labelled_segments.end()) {
           max_count = segment_it->second;
@@ -709,12 +700,14 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
           // Add old_label confidence, if any, to new_label confidence.
           addVoxelLabelConfidence(new_label, old_label_confidence, &voxel);
         }
+        // TODO(grinvalm) calling update with different preferred label
+        // can result in different assigned labels to the voxel, and
+        // can trigger an update of a segment.
         updateVoxelLabelAndConfidence(&voxel, new_label);
         Label updated_label = voxel.label;
 
         if (updated_label != previous_label) {
-          // Both of the segments corresponding to the two labels are
-          // updated, one gains a voxel, one loses a voxel.
+          // The new updated_label gains a voxel.
           updated_labels_.insert(updated_label);
           changeLabelCount(updated_label, 1);
 
@@ -753,6 +746,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     }
   }
+
+  LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
 
   void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label,
                                   int count) {
@@ -838,7 +833,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
            confidence_pair_it != confidence_map_it->second.end();
            ++confidence_pair_it) {
         if (confidence_pair_it->second >
-            label_tsdf_config_.pairwise_confidence_threshold) {
+            label_tsdf_config_.pairwise_confidence_count_threshold) {
           // If the pairwise confidence is above a threshold return
           // the two labels to merge and remove the pair
           // from the pairwise confidence counts.

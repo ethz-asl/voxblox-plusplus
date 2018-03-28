@@ -4,7 +4,6 @@
 
   <arg name="depth_registered_topic" default="/camera/depth_registered/image_raw" unless="$(arg tango)"/>
   <arg name="depth_registered_topic" default="/camera/depth/image_raw" if="$(arg tango)"/>
-
   <arg name="rgb_topic" default="/camera/rgb/image_raw" />
   <arg name="depth_camera_info_topic" default="/camera/depth/camera_info" />
   <arg name="rgb_camera_info_topic" default="/camera/rgb/camera_info" />

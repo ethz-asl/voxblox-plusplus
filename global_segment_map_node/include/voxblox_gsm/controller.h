@@ -1,4 +1,4 @@
-// Copyright 2017 Margarita Grinvald, ASL, ETH Zurich, Switzerland
+// Copyright 2018 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
 #ifndef VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
 #define VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
@@ -32,40 +32,40 @@ class Controller {
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
 
-  void advertiseMeshTopic(ros::Publisher* mesh_pub);
+  void advertiseSegmentGsmUpdateTopic(ros::Publisher* segment_gsm_update_pub);
 
-  void advertiseSceneTopic(ros::Publisher* scene_pub);
+  void advertiseSceneGsmUpdateTopic(ros::Publisher* scene_gsm_update_pub);
 
-  void advertiseObjectTopic(ros::Publisher* object_pub);
+  void advertiseSegmentMeshTopic(ros::Publisher* segment_mesh_pub);
 
-  void advertiseGsmUpdateTopic(ros::Publisher* gsm_update_pub);
+  void advertiseSceneMeshTopic(ros::Publisher* scene_mesh_pub);
+
+  void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
   void validateMergedObjectService(
       ros::ServiceServer* validate_merged_object_srv);
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
-  void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
-
   void advertiseExtractSegmentsService(
       ros::ServiceServer* extract_segments_srv);
 
-  void updateMeshEvent(const ros::TimerEvent& e);
+  bool publishObjects(const bool publish_all = false);
 
   void publishScene();
 
-  void generateMesh(bool clear_mesh);
+  bool noNewUpdatesReceived() const;
 
-  void publishObjects(const bool publish_all = false);
+  bool publish_gsm_updates_;
 
-  bool noNewUpdatesReceived(const double no_update_timeout) const;
+  bool publish_scene_mesh_;
+  bool publish_segment_mesh_;
+
+  double no_update_timeout_;
 
  private:
   void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
-
-  bool generateMeshCallback(std_srvs::Empty::Request& request,
-                            std_srvs::Empty::Response& response);
 
   bool publishSceneCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
@@ -73,6 +73,9 @@ class Controller {
   bool validateMergedObjectCallback(
       modelify_msgs::ValidateMergedObject::Request& request,
       modelify_msgs::ValidateMergedObject::Response& response);
+
+  bool generateMeshCallback(std_srvs::Empty::Request& request,
+                            std_srvs::Empty::Response& response);
 
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
@@ -84,23 +87,31 @@ class Controller {
                        const std::string& to_frame, const ros::Time& timestamp,
                        Transformation* transform);
 
+  void generateMesh(bool clear_mesh);
+
+  void updateMeshEvent(const ros::TimerEvent& e);
+
   ros::NodeHandle* node_handle_private_;
 
   tf::TransformListener tf_listener_;
   ros::Time last_segment_msg_timestamp_;
+  size_t integrated_frames_count_;
 
-  // Shutdown logic: if no messages are received for X amount of time, shut down
-  // node.
+  // Shutdown logic: if no messages are received for X amount of time,
+  // shut down node.
   bool received_first_message_;
   ros::Time last_update_received_;
 
-  ros::Publisher* mesh_pub_;
-  ros::Publisher* scene_pub_;
-  ros::Publisher* object_pub_;
-  ros::Publisher* gsm_update_pub_;
-  ros::Timer update_mesh_timer_;
+  ros::Publisher* scene_gsm_update_pub_;
+  ros::Publisher* segment_gsm_update_pub_;
 
-  size_t integrated_frames_count_;
+  ros::Timer update_mesh_timer_;
+  ros::Publisher* scene_mesh_pub_;
+  ros::Publisher* segment_mesh_pub_;
+  std::string mesh_filename_;
+
+  std::string world_frame_;
+  std::string camera_frame_;
 
   LabelTsdfMap::Config map_config_;
 

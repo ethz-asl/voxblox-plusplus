@@ -20,19 +20,24 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   MeshLabelIntegrator(const MeshIntegratorConfig& config,
                       Layer<TsdfVoxel>* tsdf_layer,
                       Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
+                      const std::map<Label, int>& label_age_map = {},
                       bool visualize_confidence = false)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(CHECK_NOTNULL(label_layer)),
         label_layer_const_(CHECK_NOTNULL(label_layer)),
+        label_age_map_ptr_(&label_age_map),
         visualize_confidence(visualize_confidence) {}
 
   MeshLabelIntegrator(const MeshIntegratorConfig& config,
                       const Layer<TsdfVoxel>& tsdf_layer,
                       const Layer<LabelVoxel>& label_layer,
-                      MeshLayer* mesh_layer, bool visualize_confidence = false)
+                      MeshLayer* mesh_layer,
+                      const std::map<Label, int>& label_age_map = {},
+                      bool visualize_confidence = false)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(nullptr),
         label_layer_const_(CHECK_NOTNULL(&label_layer)),
+        label_age_map_ptr_(&label_age_map),
         visualize_confidence(visualize_confidence) {}
 
   // Generates mesh for the tsdf layer.
@@ -92,7 +97,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
   Color getColorFromLabel(const Label& label) {
     Color color;
-    // CHECK_NE(label, 0u);
+    CHECK_NE(label, 0u);
     auto label_color_map_it = label_color_map_.find(label);
 
     if (label_color_map_it != label_color_map_.end()) {
@@ -101,6 +106,40 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       color = randomColor();
       label_color_map_.insert(std::pair<Label, Color>(label, color));
     }
+
+    // if (!label_age_map_ptr_->empty()) {
+    //   std::map<Label, int>::const_iterator label_age_pair_it;
+    //   label_age_pair_it = label_age_map_ptr_->find(label);
+    //   if (label_age_pair_it != label_age_map_ptr_->end()) {
+    //     // color.r = color.r - label_age_pair_it->second * 10;
+    //     // color.g = color.g - label_age_pair_it->second * 10;
+    //     // color.b = color.b - label_age_pair_it->second * 10;
+    //     if (label_age_pair_it->second < 4) {
+    //       color.g = 0;
+    //       // color.a = 255;
+    //     } else if (label_age_pair_it->second > 3) {
+    //       color.r = 0;
+    //       color.g = 255;
+    //       color.b = 0;
+    //     } else {
+    //       // int shade_of_gray = (color.r + color.g + color.b) % 256;
+    //       int shade_of_gray = (color.r + color.g + color.b) % 256;
+    //       color.r = shade_of_gray;
+    //       color.g = shade_of_gray;
+    //       color.b = shade_of_gray;
+    //     }
+    //   } else {
+    //     int shade_of_gray = (color.r + color.g + color.b) % 256;
+    //     color.r = shade_of_gray;
+    //     color.g = shade_of_gray;
+    //     color.b = shade_of_gray;
+    //   }
+    // } else {
+    //   int shade_of_gray = (color.r + color.g + color.b) % 256;
+    //   color.r = shade_of_gray;
+    //   color.g = shade_of_gray;
+    //   color.b = shade_of_gray;
+    // }
     return color;
   }
 
@@ -118,7 +157,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       LOG(ERROR) << "Trying to mesh a non-existent block at index: "
                  << block_index.transpose();
       return;
-      // TODO(grinvalm) : is it fine to have different layer situations?
     } else if (!(tsdf_block && label_block)) {
       LOG(FATAL) << "Block allocation differs between the two layers.";
     }
@@ -152,16 +190,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           color =
               rainbowColorMap(voxel.label_confidence / expected_max_confidence);
         } else {
-          if (voxel.label == 1000u) {
-            color.a = 255;
-
-            color.r = 255;
-            color.b = 0;
-            color.g = 0;
-          } else {
-            color = getColorFromLabel(voxel.label);
-            // color.r = 0;
-          }
+          color = getColorFromLabel(voxel.label);
         }
         mesh->colors[i] = color;
       } else {
@@ -193,6 +222,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   bool visualize_confidence;
 
   std::map<Label, Color> label_color_map_;
+  const std::map<Label, int>* label_age_map_ptr_;
 };
 
 }  // namespace voxblox

@@ -81,7 +81,7 @@ inline void convertVoxelGridToPointCloud(
       point.normal_y = normal(1);
       point.normal_z = normal(2);
     } else {
-      LOG(FATAL) << "FATAAKK";
+      LOG(FATAL) << "Mesh doesn't have normals.";
     }
 
     surfel_cloud->push_back(point);
