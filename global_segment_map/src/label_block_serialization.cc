@@ -18,7 +18,7 @@ void Block<LabelVoxel>::deserializeFromIntegers(
     const uint32_t bytes_1 = data[data_idx];
     const uint32_t bytes_2 = data[data_idx + 1u];
 
-    LabelVoxel.LabelVoxel& voxel = voxels_[voxel_idx];
+    LabelVoxel& voxel = voxels_[voxel_idx];
 
     memcpy(&(voxel.label_confidence), &bytes_1, sizeof(bytes_1));
     memcpy(&(voxel.label), &bytes_2, sizeof(bytes_2));
