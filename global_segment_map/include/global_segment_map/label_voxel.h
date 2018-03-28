@@ -9,9 +9,15 @@
 
 namespace voxblox {
 
-struct LabelVoxel {
-  LabelConfidence label_confidence = 0u;
+struct LabelCount {
   Label label = 0u;
+  LabelConfidence label_confidence = 0.0f;
+};
+
+struct LabelVoxel {
+  Label label = 0u;
+  LabelConfidence label_confidence = 0.0f;
+  LabelCount label_count[40];
 };
 
 namespace voxel_types {

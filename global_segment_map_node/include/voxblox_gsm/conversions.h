@@ -7,6 +7,7 @@
 #include <modelify_msgs/VoxelEvaluationDetails.h>
 #include <pcl/point_types.h>
 #include <voxblox/core/common.h>
+#include <voxblox/io/sdf_ply.h>
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -54,41 +55,33 @@ inline void convertVoxelGridToPointCloud(
     pcl::PointCloud<pcl::PointSurfel>* surfel_cloud) {
   CHECK_NOTNULL(surfel_cloud);
 
-  voxblox::MeshIntegrator<voxblox::TsdfVoxel>::Config mesh_config;
-  voxblox::MeshLayer::Ptr mesh_layer(
-      new voxblox::MeshLayer(tsdf_voxels.block_size()));
-  voxblox::MeshIntegrator<voxblox::TsdfVoxel> mesh_integrator(
-      mesh_config, tsdf_voxels, mesh_layer.get());
+  static constexpr bool kConnectedMesh = false;
+  voxblox::Mesh mesh;
+  io::convertLayerToMesh(tsdf_voxels, &mesh, kConnectedMesh);
 
-  constexpr bool kOnlyMeshUpdatedBlocks = false;
-  constexpr bool kClearUpdatedFlag = false;
-  mesh_integrator.generateMesh(kOnlyMeshUpdatedBlocks, kClearUpdatedFlag);
-
-  voxblox::Mesh::Ptr mesh = voxblox::aligned_shared<voxblox::Mesh>(
-      mesh_layer->block_size(), voxblox::Point::Zero());
-  mesh_layer->combineMesh(mesh);
+  surfel_cloud->reserve(mesh.vertices.size());
 
   size_t vert_idx = 0u;
-  for (const voxblox::Point& vert : mesh->vertices) {
+  for (const voxblox::Point& vert : mesh.vertices) {
     pcl::PointSurfel point;
     point.x = vert(0);
     point.y = vert(1);
     point.z = vert(2);
 
-    if (mesh->hasColors()) {
-      const voxblox::Color& color = mesh->colors[vert_idx];
+    if (mesh.hasColors()) {
+      const voxblox::Color& color = mesh.colors[vert_idx];
       point.r = static_cast<int>(color.r);
       point.g = static_cast<int>(color.g);
       point.b = static_cast<int>(color.b);
     }
 
-    if (mesh->hasNormals()) {
-      const voxblox::Point& normal = mesh->normals[vert_idx];
+    if (mesh.hasNormals()) {
+      const voxblox::Point& normal = mesh.normals[vert_idx];
       point.normal_x = normal(0);
       point.normal_y = normal(1);
       point.normal_z = normal(2);
     } else {
-      LOG(FATAL) << "FATAAKK";
+      LOG(FATAL) << "Mesh doesn't have normals.";
     }
 
     surfel_cloud->push_back(point);
@@ -98,6 +91,32 @@ inline void convertVoxelGridToPointCloud(
   surfel_cloud->is_dense = true;
   surfel_cloud->width = surfel_cloud->points.size();
   surfel_cloud->height = 1u;
+}
+
+bool convertTsdfLabelLayersToMesh(
+    const Layer<TsdfVoxel>& tsdf_layer, const Layer<LabelVoxel>& label_layer,
+    voxblox::Mesh* mesh, const bool connected_mesh = true,
+    const FloatingPoint vertex_proximity_threshold = 1e-10) {
+  CHECK_NOTNULL(mesh);
+
+  MeshIntegratorConfig mesh_config;
+  MeshLayer mesh_layer(tsdf_layer.block_size());
+  MeshLabelIntegrator mesh_integrator(mesh_config, tsdf_layer, label_layer,
+                                      &mesh_layer);
+
+  // Generate mesh layer.
+  constexpr bool only_mesh_updated_blocks = false;
+  constexpr bool clear_updated_flag = false;
+  mesh_integrator.generateMesh(only_mesh_updated_blocks, clear_updated_flag);
+
+  // Extract mesh from mesh layer, either by simply concatenating all meshes
+  // (there is one per block) or by connecting them.
+  if (connected_mesh) {
+    mesh_layer.getConnectedMesh(mesh, vertex_proximity_threshold);
+  } else {
+    mesh_layer.getMesh(mesh);
+  }
+  return mesh->size() > 0u;
 }
 
 }  // namespace voxblox_gsm

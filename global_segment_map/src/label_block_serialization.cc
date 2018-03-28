@@ -25,6 +25,7 @@ void Block<LabelVoxel>::deserializeFromIntegers(
   }
 }
 
+// TODO(grinvalm): serialize and deserialize also votes array.
 template <>
 void Block<LabelVoxel>::serializeToIntegers(std::vector<uint32_t>* data) const {
   CHECK_NOTNULL(data);

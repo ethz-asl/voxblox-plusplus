@@ -12,8 +12,6 @@ int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
   google::InstallFailureSignalHandler();
 
-  LOG(INFO) << "Running GSM...";
-
   ros::NodeHandle node_handle;
   ros::NodeHandle node_handle_private("~");
 
@@ -22,37 +20,42 @@ int main(int argc, char** argv) {
   ros::Subscriber segment_point_cloud_sub;
   controller.subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
-  ros::ServiceServer validate_merged_object_srv;
-  controller.validateMergedObjectService(&validate_merged_object_srv);
+  ros::Publisher segment_gsm_update_publisher;
+  controller.advertiseSegmentGsmUpdateTopic(&segment_gsm_update_publisher);
 
-  ros::Publisher mesh_publisher;
-  controller.advertiseMeshTopic(&mesh_publisher);
+  ros::Publisher scene_gsm_update_publisher;
+  controller.advertiseSceneGsmUpdateTopic(&scene_gsm_update_publisher);
 
-  ros::Publisher scene_publisher;
-  controller.advertiseSceneTopic(&scene_publisher);
+  ros::Publisher segment_mesh_publisher;
+  if (controller.publish_segment_mesh_) {
+    controller.advertiseSegmentMeshTopic(&segment_mesh_publisher);
+  }
 
-  ros::Publisher object_publisher;
-  controller.advertiseObjectTopic(&object_publisher);
-
-  ros::Publisher gsm_update_publisher;
-  controller.advertiseGsmUpdateTopic(&gsm_update_publisher);
-
-  ros::ServiceServer generate_mesh_srv;
-  controller.advertiseGenerateMeshService(&generate_mesh_srv);
+  ros::Publisher scene_mesh_publisher;
+  if (controller.publish_scene_mesh_) {
+    controller.advertiseSceneMeshTopic(&scene_mesh_publisher);
+  }
 
   ros::ServiceServer publish_scene_srv;
   controller.advertisePublishSceneService(&publish_scene_srv);
 
+  ros::ServiceServer validate_merged_object_srv;
+  controller.validateMergedObjectService(&validate_merged_object_srv);
+
+  ros::ServiceServer generate_mesh_srv;
+  controller.advertiseGenerateMeshService(&generate_mesh_srv);
+
   ros::ServiceServer extract_segments_srv;
   controller.advertiseExtractSegmentsService(&extract_segments_srv);
 
-  constexpr double kNoUpdateTimeout = 5.0;
-  while (ros::ok() && !controller.noNewUpdatesReceived(kNoUpdateTimeout)) {
+  while (ros::ok() && !controller.noNewUpdatesReceived()) {
     ros::spinOnce();
   }
-  LOG(INFO) << "Shutting down";
+
   controller.publishScene();
   constexpr bool kPublishAllSegments = true;
   controller.publishObjects(kPublishAllSegments);
+
+  LOG(INFO) << "Shutting down.";
   return 0;
 }

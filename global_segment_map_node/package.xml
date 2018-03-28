@@ -4,9 +4,9 @@
   <version>0.0.0</version>
   <description>Global Segmentation Map ROS node</description>
 
-  <author email="margaritagrinvald@gmail.com">Margarita Grinvald</author>
+  <author email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</author>
 
-  <maintainer email="margaritagrinvald@gmail.com">margaritaG</maintainer>
+  <maintainer email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</maintainer>
   <maintainer email="ffurrer@gmail.com">ffurrer</maintainer>
   <maintainer email="marius.b.fehr@gmail.com">mfehr</maintainer>
 
@@ -20,8 +20,8 @@
   <depend>minkindr_conversions</depend>
   <depend>object_toolbox</depend>
   <depend>modelify_msgs</depend>
+  <depend>pcl_catkin</depend>
   <depend>pcl_conversions</depend>
-  <depend>pcl_ros</depend>
   <depend>roscpp</depend>
   <depend>voxblox</depend>
   <depend>global_segment_map</depend>
