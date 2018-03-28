@@ -5,7 +5,6 @@ find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
 find_package(Boost REQUIRED COMPONENTS filesystem)
-find_package(PCL 1.8 REQUIRED)
 
 add_definitions(-std=c++11)
 

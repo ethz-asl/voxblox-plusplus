@@ -107,6 +107,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       label_color_map_.insert(std::pair<Label, Color>(label, color));
     }
 
+    // TODO(grinvalm): fix or remove the flushing color visualization below.
     // if (!label_age_map_ptr_->empty()) {
     //   std::map<Label, int>::const_iterator label_age_pair_it;
     //   label_age_pair_it = label_age_map_ptr_->find(label);

@@ -700,7 +700,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
           // Add old_label confidence, if any, to new_label confidence.
           addVoxelLabelConfidence(new_label, old_label_confidence, &voxel);
         }
-        // TODO(grinvalm) calling update with different preferred label
+        // TODO(grinvalm) calling update with different preferred labels
         // can result in different assigned labels to the voxel, and
         // can trigger an update of a segment.
         updateVoxelLabelAndConfidence(&voxel, new_label);
