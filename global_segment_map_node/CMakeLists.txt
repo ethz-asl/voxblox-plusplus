@@ -12,9 +12,15 @@ cs_add_library(${PROJECT_NAME}_library
 
 cs_add_executable(${PROJECT_NAME}
   src/node.cpp
-)
+ )
+cs_add_executable(${PROJECT_NAME}_sliding_window
+        src/sliding_window_node.cpp)
+
 target_link_libraries(${PROJECT_NAME}
   ${PROJECT_NAME}_library
+)
+target_link_libraries(${PROJECT_NAME}_sliding_window
+        ${PROJECT_NAME}_library
 )
 
 cs_install()
