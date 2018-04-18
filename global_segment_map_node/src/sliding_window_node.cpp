@@ -1,13 +1,27 @@
-//
-// Created by sebastian on 4/8/18.
-//
+/*
+ * Copyright 2015 Fadri Furrer, ASL, ETH Zurich, Switzerland
+ * Copyright 2015 Michael Burri, ASL, ETH Zurich, Switzerland
+ * Copyright 2015 Mina Kamel, ASL, ETH Zurich, Switzerland
+ * Copyright 2015 Janosch Nikolic, ASL, ETH Zurich, Switzerland
+ * Copyright 2015 Markus Achtelik, ASL, ETH Zurich, Switzerland
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#include "voxblox_gsm/controller.h"
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <ros/ros.h>
-
-#include "std_srvs/Empty.h"
-#include "voxblox_gsm/controller.h"
+#include <std_srvs/Empty.h>
 
 /*!
  * Serves as a wrapper for the standard gsm_node. It makes the gsm_node work
@@ -40,86 +54,87 @@ class SlidingWindow {
    */
   void shutdownController();
 
-  std::unique_ptr<voxblox::voxblox_gsm::Controller> controller;
 
  private:
   ros::NodeHandle node_handle_;
 
-  ros::Subscriber segment_point_cloud_sub;
-  ros::ServiceServer validate_merged_object_srv;
-  ros::Publisher mesh_publisher;
-  ros::Publisher scene_publisher;
-  ros::Publisher object_publisher;
-  ros::Publisher gsm_update_publisher;
+  std::unique_ptr<voxblox::voxblox_gsm::Controller> controller_;
 
-  ros::ServiceServer generate_mesh_srv;
-  ros::ServiceServer publish_scene_srv;
-  ros::ServiceServer extract_segments_srv;
+  ros::Subscriber segment_point_cloud_sub_;
 
-  ros::Timer window_timer;
-  ros::ServiceClient new_window_client;
+  ros::Publisher gsm_update_publisher_;
+  ros::Publisher mesh_publisher_;
+  ros::Publisher object_publisher_;
+  ros::Publisher scene_publisher_;
+
+  ros::ServiceServer extract_segments_srv_;
+  ros::ServiceServer generate_mesh_srv_;
+  ros::ServiceServer publish_scene_srv_;
+  ros::ServiceServer validate_merged_object_srv_;
+
+  ros::ServiceClient new_window_client_;
+
+  ros::Timer window_timer_;
 };
 
 SlidingWindow::SlidingWindow(ros::NodeHandle& node_handle)
     : node_handle_(node_handle) {
-  controller = std::unique_ptr<voxblox::voxblox_gsm::Controller>(
+  controller_ = std::unique_ptr<voxblox::voxblox_gsm::Controller>(
       new voxblox::voxblox_gsm::Controller(&node_handle));
   setupController();
   setupControllerServices();
-  int window_size = node_handle.param("sliding_window_size_t", 5);
-  std::cout << window_size << " window size" << std::endl;
+  size_t window_size = node_handle.param("sliding_window_size_t", 30);
 
   const std::string service_name = "/loop_closure_node/new_session";
-  new_window_client = node_handle_.serviceClient<std_srvs::Empty>(service_name);
-  window_timer = node_handle.createTimer(
+  new_window_client_ = node_handle_.serviceClient<std_srvs::Empty>(service_name);
+  window_timer_ = node_handle.createTimer(
       ros::Duration(window_size), &SlidingWindow::newWindowCallback, this);
 }
 
 void SlidingWindow::setupControllerServices() {
-  controller->advertiseGenerateMeshService(&generate_mesh_srv);
-  controller->advertisePublishSceneService(&publish_scene_srv);
-  controller->advertiseExtractSegmentsService(&extract_segments_srv);
-  controller->validateMergedObjectService(&validate_merged_object_srv);
+  controller_->advertiseGenerateMeshService(&generate_mesh_srv_);
+  controller_->advertisePublishSceneService(&publish_scene_srv_);
+  controller_->advertiseExtractSegmentsService(&extract_segments_srv_);
+  controller_->validateMergedObjectService(&validate_merged_object_srv_);
 }
 
 void SlidingWindow::setupController() {
-  controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
-  controller->advertiseSegmentMeshTopic(&mesh_publisher);
-  controller->advertiseSceneMeshTopic(&scene_publisher);
-  controller->advertiseSegmentGsmUpdateTopic(&object_publisher);
-  controller->advertiseSceneGsmUpdateTopic(&gsm_update_publisher);
+  controller_->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub_);
+  controller_->advertiseSegmentMeshTopic(&mesh_publisher_);
+  controller_->advertiseSceneMeshTopic(&scene_publisher_);
+  controller_->advertiseSegmentGsmUpdateTopic(&object_publisher_);
+  controller_->advertiseSceneGsmUpdateTopic(&gsm_update_publisher_);
 }
 
 void SlidingWindow::shutdownController() {
-  segment_point_cloud_sub.shutdown();
-  mesh_publisher.shutdown();
-  scene_publisher.shutdown();
-  object_publisher.shutdown();
-  gsm_update_publisher.shutdown();
+  segment_point_cloud_sub_.shutdown();
+  mesh_publisher_.shutdown();
+  scene_publisher_.shutdown();
+  object_publisher_.shutdown();
+  gsm_update_publisher_.shutdown();
 
-  generate_mesh_srv.shutdown();
-  publish_scene_srv.shutdown();
-  extract_segments_srv.shutdown();
-  validate_merged_object_srv.shutdown();
+  generate_mesh_srv_.shutdown();
+  publish_scene_srv_.shutdown();
+  extract_segments_srv_.shutdown();
+  validate_merged_object_srv_.shutdown();
 }
 
 void SlidingWindow::resetController() {
-  // publish scene
-  controller->publishScene();
-  controller->publishObjects(true);
+  controller_->publishScene();
+  controller_->publishObjects(true);
   shutdownController();
 
-  controller = std::unique_ptr<voxblox::voxblox_gsm::Controller>(
+  controller_ = std::unique_ptr<voxblox::voxblox_gsm::Controller>(
       new voxblox::voxblox_gsm::Controller(&node_handle_));
   setupController();
   setupControllerServices();
 }
 
 void SlidingWindow::newWindowCallback(const ros::TimerEvent&) {
-  LOG(INFO) << "Starting new window" << endl;
+  LOG(INFO) << "Starting new window";
   resetController();
   std_srvs::Empty new_window;
-  new_window_client.call(new_window);
+  new_window_client_.call(new_window);
 }
 
 int main(int argc, char** argv) {
@@ -134,7 +149,6 @@ int main(int argc, char** argv) {
   ros::NodeHandle node_handle_private("~");
 
   SlidingWindow window(node_handle_private);
-  constexpr double kNoUpdateTimeout = 5.0;
   while (ros::ok()) {
     ros::spin();
   }
