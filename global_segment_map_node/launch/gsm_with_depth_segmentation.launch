@@ -10,7 +10,7 @@
 
 
   <arg name="depth_segmentation_params_name" default="$(find depth_segmentation)/cfg/tango_coconut_config.yaml"/>
-  <rosparam command="load" file="$(arg depth_segmentation_params_name)" />
+  <rosparam command="load" file="$(arg depth_segmentation_params_name)" if="$(arg tango)"/>
 
 
   <node name="image_filter_node" pkg="depth_segmentation" type="image_filter.py" output="screen" if="$(arg dilate_depth)">
