@@ -17,7 +17,8 @@ struct LabelCount {
 struct LabelVoxel {
   Label label = 0u;
   LabelConfidence label_confidence = 0.0f;
-  LabelCount label_count[40];
+  SemanticLabel semantic_label = 0u;
+  LabelCount label_count[20];
 };
 
 namespace voxel_types {

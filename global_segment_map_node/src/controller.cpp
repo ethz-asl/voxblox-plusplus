@@ -177,6 +177,17 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     integrator_config.enable_anti_grazing = false;
   }
 
+  std::string mesh_color_scheme("label");
+  node_handle_private_->param<std::string>(
+      "mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
+  if (mesh_color_scheme.compare("label") == 0) {
+    mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
+  } else if (mesh_color_scheme.compare("semantic_label") == 0) {
+    mesh_color_scheme_ = MeshLabelIntegrator::SemanticLabelColor;
+  } else {
+    mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
+  }
+
   // Determine label integrator parameters.
   LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
@@ -206,7 +217,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   mesh_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_layer_.get(), *integrator_->getLabelsAgeMapPtr()));
+      mesh_layer_.get(), *integrator_->getLabelsAgeMapPtr(),
+      mesh_color_scheme_));
 
   // Visualization settings.
   bool visualize = false;
@@ -374,9 +386,9 @@ void Controller::segmentPointCloudCallback(
     start = ros::WallTime::now();
 
     for (const auto& segment : segments_to_integrate_) {
-      integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                       segment->colors_, segment->labels_,
-                                       kIsFreespacePointcloud);
+      integrator_->integratePointCloud(
+          segment->T_G_C_, segment->points_C_, segment->colors_,
+          segment->labels_, segment->semantic_labels_, kIsFreespacePointcloud);
     }
 
     end = ros::WallTime::now();
@@ -437,6 +449,8 @@ void Controller::segmentPointCloudCallback(
     segment->points_C_.reserve(point_cloud.points.size());
     segment->colors_.reserve(point_cloud.points.size());
 
+    LOG(ERROR) << point_cloud.points[0].label;
+
     for (size_t i = 0; i < point_cloud.points.size(); ++i) {
       if (!std::isfinite(point_cloud.points[i].x) ||
           !std::isfinite(point_cloud.points[i].y) ||
@@ -451,6 +465,8 @@ void Controller::segmentPointCloudCallback(
       segment->colors_.push_back(
           Color(point_cloud.points[i].r, point_cloud.points[i].g,
                 point_cloud.points[i].b, point_cloud.points[i].a));
+
+      segment->semantic_labels_.push_back(point_cloud.points[i].label);
     }
 
     segment->T_G_C_ = T_G_C;
@@ -540,7 +556,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
-      CHECK_EQ(modelify::file_utils::makePath("segments", 0777), 0);
+      CHECK_EQ(modelify::file_utils::makePath("gsm_segments", 0777), 0);
 
       std::string mesh_filename = "gsm_segments/gsm_segment_mesh_label_" +
                                   std::to_string(label) + ".ply";

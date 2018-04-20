@@ -108,6 +108,7 @@ class Controller {
   ros::Timer update_mesh_timer_;
   ros::Publisher* scene_mesh_pub_;
   ros::Publisher* segment_mesh_pub_;
+  MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
   std::string mesh_filename_;
 
   std::string world_frame_;

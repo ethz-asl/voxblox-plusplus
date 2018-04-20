@@ -17,28 +17,34 @@ namespace voxblox {
 
 class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
  public:
+  enum ColorScheme {
+    LabelColor = 1,
+    SemanticLabelColor = 2,
+    ConfidenceColor = 3
+  };
+
   MeshLabelIntegrator(const MeshIntegratorConfig& config,
                       Layer<TsdfVoxel>* tsdf_layer,
                       Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
                       const std::map<Label, int>& label_age_map = {},
-                      bool visualize_confidence = false)
+                      ColorScheme color_scheme = LabelColor)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(CHECK_NOTNULL(label_layer)),
         label_layer_const_(CHECK_NOTNULL(label_layer)),
         label_age_map_ptr_(&label_age_map),
-        visualize_confidence(visualize_confidence) {}
+        color_scheme_(color_scheme) {}
 
   MeshLabelIntegrator(const MeshIntegratorConfig& config,
                       const Layer<TsdfVoxel>& tsdf_layer,
                       const Layer<LabelVoxel>& label_layer,
                       MeshLayer* mesh_layer,
                       const std::map<Label, int>& label_age_map = {},
-                      bool visualize_confidence = false)
+                      ColorScheme color_scheme = LabelColor)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(nullptr),
         label_layer_const_(CHECK_NOTNULL(&label_layer)),
         label_age_map_ptr_(&label_age_map),
-        visualize_confidence(visualize_confidence) {}
+        color_scheme_(color_scheme) {}
 
   // Generates mesh for the tsdf layer.
   bool generateMesh(bool only_mesh_updated_blocks, bool clear_updated_flag) {
@@ -93,6 +99,20 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         label_block->updated() = false;
       }
     }
+  }
+
+  Color getColorFromSemanticLabel(const SemanticLabel& semantic_label) {
+    std::vector<std::array<float, 3>> nyu_color_code{
+        {20, 20, 20},    {0, 128, 128},   {250, 50, 50}, {102, 0, 204},
+        {50, 50, 250},   {220, 220, 220}, {255, 69, 20}, {255, 20, 127},
+        {50, 50, 150},   {222, 180, 140}, {50, 250, 50}, {255, 215, 0},
+        {150, 150, 150}, {0, 255, 255}};
+
+    Color color;
+    color.r = nyu_color_code.at(semantic_label)[0];
+    color.g = nyu_color_code.at(semantic_label)[1];
+    color.b = nyu_color_code.at(semantic_label)[2];
+    return color;
   }
 
   Color getColorFromLabel(const Label& label) {
@@ -185,13 +205,15 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       if (label_block.isValidVoxelIndex(voxel_index)) {
         const LabelVoxel& voxel = label_block.getVoxelByVoxelIndex(voxel_index);
         Color color;
-        if (visualize_confidence) {
+        if (color_scheme_ == ConfidenceColor) {
           // Scale values to range (0.0, 1.0).
           constexpr float expected_max_confidence = 100.0f;
           color =
               rainbowColorMap(voxel.label_confidence / expected_max_confidence);
-        } else {
+        } else if (color_scheme_ == LabelColor) {
           color = getColorFromLabel(voxel.label);
+        } else {
+          color = getColorFromSemanticLabel(voxel.semantic_label);
         }
         mesh->colors[i] = color;
       } else {
@@ -199,10 +221,15 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
             label_layer_const_->getBlockPtrByCoordinates(vertex);
         const LabelVoxel& voxel = neighbor_block->getVoxelByCoordinates(vertex);
         Color color;
-        if (visualize_confidence) {
-          color = rainbowColorMap(voxel.label_confidence / 100);
-        } else {
+        if (color_scheme_ == ConfidenceColor) {
+          // Scale values to range (0.0, 1.0).
+          constexpr float expected_max_confidence = 100.0f;
+          color =
+              rainbowColorMap(voxel.label_confidence / expected_max_confidence);
+        } else if (color_scheme_ == LabelColor) {
           color = getColorFromLabel(voxel.label);
+        } else {
+          color = getColorFromSemanticLabel(voxel.semantic_label);
         }
         mesh->colors[i] = color;
       }
@@ -211,20 +238,19 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
  protected:
   // Having both a const and a mutable pointer to the layer allows this
-  // integrator to work both with a const layer (in case you don't want to clear
-  // the updated flag) and mutable layer (in case you do want to clear the
-  // updated flag).
+  // integrator to work both with a const layer (in case you don't want to
+  // clear the updated flag) and mutable layer (in case you do want to clear
+  // the updated flag).
   Layer<LabelVoxel>* label_layer_mutable_;
   const Layer<LabelVoxel>* label_layer_const_;
 
-  // Flag to choose whether the mesh color
-  // encodes the labels or the label confidences.
+  // Color scheme to use for the mesh color.
   // By default the mesh encodes the labels.
-  bool visualize_confidence;
+  ColorScheme color_scheme_;
 
   std::map<Label, Color> label_color_map_;
   const std::map<Label, int>* label_age_map_ptr_;
-};
+};  // namespace voxblox
 
 }  // namespace voxblox
 

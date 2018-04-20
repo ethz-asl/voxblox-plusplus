@@ -26,6 +26,7 @@ class Segment {
   voxblox::Transformation T_G_C_;
   voxblox::Colors colors_;
   voxblox::Labels labels_;
+  voxblox::SemanticLabels semantic_labels_;
 };
 
 class LabelTsdfIntegrator : public MergedTsdfIntegrator {
@@ -464,14 +465,16 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Updates label_voxel. Thread safe.
   inline void updateLabelVoxel(const Point& point_G, const Label& label,
+                               const SemanticLabel& semantic_label,
                                LabelVoxel* label_voxel,
                                const LabelConfidence& confidence = 1.0f) {
-    // Lookup the mutex that is responsible for this voxel and lock it
+    // Lookup the mutex that is responsible for this voxel and lock it.
     std::lock_guard<std::mutex> lock(
         mutexes_.get(getGridIndexFromPoint(point_G, voxel_size_inv_)));
 
     CHECK_NOTNULL(label_voxel);
 
+    label_voxel->semantic_label = semantic_label;
     Label previous_label = label_voxel->label;
     addVoxelLabelConfidence(label, confidence, label_voxel);
     updateVoxelLabelAndConfidence(label_voxel, label);
@@ -498,10 +501,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void integratePointCloud(const Transformation& T_G_C,
                            const Pointcloud& points_C, const Colors& colors,
-                           const Labels& labels, const bool freespace_points) {
+                           const Labels& labels,
+                           const SemanticLabels& semantic_labels,
+                           const bool freespace_points) {
     CHECK_EQ(points_C.size(), colors.size());
     CHECK_EQ(points_C.size(), labels.size());
-    CHECK_GE(labels.size(), 0u);
+    CHECK_EQ(points_C.size(), semantic_labels.size());
+    CHECK_GE(points_C.size(), 0u);
 
     timing::Timer integrate_timer("integrate");
 
@@ -517,13 +523,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     bundleRays(T_G_C, points_C, freespace_points, &index_getter, &voxel_map,
                &clear_map);
 
-    integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
-                  false, voxel_map, clear_map);
+    integrateRays(T_G_C, points_C, colors, labels, semantic_labels,
+                  config_.enable_anti_grazing, false, voxel_map, clear_map);
 
     timing::Timer clear_timer("integrate/clear");
 
-    integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
-                  true, voxel_map, clear_map);
+    integrateRays(T_G_C, points_C, colors, labels, semantic_labels,
+                  config_.enable_anti_grazing, true, voxel_map, clear_map);
 
     clear_timer.Stop();
 
@@ -532,6 +538,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void integrateVoxel(const Transformation& T_G_C, const Pointcloud& points_C,
                       const Colors& colors, const Labels& labels,
+                      const SemanticLabels& semantic_labels,
                       const bool enable_anti_grazing, const bool clearing_ray,
                       const std::pair<AnyIndex, AlignedVector<size_t>>& kv,
                       const VoxelMap& voxel_map) {
@@ -545,11 +552,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     FloatingPoint merged_weight = 0.0f;
     Label merged_label;
     LabelConfidence merged_label_confidence;
+    SemanticLabel merged_semantic_label;
 
     for (const size_t pt_idx : kv.second) {
       const Point& point_C = points_C[pt_idx];
       const Color& color = colors[pt_idx];
       const Label& label = labels[pt_idx];
+      const SemanticLabel& semantic_label = semantic_labels[pt_idx];
 
       const float point_weight = getVoxelWeight(point_C);
       merged_point_C =
@@ -567,6 +576,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       } else {
         merged_label_confidence = 1.0f;
       }
+
+      merged_semantic_label = semantic_label;
 
       // only take first point when clearing
       if (clearing_ray) {
@@ -604,13 +615,14 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
           global_voxel_idx, &label_block, &block_idx);
 
-      updateLabelVoxel(merged_point_G, merged_label, label_voxel,
-                       merged_label_confidence);
+      updateLabelVoxel(merged_point_G, merged_label, merged_semantic_label,
+                       label_voxel, merged_label_confidence);
     }
   }
 
   void integrateVoxels(const Transformation& T_G_C, const Pointcloud& points_C,
                        const Colors& colors, const Labels& labels,
+                       const SemanticLabels& semantic_labels,
                        const bool enable_anti_grazing, const bool clearing_ray,
                        const VoxelMap& voxel_map, const VoxelMap& clear_map,
                        const size_t thread_idx) {
@@ -625,8 +637,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
     for (size_t i = 0; i < map_size; ++i) {
       if (((i + thread_idx + 1) % config_.integrator_threads) == 0) {
-        integrateVoxel(T_G_C, points_C, colors, labels, enable_anti_grazing,
-                       clearing_ray, *it, voxel_map);
+        integrateVoxel(T_G_C, points_C, colors, labels, semantic_labels,
+                       enable_anti_grazing, clearing_ray, *it, voxel_map);
       }
       ++it;
     }
@@ -634,6 +646,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void integrateRays(const Transformation& T_G_C, const Pointcloud& points_C,
                      const Colors& colors, const Labels& labels,
+                     const SemanticLabels& semantic_labels,
                      const bool enable_anti_grazing, const bool clearing_ray,
                      const VoxelMap& voxel_map, const VoxelMap& clear_map) {
     const Point& origin = T_G_C.getPosition();
@@ -641,15 +654,16 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // if only 1 thread just do function call, otherwise spawn threads
     if (config_.integrator_threads == 1) {
       constexpr size_t thread_idx = 0;
-      integrateVoxels(T_G_C, points_C, colors, labels, enable_anti_grazing,
-                      clearing_ray, voxel_map, clear_map, thread_idx);
+      integrateVoxels(T_G_C, points_C, colors, labels, semantic_labels,
+                      enable_anti_grazing, clearing_ray, voxel_map, clear_map,
+                      thread_idx);
     } else {
       std::list<std::thread> integration_threads;
       for (size_t i = 0; i < config_.integrator_threads; ++i) {
         integration_threads.emplace_back(&LabelTsdfIntegrator::integrateVoxels,
                                          this, T_G_C, points_C, colors, labels,
-                                         enable_anti_grazing, clearing_ray,
-                                         voxel_map, clear_map, i);
+                                         semantic_labels, enable_anti_grazing,
+                                         clearing_ray, voxel_map, clear_map, i);
       }
 
       for (std::thread& thread : integration_threads) {
