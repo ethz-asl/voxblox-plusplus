@@ -10,12 +10,12 @@
  * similar to a sliding window of window size t.
  * It basically restarts the gsm every t seconds.
  */
-class SlidingWindow {
+class LegacySlidingWindow {
  public:
   /*!
    * @param node_handle needs to have aprivate parameter window_size_t
    */
-  SlidingWindow(ros::NodeHandle& node_handle);
+  LegacySlidingWindow(ros::NodeHandle& node_handle);
   void setupControllerServices();
   void setupController();
   /*!
@@ -59,7 +59,7 @@ class SlidingWindow {
   ros::Timer window_timer_;
 };
 
-SlidingWindow::SlidingWindow(ros::NodeHandle& node_handle)
+LegacySlidingWindow::LegacySlidingWindow(ros::NodeHandle& node_handle)
     : node_handle_(node_handle) {
   controller_ = std::unique_ptr<voxblox::voxblox_gsm::Controller>(
       new voxblox::voxblox_gsm::Controller(&node_handle));
@@ -70,17 +70,17 @@ SlidingWindow::SlidingWindow(ros::NodeHandle& node_handle)
   const std::string service_name = "/loop_closure_node/new_session";
   new_window_client_ = node_handle_.serviceClient<std_srvs::Empty>(service_name);
   window_timer_ = node_handle.createTimer(
-      ros::Duration(window_size), &SlidingWindow::newWindowCallback, this);
+      ros::Duration(window_size), &LegacySlidingWindow::newWindowCallback, this);
 }
 
-void SlidingWindow::setupControllerServices() {
+void LegacySlidingWindow::setupControllerServices() {
   controller_->advertiseGenerateMeshService(&generate_mesh_srv_);
   controller_->advertisePublishSceneService(&publish_scene_srv_);
   controller_->advertiseExtractSegmentsService(&extract_segments_srv_);
   controller_->validateMergedObjectService(&validate_merged_object_srv_);
 }
 
-void SlidingWindow::setupController() {
+void LegacySlidingWindow::setupController() {
   controller_->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub_);
   controller_->advertiseSegmentMeshTopic(&mesh_publisher_);
   controller_->advertiseSceneMeshTopic(&scene_publisher_);
@@ -88,7 +88,7 @@ void SlidingWindow::setupController() {
   controller_->advertiseSceneGsmUpdateTopic(&gsm_update_publisher_);
 }
 
-void SlidingWindow::shutdownController() {
+void LegacySlidingWindow::shutdownController() {
   segment_point_cloud_sub_.shutdown();
   mesh_publisher_.shutdown();
   scene_publisher_.shutdown();
@@ -101,7 +101,7 @@ void SlidingWindow::shutdownController() {
   validate_merged_object_srv_.shutdown();
 }
 
-void SlidingWindow::resetController() {
+void LegacySlidingWindow::resetController() {
   controller_->publishScene();
   controller_->publishObjects(true);
   shutdownController();
@@ -112,7 +112,7 @@ void SlidingWindow::resetController() {
   setupControllerServices();
 }
 
-void SlidingWindow::newWindowCallback(const ros::TimerEvent&) {
+void LegacySlidingWindow::newWindowCallback(const ros::TimerEvent&) {
   LOG(INFO) << "Starting new window";
   resetController();
   std_srvs::Empty new_window;
@@ -130,7 +130,7 @@ int main(int argc, char** argv) {
   ros::NodeHandle node_handle;
   ros::NodeHandle node_handle_private("~");
 
-  SlidingWindow window(node_handle_private);
+  LegacySlidingWindow window(node_handle_private);
   while (ros::ok()) {
     ros::spin();
   }

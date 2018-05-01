@@ -65,11 +65,11 @@ class Controller {
 
   double no_update_timeout_;
 
- private:
+ protected:
   void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
-  bool publishSceneCallback(std_srvs::Empty::Request& request,
+  virtual bool publishSceneCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
 
   bool validateMergedObjectCallback(
@@ -91,7 +91,7 @@ class Controller {
    * labels. false if \labels is only a subset of all labels contained by the
    * gsm.
    */
-  void extractSegmentLayers(
+  virtual void extractSegmentLayers(
       const std::vector<Label> &labels,
       std::unordered_map<Label, LayerPair> *label_layers_map,
       bool labels_list_is_complete = false);
@@ -103,6 +103,8 @@ class Controller {
   void generateMesh(bool clear_mesh);
 
   void updateMeshEvent(const ros::TimerEvent& e);
+
+  bool hasMinNumberOfAllocatedBlocksToPublish(const Layer<TsdfVoxel>& tsdf_layer);
 
   ros::NodeHandle* node_handle_private_;
 

@@ -471,11 +471,19 @@ void Controller::segmentPointCloudCallback(
 
 bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
                                       std_srvs::Empty::Response& response) {
-  constexpr bool kClearMesh = true;
-  generateMesh(kClearMesh);
+  // TODO(SebasRatz) make both parameters arguments of service?
+  bool save_scene_mesh = true;
+  node_handle_private_->param("save_scene_mesh", save_scene_mesh,
+                              save_scene_mesh);
+  if (save_scene_mesh) {
+    constexpr bool kClearMesh = true;
+    generateMesh(kClearMesh);
+  }
   publishScene();
-  constexpr bool kPublishAllSegments = true;
-  publishObjects(kPublishAllSegments);
+  bool publish_all_segments = true;
+  node_handle_private_->param("publish_all_segments", publish_all_segments,
+                              publish_all_segments);
+  publishObjects(publish_all_segments);
   return true;
 }
 
@@ -690,10 +698,7 @@ bool Controller::publishObjects(const bool publish_all) {
     Layer<LabelVoxel>& label_layer = it->second.second;
 
     // Continue if tsdf_layer has little getNumberOfAllocatedBlocks.
-    // TODO(ff): Check what a reasonable size is for this.
-    constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
-    if (tsdf_layer.getNumberOfAllocatedBlocks() <
-        kMinNumberOfAllocatedBlocksToPublish) {
+    if (!hasMinNumberOfAllocatedBlocksToPublish(tsdf_layer)) {
       continue;
     }
 
@@ -724,6 +729,7 @@ bool Controller::publishObjects(const bool publish_all) {
     constexpr bool kSerializeOnlyUpdated = false;
     gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
     gsm_update_msg.header.frame_id = world_frame_;
+    gsm_update_msg.is_scene = false;
     serializeLayerAsMsg<TsdfVoxel>(tsdf_layer, kSerializeOnlyUpdated,
                                    &gsm_update_msg.object.tsdf_layer);
     // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
@@ -805,6 +811,7 @@ void Controller::publishScene() {
 
   gsm_update_msg.object.label = 0u;
   gsm_update_msg.old_labels.clear();
+  gsm_update_msg.is_scene = true;
   geometry_msgs::Transform transform;
   transform.translation.x = 0.0;
   transform.translation.y = 0.0;
@@ -899,5 +906,12 @@ bool Controller::noNewUpdatesReceived() const {
   return false;
 }
 
+bool Controller::hasMinNumberOfAllocatedBlocksToPublish(
+    const Layer<TsdfVoxel>& tsdf_layer) {
+  // TODO(ff): Check what a reasonable size is for this.
+  constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
+  return tsdf_layer.getNumberOfAllocatedBlocks() >
+         kMinNumberOfAllocatedBlocksToPublish;
+}
 }  // namespace voxblox_gsm
 }  // namespace voxblox

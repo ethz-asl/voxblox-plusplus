@@ -8,6 +8,7 @@ catkin_simple(ALL_DEPS_REQUIRED)
 
 cs_add_library(${PROJECT_NAME}_library
   src/controller.cpp
+  src/sliding_window_controller.cpp
 )
 
 cs_add_executable(${PROJECT_NAME}
@@ -18,7 +19,7 @@ target_link_libraries(${PROJECT_NAME}
 )
 
 cs_add_executable(${PROJECT_NAME}_sliding_window
-  src/sliding_window_node.cpp
+  src/legacy_sliding_window_node.cpp
 )
 target_link_libraries(${PROJECT_NAME}_sliding_window
   ${PROJECT_NAME}_library
