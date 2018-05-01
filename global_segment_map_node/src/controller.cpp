@@ -477,8 +477,10 @@ bool Controller::publishSceneCallback(std_srvs::SetBool::Request& request,
     generateMesh(kClearMesh);
   }
   publishScene();
-  constexpr bool kPublishAllSegments = true;
-  publishObjects(kPublishAllSegments);
+  bool publish_all_segments = true;
+  node_handle_private_->param("publish_all_segments", publish_all_segments,
+                              publish_all_segments);
+  publishObjects(publish_all_segments);
   return true;
 }
 
