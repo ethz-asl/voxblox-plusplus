@@ -530,13 +530,17 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   std::vector<Label> labels = integrator_->getLabelsList();
   static constexpr bool kConnectedMesh = false;
 
+  std::unordered_map<Label, LayerPair> label_to_layers;
+  // Extract the TSDF and label layers corresponding to a segment.
+  extractAllSegmentLayers(labels, &label_to_layers);
+
   for (Label label : labels) {
-    Layer<TsdfVoxel> segment_tsdf_layer(map_config_.voxel_size,
-                                        map_config_.voxels_per_side);
-    Layer<LabelVoxel> segment_label_layer(map_config_.voxel_size,
-                                          map_config_.voxels_per_side);
-    // Extract the TSDF and label layers corresponding to a segment.
-    extractSegmentLayers(label, &segment_tsdf_layer, &segment_label_layer);
+    auto it = label_to_layers.find(label);
+    CHECK(it != label_to_layers.end());
+
+    Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+    Layer<LabelVoxel>& segment_label_layer = it->second.second;
+
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
@@ -556,6 +560,71 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   return true;
 }
 
+void Controller::extractAllSegmentLayers(
+    const std::vector<Label>& labels,
+    std::unordered_map<Label, LayerPair>* label_layers_map) {
+  CHECK(label_layers_map);
+
+  // Build map from labels to tsdf and label layers. Each will contain the
+  // segment of the corresponding layer.
+  for (const Label& label : labels) {
+    Layer<TsdfVoxel> tsdf_layer(map_config_.voxel_size,
+                                map_config_.voxels_per_side);
+    Layer<LabelVoxel> label_layer(map_config_.voxel_size,
+                                  map_config_.voxels_per_side);
+
+    LayerPair layer_pair(tsdf_layer, label_layer);
+    label_layers_map->insert({label, layer_pair});
+  }
+
+  BlockIndexList all_label_blocks;
+  map_->getTsdfLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
+
+  for (const BlockIndex& block_index : all_label_blocks) {
+    Block<TsdfVoxel>::Ptr global_tsdf_block =
+        map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
+    Block<LabelVoxel>::Ptr global_label_block =
+        map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
+    Block<TsdfVoxel>::Ptr tsdf_block;
+    Block<LabelVoxel>::Ptr label_block;
+
+    size_t vps = global_label_block->voxels_per_side();
+    for (int i = 0; i < vps * vps * vps; i++) {
+      const LabelVoxel& global_label_voxel =
+          global_label_block->getVoxelByLinearIndex(i);
+
+      if (global_label_voxel.label == 0u) {
+        continue;
+      }
+      auto it = label_layers_map->find(global_label_voxel.label);
+      CHECK(it != label_layers_map->end()) << "Label not found";
+
+      Layer<TsdfVoxel>& tsdf_layer = it->second.first;
+      Layer<LabelVoxel>& label_layer = it->second.second;
+
+      if (!tsdf_block) {
+        tsdf_block = tsdf_layer.allocateBlockPtrByIndex(block_index);
+        label_block = label_layer.allocateBlockPtrByIndex(block_index);
+      }
+      CHECK(tsdf_block);
+      CHECK(label_block);
+
+      TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
+      LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
+
+      const TsdfVoxel& global_tsdf_voxel =
+          global_tsdf_block->getVoxelByLinearIndex(i);
+
+      tsdf_voxel = global_tsdf_voxel;
+      label_voxel = global_label_voxel;
+    }
+  }
+}
+
+// TODO(SebasRatz) remove this implementation?
+// or do something like: extractAllSegmentLayers(..) and then only output the
+// layers of the label entered as an argument here. More memory needed,
+// not so much slower, but less duplicate code.
 void Controller::extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
                                       Layer<LabelVoxel>* label_layer) {
   CHECK_NOTNULL(tsdf_layer);
@@ -629,8 +698,8 @@ bool Controller::lookupTransform(const std::string& from_frame,
 
 // TODO(ff): Create this somewhere:
 // void serializeGsmAsMsg(const map&, const label&, const parent_labels&, msg*);
-
 bool Controller::publishObjects(const bool publish_all) {
+
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
   // TODO(ff): Not sure if we want to use this or ros::Time::now();
@@ -642,13 +711,19 @@ bool Controller::publishObjects(const bool publish_all) {
     ROS_INFO("Publishing all segments");
   }
 
+  std::unordered_map<Label, LayerPair> label_to_layers;
+  ros::Time start = ros::Time::now();
+  extractAllSegmentLayers(*labels_to_publish_ptr, &label_to_layers);
+  ros::Time stop = ros::Time::now();
+  ros::Duration duration = stop - start;
+  LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";
+
   for (const Label& label : *labels_to_publish_ptr) {
-    // Extract the TSDF and label layers corresponding to this label.
-    Layer<TsdfVoxel> tsdf_layer(map_config_.voxel_size,
-                                map_config_.voxels_per_side);
-    Layer<LabelVoxel> label_layer(map_config_.voxel_size,
-                                  map_config_.voxels_per_side);
-    extractSegmentLayers(label, &tsdf_layer, &label_layer);
+    auto it = label_to_layers.find(label);
+    CHECK (it != label_to_layers.end()) << "Label not found";
+
+    Layer<TsdfVoxel>& tsdf_layer = it->second.first;
+    Layer<LabelVoxel>& label_layer = it->second.second;
 
     // Continue if tsdf_layer has little getNumberOfAllocatedBlocks.
     // TODO(ff): Check what a reasonable size is for this.

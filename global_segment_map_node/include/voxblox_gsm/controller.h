@@ -23,6 +23,8 @@
 namespace voxblox {
 namespace voxblox_gsm {
 
+typedef std::pair<Layer<TsdfVoxel>, Layer<LabelVoxel>> LayerPair;
+
 class Controller {
  public:
   Controller(ros::NodeHandle* node_handle);
@@ -80,6 +82,9 @@ class Controller {
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
 
+  virtual void extractAllSegmentLayers(
+      const std::vector<Label>& labels,
+      std::unordered_map<Label, LayerPair>* label_layers_map);
   void extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
                             Layer<LabelVoxel>* label_layer);
 
@@ -90,6 +95,9 @@ class Controller {
   void generateMesh(bool clear_mesh);
 
   void updateMeshEvent(const ros::TimerEvent& e);
+
+  bool hasMinNumberOfAllocatedBlocksToPublish(
+      const Layer<TsdfVoxel>& tsdf_layer);
 
   ros::NodeHandle* node_handle_private_;
 
