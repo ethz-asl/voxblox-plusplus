@@ -1,5 +1,6 @@
 <launch>
-  <arg name="tango" default="true" />
+  <arg name="tango" default="false" />
+  <arg name="rotors" default="false" />
   <arg name="dilate_depth" default="$(arg tango)" />
 
   <arg name="depth_registered_topic" default="/camera/depth_registered/image_raw" unless="$(arg tango)"/>
