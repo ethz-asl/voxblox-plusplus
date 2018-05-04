@@ -82,9 +82,20 @@ class Controller {
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
 
-  virtual void extractAllSegmentLayers(
+  /**
+   * Extracts separate tsdf and label layers from the gsm, for every given
+   * label.
+   * @param labels of segments to extract
+   * @param label_layers_map output map
+   * @param labels_list_is_complete true if the gsm does not contain other
+   * labels. false if \labels is only a subset of all labels contained by the
+   * gsm.
+   */
+  void extractAllSegmentLayers(
       const std::vector<Label>& labels,
-      std::unordered_map<Label, LayerPair>* label_layers_map);
+      std::unordered_map<Label, LayerPair>* label_layers_map,
+      bool labels_list_is_complete = true);
+
   void extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
                             Layer<LabelVoxel>* label_layer);
 
@@ -95,9 +106,6 @@ class Controller {
   void generateMesh(bool clear_mesh);
 
   void updateMeshEvent(const ros::TimerEvent& e);
-
-  bool hasMinNumberOfAllocatedBlocksToPublish(
-      const Layer<TsdfVoxel>& tsdf_layer);
 
   ros::NodeHandle* node_handle_private_;
 
