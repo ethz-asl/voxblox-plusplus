@@ -11,24 +11,26 @@ class SlidingWindowController : public Controller {
  public:
   explicit SlidingWindowController(ros::NodeHandle* node_handle);
 
-  void updateWindowCallback(const ros::TimerEvent&);
-
   void extractAllSegmentLayers(
       const std::vector<Label>& labels,
       std::unordered_map<Label, LayerPair>* label_layers_map,
       bool labels_list_is_complete = true) override;
 
  private:
+  void updateAndPublishWindow(const Point &new_center);
+  void checkTfCallback(const ros::TimerEvent&);
   void removeSegmentsOutsideOfRadius(float radius, Point center);
-  void getAndPublishCurrentPosition(Point *position);
+  void getCurrentPosition(tf::StampedTransform* position);
+  void publishPosition(const Point& position);
   void publishGsmUpdate(const ros::Publisher& publisher,
                         modelify_msgs::GsmUpdate& gsm_update) override;
   std::unordered_map<Label, LayerPair> label_to_layers_;
   ros::Publisher removed_segments_pub_;
-  ros::Timer timer_;
+  ros::Timer tf_check_timer_;
   tf::TransformBroadcaster position_broadcaster_;
-  Point current_position_;
-
+  tf::StampedTransform current_window_position_;
+  Point current_window_position_point_;
+  float window_radius_=1.0f;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox

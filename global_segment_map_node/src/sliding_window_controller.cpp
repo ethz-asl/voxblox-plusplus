@@ -8,12 +8,14 @@ namespace voxblox_gsm {
 
 SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
     : Controller(node_handle) {
-  double update_period = 10.0;
-  node_handle_private_->param("sliding_window/update_period", update_period,
+  double update_period = 1.0;
+  node_handle_private_->param("sliding_window/tf_check_t", update_period,
                               update_period);
   ros::Duration period(update_period);
-  timer_ = node_handle_private_->createTimer(
-      period, &SlidingWindowController::updateWindowCallback, this);
+  tf_check_timer_ = node_handle_private_->createTimer(
+      period, &SlidingWindowController::checkTfCallback, this);
+  node_handle_private_->param<float>("sliding_window/radius", window_radius_,
+                                     window_radius_);
 }
 
 void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
@@ -67,55 +69,67 @@ void SlidingWindowController::extractAllSegmentLayers(
   }
 }
 
-void SlidingWindowController::updateWindowCallback(const ros::TimerEvent&) {
-  float radius = 3.0f;
-  node_handle_private_->param<float>("sliding_window/radius", radius, radius);
+void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
+  tf::StampedTransform tf_transform;
+  getCurrentPosition(&tf_transform);
 
-  Point center;
-  getAndPublishCurrentPosition(&center);
-  current_position_ = center;
-  removeSegmentsOutsideOfRadius(radius, center);
+  tfScalar distance =
+      tf_transform.getOrigin().distance(current_window_position_.getOrigin());
+  LOG(WARNING) << "distance " << distance;
 
+  if (distance > window_radius_) {
+    updateAndPublishWindow(current_window_position_point_);
+    publishPosition(current_window_position_point_);
+    current_window_position_ = tf_transform;
+    Transformation kindr_transform;
+    tf::transformTFToKindr(tf_transform, &kindr_transform);
+    current_window_position_point_ = kindr_transform.getPosition();
+  }
+}
+
+void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
+  removeSegmentsOutsideOfRadius(window_radius_, new_center);
   std_srvs::Empty::Request req;
   std_srvs::Empty::Response res;
   LOG(INFO) << "Publish scene";
   publishSceneCallback(req, res);
 }
 
-void SlidingWindowController::getAndPublishCurrentPosition(Point* position) {
+void SlidingWindowController::getCurrentPosition(
+    tf::StampedTransform* position) {
   // Get current position. The window radius is relative to this position.
-  Transformation current_tf;
-  tf::StampedTransform tf_transform;
   ros::Time time_now = ros::Time(0);
-
   try {
     tf_listener_.waitForTransform(
         world_frame_, camera_frame_, time_now,
         ros::Duration(30.0));  // in case rosbag has not been started yet
     tf_listener_.lookupTransform(world_frame_, camera_frame_, time_now,
-                                 tf_transform);
+                                 *position);
   } catch (tf::TransformException& ex) {
     LOG(FATAL) << "Error getting TF transform from sensor data: " << ex.what();
   }
-  tf::transformTFToKindr(tf_transform, &current_tf);
-  *position = current_tf.getPosition();
-
-  // Publish position.
-  tf::Quaternion identity;
-  identity.setEuler(0, 0, 0);
-  tf_transform.setRotation(identity);
-  position_broadcaster_.sendTransform(tf::StampedTransform(
-      tf_transform, ros::Time::now(), "world", "sliding_window"));
 }
 
 void SlidingWindowController::publishGsmUpdate(
     const ros::Publisher& publisher, modelify_msgs::GsmUpdate& gsm_update) {
   geometry_msgs::Point point;
-  point.x = current_position_(0);
-  point.y = current_position_(1);
-  point.z = current_position_(2);
+  point.x = current_window_position_point_(0);
+  point.y = current_window_position_point_(1);
+  point.z = current_window_position_point_(2);
   gsm_update.sliding_window_position = point;
   Controller::publishGsmUpdate(publisher, gsm_update);
+}
+
+void SlidingWindowController::publishPosition(const Point& position) {
+  // Publish position.
+  tf::StampedTransform tf;
+  tf::Vector3 translation;
+  translation.setX(position(0));
+  translation.setY(position(1));
+  translation.setZ(position(2));
+  tf.setOrigin(translation);
+  position_broadcaster_.sendTransform(
+      tf::StampedTransform(tf, ros::Time::now(), "world", "sliding_window"));
 }
 
 }  // namespace voxblox_gsm
