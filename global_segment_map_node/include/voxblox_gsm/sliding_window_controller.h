@@ -3,11 +3,13 @@
 
 #include "controller.h"
 
+#include <tf/transform_broadcaster.h>
+
 namespace voxblox {
 namespace voxblox_gsm {
 class SlidingWindowController : public Controller {
  public:
-  SlidingWindowController(ros::NodeHandle* node_handle);
+  explicit SlidingWindowController(ros::NodeHandle* node_handle);
 
   void updateWindowCallback(const ros::TimerEvent&);
 
@@ -16,14 +18,17 @@ class SlidingWindowController : public Controller {
       std::unordered_map<Label, LayerPair>* label_layers_map,
       bool labels_list_is_complete = true) override;
 
-  void advertiseSegmentRemovalTopic();
-
  private:
-  void removeSegmentsOutsideOfRadius(float radius);
+  void removeSegmentsOutsideOfRadius(float radius, Point center);
+  void getAndPublishCurrentPosition(Point *position);
+  void publishGsmUpdate(const ros::Publisher& publisher,
+                        modelify_msgs::GsmUpdate& gsm_update) override;
   std::unordered_map<Label, LayerPair> label_to_layers_;
   ros::Publisher removed_segments_pub_;
   ros::Timer timer_;
-  ros::ServiceClient new_window_client_;
+  tf::TransformBroadcaster position_broadcaster_;
+  Point current_position_;
+
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox

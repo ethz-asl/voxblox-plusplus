@@ -70,7 +70,7 @@ class Controller {
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
   virtual bool publishSceneCallback(std_srvs::Empty::Request& request,
-                            std_srvs::Empty::Response& response);
+                                    std_srvs::Empty::Response& response);
 
   bool validateMergedObjectCallback(
       modelify_msgs::ValidateMergedObject::Request& request,
@@ -104,7 +104,11 @@ class Controller {
 
   void updateMeshEvent(const ros::TimerEvent& e);
 
-  bool hasMinNumberOfAllocatedBlocksToPublish(const Layer<TsdfVoxel>& tsdf_layer);
+  bool hasMinNumberOfAllocatedBlocksToPublish(
+      const Layer<TsdfVoxel>& tsdf_layer);
+
+  virtual void publishGsmUpdate(const ros::Publisher& publisher,
+                                modelify_msgs::GsmUpdate& gsm_update);
 
   ros::NodeHandle* node_handle_private_;
 
