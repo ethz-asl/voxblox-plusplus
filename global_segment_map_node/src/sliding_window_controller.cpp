@@ -8,12 +8,6 @@ namespace voxblox_gsm {
 
 SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
     : Controller(node_handle) {
-  advertiseSegmentRemovalTopic();
-
-  const std::string service_name = "/loop_closure_node/new_session";
-  new_window_client_ =
-      node_handle_private_->serviceClient<std_srvs::Empty>(service_name);
-
   double update_period = 10.0;
   node_handle_private_->param("sliding_window/update_period", update_period,
                               update_period);
@@ -22,9 +16,9 @@ SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
       period, &SlidingWindowController::updateWindowCallback, this);
 }
 
-void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius) {
+void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
+                                                            Point center) {
   std::vector<Label> all_labels = integrator_->getLabelsList();
-  ros::Time time_now = ros::Time(0);
   label_to_layers_.clear();
   extractAllSegmentLayers(all_labels, &label_to_layers_);
 
@@ -35,18 +29,6 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius) {
       continue;
     }
 
-    // Get current position. The window radius is relative to this position.
-    Transformation current_tf;
-    tf::StampedTransform tf_transform;
-    try {
-      tf_listener_.lookupTransform(world_frame_, camera_frame_, time_now,
-                                   tf_transform);
-    } catch (tf::TransformException& ex) {
-      LOG(FATAL) << "Error getting TF transform from sensor data: "
-                 << ex.what();
-    }
-    tf::transformTFToKindr(tf_transform, &current_tf);
-
     // Iterate over all blocks of segment. If one of the blocks is inside the
     // window radius, the whole segment is valid. Otherwise, the segment is
     // removed from the gsm
@@ -54,9 +36,10 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius) {
     layer_pair.first.getAllAllocatedBlocks(&blocks_of_label);
     bool has_block_within_radius = false;
     for (const BlockIndex& block_index : blocks_of_label) {
-      Point center = getCenterPointFromGridIndex(
+      Point center_block = getCenterPointFromGridIndex(
           block_index, map_config_.voxel_size * map_config_.voxels_per_side);
-      double distance_x_y = sqrt(pow(center(0, 0), 2) + pow(center(1, 0), 2));
+      double distance_x_y = sqrt(pow(center_block(0, 0) - center(0, 0), 2) +
+                                 pow(center_block(1, 0) - center(1, 0), 2));
       if (distance_x_y < radius) {
         has_block_within_radius = true;
         break;
@@ -84,24 +67,55 @@ void SlidingWindowController::extractAllSegmentLayers(
   }
 }
 
-void SlidingWindowController::advertiseSegmentRemovalTopic() {
-  std::string topic = "removed_segment_label";
-  node_handle_private_->param("sliding_window/removed_segment_label_topic",
-                              topic, topic);
-  constexpr size_t kQueueSize = 100;
-  removed_segments_pub_ =
-      node_handle_private_->advertise<std_msgs::UInt32>(topic, kQueueSize);
-}
-
 void SlidingWindowController::updateWindowCallback(const ros::TimerEvent&) {
   float radius = 3.0f;
   node_handle_private_->param<float>("sliding_window/radius", radius, radius);
-  removeSegmentsOutsideOfRadius(radius);
+
+  Point center;
+  getAndPublishCurrentPosition(&center);
+  current_position_ = center;
+  removeSegmentsOutsideOfRadius(radius, center);
 
   std_srvs::Empty::Request req;
   std_srvs::Empty::Response res;
-  LOG(WARNING) << "Publish scene";
+  LOG(INFO) << "Publish scene";
   publishSceneCallback(req, res);
+}
+
+void SlidingWindowController::getAndPublishCurrentPosition(Point* position) {
+  // Get current position. The window radius is relative to this position.
+  Transformation current_tf;
+  tf::StampedTransform tf_transform;
+  ros::Time time_now = ros::Time(0);
+
+  try {
+    tf_listener_.waitForTransform(
+        world_frame_, camera_frame_, time_now,
+        ros::Duration(30.0));  // in case rosbag has not been started yet
+    tf_listener_.lookupTransform(world_frame_, camera_frame_, time_now,
+                                 tf_transform);
+  } catch (tf::TransformException& ex) {
+    LOG(FATAL) << "Error getting TF transform from sensor data: " << ex.what();
+  }
+  tf::transformTFToKindr(tf_transform, &current_tf);
+  *position = current_tf.getPosition();
+
+  // Publish position.
+  tf::Quaternion identity;
+  identity.setEuler(0, 0, 0);
+  tf_transform.setRotation(identity);
+  position_broadcaster_.sendTransform(tf::StampedTransform(
+      tf_transform, ros::Time::now(), "world", "sliding_window"));
+}
+
+void SlidingWindowController::publishGsmUpdate(
+    const ros::Publisher& publisher, modelify_msgs::GsmUpdate& gsm_update) {
+  geometry_msgs::Point point;
+  point.x = current_position_(0);
+  point.y = current_position_(1);
+  point.z = current_position_(2);
+  gsm_update.sliding_window_position = point;
+  Controller::publishGsmUpdate(publisher, gsm_update);
 }
 
 }  // namespace voxblox_gsm

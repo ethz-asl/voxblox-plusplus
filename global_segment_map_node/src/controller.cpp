@@ -765,7 +765,7 @@ bool Controller::publishObjects(const bool publish_all) {
       }
       merges_to_publish_.erase(merged_label_it);
     }
-    segment_gsm_update_pub_->publish(gsm_update_msg);
+    publishGsmUpdate(*segment_gsm_update_pub_, gsm_update_msg);
     // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
 
     if (publish_segment_mesh_) {
@@ -820,7 +820,7 @@ void Controller::publishScene() {
   transform.rotation.z = 0.0;
   gsm_update_msg.object.transforms.clear();
   gsm_update_msg.object.transforms.push_back(transform);
-  scene_gsm_update_pub_->publish(gsm_update_msg);
+  publishGsmUpdate(*scene_gsm_update_pub_, gsm_update_msg);
 }
 
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
@@ -910,6 +910,11 @@ bool Controller::hasMinNumberOfAllocatedBlocksToPublish(
   constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
   return tsdf_layer.getNumberOfAllocatedBlocks() >
          kMinNumberOfAllocatedBlocksToPublish;
+}
+
+void Controller::publishGsmUpdate(const ros::Publisher &publisher,
+                                  modelify_msgs::GsmUpdate& gsm_update) {
+  publisher.publish(gsm_update);
 }
 }  // namespace voxblox_gsm
 }  // namespace voxblox
