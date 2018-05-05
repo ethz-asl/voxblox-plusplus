@@ -21,7 +21,7 @@ sliding_window:
   is_on: true
   removed_segment_label_topic: removed_segment_label
   radius: 1.0
-  update_period: 10.0
+  tf_check_t: 1.0
 
 save_scene_mesh: false
 publish_all_segments: true
