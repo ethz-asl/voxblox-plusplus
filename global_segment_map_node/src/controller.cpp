@@ -672,24 +672,19 @@ bool Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
   // TODO(ff): Not sure if we want to use this or ros::Time::now();
-  const std::vector<Label>* labels_to_publish_ptr = &segment_labels_to_publish_;
-  std::vector<Label> all_labels;
-  if (publish_all) {
-    all_labels = integrator_->getLabelsList();
-    labels_to_publish_ptr = &all_labels;
-    ROS_INFO("Publishing all segments");
-  }
+
+  std::vector<Label> labels_to_publish;
+  getLabelsToPublish(&labels_to_publish, publish_all);
 
   std::unordered_map<Label, LayerPair> label_to_layers;
   constexpr bool kLabelsListIsComplete = true;
   ros::Time start = ros::Time::now();
-  extractSegmentLayers(*labels_to_publish_ptr, &label_to_layers,
-                       kLabelsListIsComplete);
+  extractAllSegmentLayers(labels_to_publish, &label_to_layers);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
   LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";
 
-  for (const Label& label : *labels_to_publish_ptr) {
+  for (const Label& label : labels_to_publish) {
     auto it = label_to_layers.find(label);
     CHECK(it != label_to_layers.end()) << "Layers for " << label
                                        << "could not be extracted.";
@@ -697,8 +692,10 @@ bool Controller::publishObjects(const bool publish_all) {
     Layer<TsdfVoxel>& tsdf_layer = it->second.first;
     Layer<LabelVoxel>& label_layer = it->second.second;
 
-    // Continue if tsdf_layer has little getNumberOfAllocatedBlocks.
-    if (!hasMinNumberOfAllocatedBlocksToPublish(tsdf_layer)) {
+    // TODO(ff): Check what a reasonable size is for this.
+    constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
+    if (tsdf_layer.getNumberOfAllocatedBlocks() <
+        kMinNumberOfAllocatedBlocksToPublish) {
       continue;
     }
 
@@ -906,17 +903,18 @@ bool Controller::noNewUpdatesReceived() const {
   return false;
 }
 
-bool Controller::hasMinNumberOfAllocatedBlocksToPublish(
-    const Layer<TsdfVoxel>& tsdf_layer) {
-  // TODO(ff): Check what a reasonable size is for this.
-  constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
-  return tsdf_layer.getNumberOfAllocatedBlocks() >
-         kMinNumberOfAllocatedBlocksToPublish;
-}
-
-void Controller::publishGsmUpdate(const ros::Publisher &publisher,
+void Controller::publishGsmUpdate(const ros::Publisher& publisher,
                                   modelify_msgs::GsmUpdate& gsm_update) {
   publisher.publish(gsm_update);
+}
+
+void Controller::getLabelsToPublish(std::vector<Label>* labels, bool get_all) {
+  if (get_all) {
+    *labels = integrator_->getLabelsList();
+    ROS_INFO("Publishing all segments");
+  } else {
+    *labels = segment_labels_to_publish_;
+  }
 }
 }  // namespace voxblox_gsm
 }  // namespace voxblox

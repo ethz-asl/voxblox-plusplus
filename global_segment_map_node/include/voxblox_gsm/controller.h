@@ -104,11 +104,10 @@ class Controller {
 
   void updateMeshEvent(const ros::TimerEvent& e);
 
-  bool hasMinNumberOfAllocatedBlocksToPublish(
-      const Layer<TsdfVoxel>& tsdf_layer);
-
   virtual void publishGsmUpdate(const ros::Publisher& publisher,
                                 modelify_msgs::GsmUpdate& gsm_update);
+
+  virtual void getLabelsToPublish(std::vector<Label>* labels, bool get_all);
 
   ros::NodeHandle* node_handle_private_;
 

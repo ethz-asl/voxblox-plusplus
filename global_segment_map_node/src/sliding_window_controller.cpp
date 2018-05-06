@@ -20,6 +20,7 @@ SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
 
 void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
                                                             Point center) {
+  removed_segments_.clear();
   std::vector<Label> all_labels = integrator_->getLabelsList();
   label_to_layers_.clear();
   extractAllSegmentLayers(all_labels, &label_to_layers_);
@@ -27,9 +28,6 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
   for (const Label& label : all_labels) {
     auto it = label_to_layers_.find(label);
     LayerPair& layer_pair = it->second;
-    if (!hasMinNumberOfAllocatedBlocksToPublish(layer_pair.first)) {
-      continue;
-    }
 
     // Iterate over all blocks of segment. If one of the blocks is inside the
     // window radius, the whole segment is valid. Otherwise, the segment is
@@ -40,8 +38,8 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
     for (const BlockIndex& block_index : blocks_of_label) {
       Point center_block = getCenterPointFromGridIndex(
           block_index, map_config_.voxel_size * map_config_.voxels_per_side);
-      double distance_x_y = sqrt(pow(center_block(0, 0) - center(0, 0), 2) +
-                                 pow(center_block(1, 0) - center(1, 0), 2));
+      double distance_x_y = sqrt(pow(center_block(0) - center(0), 2) +
+                                 pow(center_block(1) - center(1), 2));
       if (distance_x_y < radius) {
         has_block_within_radius = true;
         break;
@@ -52,7 +50,8 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
         map_->getTsdfLayerPtr()->removeBlock(block_index);
         map_->getLabelLayerPtr()->removeBlock(block_index);
       }
-      removed_segments_pub_.publish(label);
+      label_to_layers_.erase(label);
+      removed_segments_.push_back(label);
     }
   }
 }
@@ -77,22 +76,28 @@ void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
       tf_transform.getOrigin().distance(current_window_position_.getOrigin());
   LOG(WARNING) << "distance " << distance;
 
-  if (distance > window_radius_) {
-    updateAndPublishWindow(current_window_position_point_);
-    publishPosition(current_window_position_point_);
+  if (distance > window_radius_ / 2.0) {
     current_window_position_ = tf_transform;
     Transformation kindr_transform;
     tf::transformTFToKindr(tf_transform, &kindr_transform);
     current_window_position_point_ = kindr_transform.getPosition();
+    updateAndPublishWindow(current_window_position_point_);
+    publishPosition(current_window_position_point_);
   }
 }
 
 void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
+  LOG(WARNING) << "Update Window";
   removeSegmentsOutsideOfRadius(window_radius_, new_center);
+
   std_srvs::Empty::Request req;
   std_srvs::Empty::Response res;
   LOG(INFO) << "Publish scene";
+  ros::Time start = ros::Time::now();
   publishSceneCallback(req, res);
+  ros::Time stop = ros::Time::now();
+  ros::Duration duration = stop - start;
+  LOG(WARNING) << "Publishing took " << duration << "s";
 }
 
 void SlidingWindowController::getCurrentPosition(
@@ -130,6 +135,14 @@ void SlidingWindowController::publishPosition(const Point& position) {
   tf.setOrigin(translation);
   position_broadcaster_.sendTransform(
       tf::StampedTransform(tf, ros::Time::now(), "world", "sliding_window"));
+}
+
+void SlidingWindowController::getLabelsToPublish(std::vector<Label>* labels,
+                                                 bool get_all) {
+  Controller::getLabelsToPublish(labels, get_all);
+  for (const Label& label : removed_segments_) {
+    labels->erase(std::remove(labels->begin(), labels->end(), label));
+  }
 }
 
 }  // namespace voxblox_gsm
