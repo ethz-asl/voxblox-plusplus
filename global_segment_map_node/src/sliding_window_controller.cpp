@@ -72,11 +72,16 @@ void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
   tf::StampedTransform tf_transform;
   getCurrentPosition(&tf_transform);
 
+  constexpr double kTimeout = 20.0;
+  ros::Duration time_since_last_update =
+      tf_transform.stamp_ - current_window_position_.stamp_;
+
   tfScalar distance =
       tf_transform.getOrigin().distance(current_window_position_.getOrigin());
   LOG(WARNING) << "distance " << distance;
 
-  if (distance > window_radius_ / 2.0) {
+  if (distance > window_radius_ / 2.0 ||
+      time_since_last_update.toSec() > kTimeout) {
     current_window_position_ = tf_transform;
     Transformation kindr_transform;
     tf::transformTFToKindr(tf_transform, &kindr_transform);
