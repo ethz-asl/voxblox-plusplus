@@ -17,20 +17,29 @@ class SlidingWindowController : public Controller {
       bool labels_list_is_complete = true) override;
 
  private:
-  void updateAndPublishWindow(const Point &new_center);
+  void updateAndPublishWindow(const Point& new_center);
+
   void checkTfCallback(const ros::TimerEvent&);
+
   void removeSegmentsOutsideOfRadius(float radius, Point center);
+
   void getCurrentPosition(tf::StampedTransform* position);
+
   void publishPosition(const Point& position);
+
   void publishGsmUpdate(const ros::Publisher& publisher,
                         modelify_msgs::GsmUpdate& gsm_update) override;
-  std::unordered_map<Label, LayerPair> label_to_layers_;
-  ros::Publisher removed_segments_pub_;
+
+  void getLabelsToPublish(std::vector<Label>* labels, bool get_all) override;
+
   ros::Timer tf_check_timer_;
   tf::TransformBroadcaster position_broadcaster_;
   tf::StampedTransform current_window_position_;
+
+  std::unordered_map<Label, LayerPair> label_to_layers_;
   Point current_window_position_point_;
-  float window_radius_=1.0f;
+  std::vector<Label> removed_segments_;
+  float window_radius_ = 1.0f;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox
