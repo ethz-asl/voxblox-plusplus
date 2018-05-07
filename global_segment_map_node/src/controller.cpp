@@ -540,7 +540,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
-      CHECK_EQ(modelify::file_utils::makePath("segments", 0777), 0);
+      CHECK_EQ(modelify::file_utils::makePath("gsm_segments", 0777), 0);
 
       std::string mesh_filename = "gsm_segments/gsm_segment_mesh_label_" +
                                   std::to_string(label) + ".ply";
