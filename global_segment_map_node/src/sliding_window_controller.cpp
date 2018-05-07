@@ -69,6 +69,10 @@ void SlidingWindowController::extractAllSegmentLayers(
 }
 
 void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
+  if (!received_first_message_) {
+    return;
+  }
+
   tf::StampedTransform tf_transform;
   getCurrentPosition(&tf_transform);
 
@@ -81,7 +85,9 @@ void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
   LOG(WARNING) << "distance " << distance;
 
   if (distance > window_radius_ / 2.0 ||
-      time_since_last_update.toSec() > kTimeout) {
+      (time_since_last_update.toSec() > kTimeout &&
+       window_has_moved_first_time_)) {
+    window_has_moved_first_time_ = true;
     current_window_position_ = tf_transform;
     Transformation kindr_transform;
     tf::transformTFToKindr(tf_transform, &kindr_transform);
