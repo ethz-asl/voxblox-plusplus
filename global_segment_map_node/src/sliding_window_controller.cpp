@@ -39,7 +39,8 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
       Point center_block = getCenterPointFromGridIndex(
           block_index, map_config_.voxel_size * map_config_.voxels_per_side);
       double distance_x_y = sqrt(pow(center_block(0) - center(0), 2) +
-                                 pow(center_block(1) - center(1), 2));
+                                 pow(center_block(1) - center(1), 2) +
+                                 pow(center_block(2) - center(2), 2));
       if (distance_x_y < radius) {
         has_block_within_radius = true;
         break;
@@ -113,7 +114,6 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
 
 void SlidingWindowController::getCurrentPosition(
     tf::StampedTransform* position) {
-  // Get current position. The window radius is relative to this position.
   ros::Time time_now = ros::Time(0);
   try {
     tf_listener_.waitForTransform(
