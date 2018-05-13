@@ -536,8 +536,8 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
-    CHECK(it != label_to_layers.end()) << "Something went wrong. Label "
-                                       << label << "could not be found.";
+    CHECK(it != label_to_layers.end()) << "Layers for label " << label
+                                       << "could not be extracted.";
 
     Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
     Layer<LabelVoxel>& segment_label_layer = it->second.second;
@@ -574,9 +574,7 @@ void Controller::extractAllSegmentLayers(
   Layer<LabelVoxel> label_layer(map_config_.voxel_size,
                                 map_config_.voxels_per_side);
   for (const Label& label : labels) {
-    label_layers_map->emplace(
-        std::piecewise_construct, std::forward_as_tuple(label),
-        std::forward_as_tuple(std::make_pair(tsdf_layer, label_layer)));
+    label_layers_map->emplace(label, std::make_pair(tsdf_layer, label_layer));
   }
 
   BlockIndexList all_label_blocks;
@@ -602,9 +600,10 @@ void Controller::extractAllSegmentLayers(
       auto it = label_layers_map->find(global_label_voxel.label);
       if (it == label_layers_map->end()) {
         if (labels_list_is_complete) {
-          LOG(FATAL) << "At least one voxel contains a label which is not "
-                        "contained in the given label list. Label "
-                     << global_label_voxel.label << "could not be found.";
+          LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
+                     << global_label_voxel.label
+                     << " which is not in the given "
+                        "list of labels to retrieve.";
         }
         continue;
       }
@@ -614,8 +613,6 @@ void Controller::extractAllSegmentLayers(
 
       if (!tsdf_block) {
         tsdf_block = tsdf_layer.allocateBlockPtrByIndex(block_index);
-        CHECK(!label_block) << "Label block was allocated although tsdf block "
-                               "was not. Should not happen!";
         label_block = label_layer.allocateBlockPtrByIndex(block_index);
       }
       CHECK(tsdf_block);
@@ -631,22 +628,6 @@ void Controller::extractAllSegmentLayers(
       label_voxel = global_label_voxel;
     }
   }
-}
-
-void Controller::extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
-                                      Layer<LabelVoxel>* label_layer) {
-  CHECK_NOTNULL(tsdf_layer);
-  CHECK_NOTNULL(label_layer);
-  std::unordered_map<Label, LayerPair> label_to_layers;
-  std::vector<Label> label_vector = {label};
-  constexpr bool kIsLabelsListComplete = false;
-  extractAllSegmentLayers(label_vector, &label_to_layers, false);
-
-  auto it = label_to_layers.find(label);
-  CHECK(it != label_to_layers.end()) << "The label " << label
-                                     << "does not exist in the gsm.";
-  *tsdf_layer = it->second.first;
-  *label_layer = it->second.second;
 }
 
 bool Controller::lookupTransform(const std::string& from_frame,
@@ -699,8 +680,8 @@ bool Controller::publishObjects(const bool publish_all) {
 
   for (const Label& label : *labels_to_publish_ptr) {
     auto it = label_to_layers.find(label);
-    CHECK(it != label_to_layers.end()) << "Label not found: " << label
-                                       << "This should not happen.";
+    CHECK(it != label_to_layers.end()) << "Layers for " << label
+                                       << "could not be extracted.";
 
     Layer<TsdfVoxel>& tsdf_layer = it->second.first;
     Layer<LabelVoxel>& label_layer = it->second.second;

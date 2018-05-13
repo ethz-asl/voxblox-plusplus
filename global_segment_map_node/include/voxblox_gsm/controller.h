@@ -96,9 +96,6 @@ class Controller {
       std::unordered_map<Label, LayerPair>* label_layers_map,
       bool labels_list_is_complete = true);
 
-  void extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
-                            Layer<LabelVoxel>* label_layer);
-
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
                        Transformation* transform);
