@@ -18,7 +18,7 @@ SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
   node_handle_private_->param<float>("sliding_window/radius", window_radius_,
                                      window_radius_);
   node_handle_private_->param<float>("sliding_window/update_fraction",
-                                     update_fraction_, update_fraction_)
+                                     update_fraction_, update_fraction_);
 }
 
 void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
