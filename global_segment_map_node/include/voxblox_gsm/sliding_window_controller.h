@@ -85,6 +85,7 @@ class SlidingWindowController : public Controller {
   Point current_window_position_point_;
   std::vector<Label> removed_segments_;
   float window_radius_ = 1.0f;
+  float update_fraction_ = 0.5f;
   bool window_has_moved_first_time_ = false;
 };
 }  // namespace voxblox_gsm
