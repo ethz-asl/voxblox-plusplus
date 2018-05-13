@@ -14,8 +14,11 @@ SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
   ros::Duration period(update_period);
   tf_check_timer_ = node_handle_private_->createTimer(
       period, &SlidingWindowController::checkTfCallback, this);
+
   node_handle_private_->param<float>("sliding_window/radius", window_radius_,
                                      window_radius_);
+  node_handle_private_->param<float>("sliding_window/update_fraction",
+                                     update_fraction_, update_fraction_)
 }
 
 void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
@@ -66,7 +69,7 @@ void SlidingWindowController::extractSegmentLayers(
     *label_layers_map = label_to_layers_;
   } else {
     Controller::extractSegmentLayers(labels, label_layers_map,
-                                        labels_list_is_complete);
+                                     labels_list_is_complete);
   }
 }
 
