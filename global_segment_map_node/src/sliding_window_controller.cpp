@@ -89,7 +89,7 @@ void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
       tf_transform.getOrigin().distance(current_window_position_.getOrigin());
   LOG(WARNING) << "distance " << distance;
 
-  if (distance > window_radius_ / 2.0 ||
+  if (distance > window_radius_ * update_fraction_ ||
       (time_since_last_update.toSec() > kTimeout &&
        window_has_moved_first_time_)) {
     window_has_moved_first_time_ = true;
@@ -113,7 +113,7 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
   publishSceneCallback(req, res);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
-  LOG(WARNING) << "Publishing took " << duration << "s";
+  LOG(WARNING) << "Publishing took " << duration.toSec() << "s";
 }
 
 void SlidingWindowController::getCurrentPosition(
