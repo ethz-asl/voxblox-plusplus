@@ -23,7 +23,8 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
   removed_segments_.clear();
   std::vector<Label> all_labels = integrator_->getLabelsList();
   label_to_layers_.clear();
-  extractAllSegmentLayers(all_labels, &label_to_layers_);
+  constexpr bool kLabelsListIsComlete = true;
+  extractSegmentLayers(all_labels, &label_to_layers_, kLabelsListIsComlete);
 
   for (const Label& label : all_labels) {
     auto it = label_to_layers_.find(label);
@@ -57,14 +58,14 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
   }
 }
 
-void SlidingWindowController::extractAllSegmentLayers(
+void SlidingWindowController::extractSegmentLayers(
     const std::vector<Label>& labels,
     std::unordered_map<Label, LayerPair>* label_layers_map,
     bool labels_list_is_complete) {
   if (!label_to_layers_.empty()) {
     *label_layers_map = label_to_layers_;
   } else {
-    Controller::extractAllSegmentLayers(labels, label_layers_map,
+    Controller::extractSegmentLayers(labels, label_layers_map,
                                         labels_list_is_complete);
   }
 }
