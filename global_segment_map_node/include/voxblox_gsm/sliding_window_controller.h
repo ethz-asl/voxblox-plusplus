@@ -19,10 +19,10 @@ class SlidingWindowController : public Controller {
    * @param label_layers_map
    * @param labels_list_is_complete
    */
-  void extractAllSegmentLayers(
+  void extractSegmentLayers(
       const std::vector<Label>& labels,
       std::unordered_map<Label, LayerPair>* label_layers_map,
-      bool labels_list_is_complete = true) override;
+      bool labels_list_is_complete = false) override;
 
  private:
   /**
