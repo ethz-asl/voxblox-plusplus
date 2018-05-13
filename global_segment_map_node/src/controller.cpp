@@ -532,7 +532,8 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 
   std::unordered_map<Label, LayerPair> label_to_layers;
   // Extract the TSDF and label layers corresponding to a segment.
-  extractAllSegmentLayers(labels, &label_to_layers);
+  constexpr bool kLabelsListIsComplete = true;
+  extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
 
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
@@ -561,7 +562,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   return true;
 }
 
-void Controller::extractAllSegmentLayers(
+void Controller::extractSegmentLayers(
     const std::vector<Label>& labels,
     std::unordered_map<Label, LayerPair>* label_layers_map,
     bool labels_list_is_complete) {
@@ -672,8 +673,10 @@ bool Controller::publishObjects(const bool publish_all) {
   }
 
   std::unordered_map<Label, LayerPair> label_to_layers;
+  constexpr bool kLabelsListIsComplete = true;
   ros::Time start = ros::Time::now();
-  extractAllSegmentLayers(*labels_to_publish_ptr, &label_to_layers);
+  extractSegmentLayers(*labels_to_publish_ptr, &label_to_layers,
+                       kLabelsListIsComplete);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
   LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";

@@ -91,10 +91,10 @@ class Controller {
    * labels. false if \labels is only a subset of all labels contained by the
    * gsm.
    */
-  void extractAllSegmentLayers(
-      const std::vector<Label>& labels,
-      std::unordered_map<Label, LayerPair>* label_layers_map,
-      bool labels_list_is_complete = true);
+  void extractSegmentLayers(
+      const std::vector<Label> &labels,
+      std::unordered_map<Label, LayerPair> *label_layers_map,
+      bool labels_list_is_complete = false);
 
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
