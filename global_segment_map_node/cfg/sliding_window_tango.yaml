@@ -20,9 +20,9 @@ max_ray_length_m: 2.5
 sliding_window:
   is_on: true
   removed_segment_label_topic: removed_segment_label
-  radius: 1.0
-  tf_check_t: 1.0
-  update_fraction: 0.25 # between 0 and 1
+  radius: 2.0
+  tf_check_t: 0.5
+  update_fraction: 0.5 # between 0 and 1
 
 save_scene_mesh: false
 publish_all_segments: true
