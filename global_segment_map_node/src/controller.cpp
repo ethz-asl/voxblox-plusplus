@@ -483,11 +483,17 @@ bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
     constexpr bool kClearMesh = true;
     generateMesh(kClearMesh);
   }
+  ros::Time start = ros::Time::now();
   publishScene();
+  ros::Time stop = ros::Time::now();
+  LOG (WARNING) << "Scene publishing took " << (stop -start).toSec() << "s";
   bool publish_all_segments = true;
   node_handle_private_->param("publish_all_segments", publish_all_segments,
                               publish_all_segments);
+  start = ros::Time::now();
   publishObjects(publish_all_segments);
+  stop = ros::Time::now();
+  LOG(WARNING) << "Object publishing took " << (stop - start).toSec() << "s";
   return true;
 }
 
