@@ -38,7 +38,7 @@ class SlidingWindowController : public Controller {
    * certain distance from the current window center. If so, the window is
    * updated.
    */
-  void checkTfCallback(const ros::TimerEvent&);
+  void checkTfCallback(const ros::TimerEvent& ev);
 
   /**
    * Removes segments from the gsm which are outside the ball volume defined

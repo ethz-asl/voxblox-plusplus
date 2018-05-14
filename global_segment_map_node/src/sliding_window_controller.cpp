@@ -73,7 +73,10 @@ void SlidingWindowController::extractSegmentLayers(
   }
 }
 
-void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
+void SlidingWindowController::checkTfCallback(const ros::TimerEvent& ev) {
+  ros::Duration diff = ev.current_real - ev.current_expected;
+  LOG(WARNING) << "tf diff: " << diff.toSec() << "s";
+
   if (!received_first_message_) {
     return;
   }
@@ -100,6 +103,7 @@ void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
     updateAndPublishWindow(current_window_position_point_);
     publishPosition(current_window_position_point_);
   }
+  LOG(WARNING) << "Done tf check";
 }
 
 void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
