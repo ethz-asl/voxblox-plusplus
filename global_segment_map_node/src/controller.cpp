@@ -243,6 +243,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
                                       no_update_timeout_);
 
   ros::spinOnce();
+  node_start_time_ = ros::Time::now();
 }
 
 Controller::~Controller() {}
@@ -349,6 +350,7 @@ void Controller::advertiseExtractSegmentsService(
 
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
+  ros::Time start = ros::Time::now();
   // Message timestamps are used to detect when all
   // segment messages from a certain frame have arrived.
   // Since segments from the same frame all have the same timestamp,
@@ -467,6 +469,8 @@ void Controller::segmentPointCloudCallback(
 
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
   }
+  ros::Time stop = ros::Time::now();
+  segments_time_ += stop - start;
 }
 
 bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,

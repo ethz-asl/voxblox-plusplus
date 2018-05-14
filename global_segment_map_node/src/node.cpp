@@ -23,7 +23,7 @@ int main(int argc, char** argv) {
 
   voxblox::voxblox_gsm::Controller* controller;
   if (sliding_window) {
-    LOG(INFO) << "SLDIING WINDOW GSM";
+    LOG(INFO) << "SLIDING WINDOW GSM";
     controller =
         new voxblox::voxblox_gsm::SlidingWindowController(&node_handle_private);
   } else {

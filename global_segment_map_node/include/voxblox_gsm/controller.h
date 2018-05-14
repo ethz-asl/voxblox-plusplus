@@ -149,6 +149,11 @@ class Controller {
   std::vector<Label> segment_labels_to_publish_;
 
   std::map<Label, std::set<Label>> merges_to_publish_;
+
+
+  ros::Duration segments_time_;
+  ros::Duration tf_check_time_;
+  ros::Time node_start_time_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox
