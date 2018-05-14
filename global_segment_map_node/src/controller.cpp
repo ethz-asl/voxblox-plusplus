@@ -540,8 +540,8 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     CHECK(it != label_to_layers.end()) << "Layers for label " << label
                                        << "could not be extracted.";
 
-    Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
-    Layer<LabelVoxel>& segment_label_layer = it->second.second;
+    const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+    const Layer<LabelVoxel>& segment_label_layer = it->second.second;
 
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
