@@ -58,7 +58,7 @@ class SlidingWindowController : public Controller {
    * Publishes position of new sliding window. Useful for debugging or display.
    * @param position
    */
-  void publishPosition(const Point& position);
+  void publishWindowTrajectory(const Point &position);
 
   /**
    * Calls base method and adds the position of the sliding window to the
@@ -78,7 +78,6 @@ class SlidingWindowController : public Controller {
   void getLabelsToPublish(std::vector<Label>* labels, bool get_all) override;
 
   ros::Timer tf_check_timer_;
-  tf::TransformBroadcaster position_broadcaster_;
   tf::StampedTransform current_window_position_;
 
   std::unordered_map<Label, LayerPair> label_to_layers_;
@@ -87,6 +86,9 @@ class SlidingWindowController : public Controller {
   float window_radius_ = 1.0f;
   float update_fraction_ = 0.5f;
   bool window_has_moved_first_time_ = false;
+  std::vector<geometry_msgs::PoseStamped> window_trajectory_;
+
+  ros::Publisher trajectory_publisher_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox

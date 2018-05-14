@@ -1,6 +1,7 @@
 #include "voxblox_gsm/sliding_window_controller.h"
 
 #include <minkindr_conversions/kindr_tf.h>
+#include <nav_msgs/Path.h>
 #include <std_msgs/builtin_uint32.h>
 
 namespace voxblox {
@@ -19,6 +20,9 @@ SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
                                      window_radius_);
   node_handle_private_->param<float>("sliding_window/update_fraction",
                                      update_fraction_, update_fraction_);
+
+  trajectory_publisher_ =
+      node_handle_private_->advertise<nav_msgs::Path>("window_trajectory", 200);
 }
 
 void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
@@ -102,15 +106,16 @@ void SlidingWindowController::checkTfCallback(const ros::TimerEvent& ev) {
     tf::transformTFToKindr(tf_transform, &kindr_transform);
     current_window_position_point_ = kindr_transform.getPosition();
     updateAndPublishWindow(current_window_position_point_);
-    publishPosition(current_window_position_point_);
+    publishWindowTrajectory(current_window_position_point_);
   }
   LOG(WARNING) << "Done tf check";
   ros::Time stop = ros::Time::now();
   tf_check_time_ += stop - start;
-
+  LOG(WARNING) << "tf check took: " << (stop - start).toSec() << "s";
   LOG(WARNING) << "total time tf check: " << tf_check_time_.toSec() << "s";
   LOG(WARNING) << "total time segments: " << segments_time_.toSec() << "s";
-  LOG(WARNING) << "total time passed: " << (stop - node_start_time_).toSec() << "s";
+  LOG(WARNING) << "total time passed: " << (stop - node_start_time_).toSec()
+               << "s";
 }
 
 void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
@@ -151,16 +156,19 @@ void SlidingWindowController::publishGsmUpdate(
   Controller::publishGsmUpdate(publisher, gsm_update);
 }
 
-void SlidingWindowController::publishPosition(const Point& position) {
+void SlidingWindowController::publishWindowTrajectory(const Point& position) {
   // Publish position.
-  tf::StampedTransform tf;
-  tf::Vector3 translation;
-  translation.setX(position(0));
-  translation.setY(position(1));
-  translation.setZ(position(2));
-  tf.setOrigin(translation);
-  position_broadcaster_.sendTransform(
-      tf::StampedTransform(tf, ros::Time::now(), "world", "sliding_window"));
+  geometry_msgs::PoseStamped pose;
+  pose.header.frame_id = "world";
+  pose.pose.position.x = position(0);
+  pose.pose.position.y = position(1);
+  pose.pose.position.z = position(2);
+  window_trajectory_.push_back(pose);
+
+  nav_msgs::Path msg;
+  msg.poses = window_trajectory_;
+  msg.header.frame_id = "world";
+  trajectory_publisher_.publish(msg);
 }
 
 void SlidingWindowController::getLabelsToPublish(std::vector<Label>* labels,
