@@ -74,6 +74,7 @@ void SlidingWindowController::extractSegmentLayers(
 }
 
 void SlidingWindowController::checkTfCallback(const ros::TimerEvent& ev) {
+  ros::Time start = ros::Time::now();
   ros::Duration diff = ev.current_real - ev.current_expected;
   LOG(WARNING) << "tf diff: " << diff.toSec() << "s";
 
@@ -104,6 +105,12 @@ void SlidingWindowController::checkTfCallback(const ros::TimerEvent& ev) {
     publishPosition(current_window_position_point_);
   }
   LOG(WARNING) << "Done tf check";
+  ros::Time stop = ros::Time::now();
+  tf_check_time_ += stop - start;
+
+  LOG(WARNING) << "total time tf check: " << tf_check_time_.toSec() << "s";
+  LOG(WARNING) << "total time segments: " << segments_time_.toSec() << "s";
+  LOG(WARNING) << "total time passed: " << (stop - node_start_time_).toSec() << "s";
 }
 
 void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
