@@ -23,6 +23,8 @@
 namespace voxblox {
 namespace voxblox_gsm {
 
+typedef std::pair<Layer<TsdfVoxel>, Layer<LabelVoxel>> LayerPair;
+
 class Controller {
  public:
   Controller(ros::NodeHandle* node_handle);
@@ -80,8 +82,19 @@ class Controller {
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
 
-  void extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
-                            Layer<LabelVoxel>* label_layer);
+  /**
+   * Extracts separate tsdf and label layers from the gsm, for every given
+   * label.
+   * @param labels of segments to extract
+   * @param label_layers_map output map
+   * @param labels_list_is_complete true if the gsm does not contain other
+   * labels. false if \labels is only a subset of all labels contained by the
+   * gsm.
+   */
+  void extractSegmentLayers(
+      const std::vector<Label> &labels,
+      std::unordered_map<Label, LayerPair> *label_layers_map,
+      bool labels_list_is_complete = false);
 
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
