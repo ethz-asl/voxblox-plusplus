@@ -41,11 +41,11 @@ class SlidingWindowController : public Controller {
   void updateAndPublishWindow(const Point& new_center);
 
   /**
-   * Called by the timer. Checks whether the camera has moved more than a
+   * Checks whether the camera has moved more than a
    * certain distance from the current window center. If so, the window is
    * updated.
    */
-  void checkTfCallback(const ros::TimerEvent&);
+  void checkTfCallback();
 
   /**
    * Removes segments from the gsm which are outside the ball volume defined
@@ -84,7 +84,6 @@ class SlidingWindowController : public Controller {
    */
   void getLabelsToPublish(std::vector<Label>* labels, bool get_all) override;
 
-  ros::Timer tf_check_timer_;
   tf::StampedTransform current_window_position_;
 
   std::unordered_map<Label, LayerPair> label_to_layers_;

@@ -9,13 +9,6 @@ namespace voxblox_gsm {
 
 SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
     : Controller(node_handle) {
-  double update_period = 1.0;
-  node_handle_private_->param("sliding_window/tf_check_t", update_period,
-                              update_period);
-  ros::Duration period(update_period);
-  tf_check_timer_ = node_handle_private_->createTimer(
-      period, &SlidingWindowController::checkTfCallback, this);
-
   node_handle_private_->param<float>("sliding_window/radius", window_radius_,
                                      window_radius_);
   node_handle_private_->param<float>("sliding_window/update_fraction",
@@ -77,7 +70,7 @@ void SlidingWindowController::extractSegmentLayers(
   }
 }
 
-void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
+void SlidingWindowController::checkTfCallback() {
   if (!received_first_message_) {
     return;
   }
@@ -171,8 +164,13 @@ void SlidingWindowController::getLabelsToPublish(std::vector<Label>* labels,
 void SlidingWindowController::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   Controller::segmentPointCloudCallback(segment_point_cloud_msg);
-  time_last_processed_segment_ = segment_point_cloud_msg->header.stamp;
-  checkTfCallback(ros::TimerEvent());
+
+  // update sliding window if necessary
+  const ros::Time& current_stamp = segment_point_cloud_msg->header.stamp;
+  if (current_stamp != time_last_processed_segment_) {
+    checkTfCallback();
+    time_last_processed_segment_ = current_stamp;
+  }
 }
 
 }  // namespace voxblox_gsm
