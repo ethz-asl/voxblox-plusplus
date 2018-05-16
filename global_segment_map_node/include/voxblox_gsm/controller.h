@@ -66,7 +66,7 @@ class Controller {
   double no_update_timeout_;
 
  protected:
-  void segmentPointCloudCallback(
+  virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
   virtual bool publishSceneCallback(std_srvs::Empty::Request& request,
@@ -149,11 +149,6 @@ class Controller {
   std::vector<Label> segment_labels_to_publish_;
 
   std::map<Label, std::set<Label>> merges_to_publish_;
-
-
-  ros::Duration segments_time_;
-  ros::Duration tf_check_time_;
-  ros::Time node_start_time_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox

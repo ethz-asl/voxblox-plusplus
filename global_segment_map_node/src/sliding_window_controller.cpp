@@ -108,14 +108,8 @@ void SlidingWindowController::checkTfCallback(const ros::TimerEvent& ev) {
     updateAndPublishWindow(current_window_position_point_);
     publishWindowTrajectory(current_window_position_point_);
   }
-  LOG(WARNING) << "Done tf check";
   ros::Time stop = ros::Time::now();
-  tf_check_time_ += stop - start;
   LOG(WARNING) << "tf check took: " << (stop - start).toSec() << "s";
-  LOG(WARNING) << "total time tf check: " << tf_check_time_.toSec() << "s";
-  LOG(WARNING) << "total time segments: " << segments_time_.toSec() << "s";
-  LOG(WARNING) << "total time passed: " << (stop - node_start_time_).toSec()
-               << "s";
 }
 
 void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
@@ -177,6 +171,13 @@ void SlidingWindowController::getLabelsToPublish(std::vector<Label>* labels,
   for (const Label& label : removed_segments_) {
     labels->erase(std::remove(labels->begin(), labels->end(), label));
   }
+}
+
+void SlidingWindowController::segmentPointCloudCallback(
+    const sensor_msgs::PointCloud2::Ptr &segment_point_cloud_msg) {
+
+  Controller::segmentPointCloudCallback(segment_point_cloud_msg);
+  checkTfCallback(ros::TimerEvent());
 }
 
 }  // namespace voxblox_gsm
