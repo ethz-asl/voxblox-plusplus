@@ -26,6 +26,13 @@ class SlidingWindowController : public Controller {
 
  private:
   /**
+   * Additional to calling the base class method, which integrates the pcl
+   * segments into the gsm, at the end the checkTfCallback is triggered as well.
+   * @param segment_point_cloud_msg
+   */
+  void segmentPointCloudCallback(
+      const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) override;
+  /**
    * Sets the sliding window to the new position, removes segments which are
    * completely outide of its volume and publishes the remaining scene and
    * segments.
