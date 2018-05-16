@@ -45,7 +45,7 @@ class SlidingWindowController : public Controller {
    * certain distance from the current window center. If so, the window is
    * updated.
    */
-  void checkTfCallback(const ros::TimerEvent& ev);
+  void checkTfCallback(const ros::TimerEvent&);
 
   /**
    * Removes segments from the gsm which are outside the ball volume defined
@@ -96,6 +96,7 @@ class SlidingWindowController : public Controller {
   std::vector<geometry_msgs::PoseStamped> window_trajectory_;
 
   ros::Publisher trajectory_publisher_;
+  ros::Time time_last_processed_segment_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox
