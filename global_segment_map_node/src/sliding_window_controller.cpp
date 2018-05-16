@@ -77,64 +77,59 @@ void SlidingWindowController::extractSegmentLayers(
   }
 }
 
-void SlidingWindowController::checkTfCallback(const ros::TimerEvent& ev) {
-  ros::Time start = ros::Time::now();
-  ros::Duration diff = ev.current_real - ev.current_expected;
-  LOG(WARNING) << "tf diff: " << diff.toSec() << "s";
-
+void SlidingWindowController::checkTfCallback(const ros::TimerEvent&) {
   if (!received_first_message_) {
     return;
   }
 
-  tf::StampedTransform tf_transform;
-  getCurrentPosition(&tf_transform);
+  tf::StampedTransform T_G_C;
+  getCurrentPosition(&T_G_C);
 
   constexpr double kTimeout = 20.0;
   ros::Duration time_since_last_update =
-      tf_transform.stamp_ - current_window_position_.stamp_;
+      T_G_C.stamp_ - current_window_position_.stamp_;
 
   tfScalar distance =
-      tf_transform.getOrigin().distance(current_window_position_.getOrigin());
-  LOG(WARNING) << "distance " << distance;
+      T_G_C.getOrigin().distance(current_window_position_.getOrigin());
+  LOG(WARNING) << "Distance between camera and center of sliding window: "
+               << distance;
 
   if (distance > window_radius_ * update_fraction_ ||
       (time_since_last_update.toSec() > kTimeout &&
        window_has_moved_first_time_)) {
     window_has_moved_first_time_ = true;
-    current_window_position_ = tf_transform;
+    current_window_position_ = T_G_C;
+
     Transformation kindr_transform;
-    tf::transformTFToKindr(tf_transform, &kindr_transform);
+    tf::transformTFToKindr(T_G_C, &kindr_transform);
     current_window_position_point_ = kindr_transform.getPosition();
+
     updateAndPublishWindow(current_window_position_point_);
     publishWindowTrajectory(current_window_position_point_);
   }
-  ros::Time stop = ros::Time::now();
-  LOG(WARNING) << "tf check took: " << (stop - start).toSec() << "s";
 }
 
 void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
   LOG(WARNING) << "Update Window";
   removeSegmentsOutsideOfRadius(window_radius_, new_center);
 
+  LOG(INFO) << "Publish scene";
   std_srvs::Empty::Request req;
   std_srvs::Empty::Response res;
-  LOG(INFO) << "Publish scene";
   ros::Time start = ros::Time::now();
   publishSceneCallback(req, res);
   ros::Time stop = ros::Time::now();
-  ros::Duration duration = stop - start;
-  LOG(WARNING) << "Publishing took " << duration.toSec() << "s";
+  LOG(WARNING) << "Publishing took " << (stop - start).toSec() << "s";
 }
 
 void SlidingWindowController::getCurrentPosition(
     tf::StampedTransform* position) {
-  ros::Time time_now = ros::Time(0);
   try {
     tf_listener_.waitForTransform(
-        world_frame_, camera_frame_, time_now,
+        world_frame_, camera_frame_, time_last_processed_segment_,
         ros::Duration(30.0));  // in case rosbag has not been started yet
-    tf_listener_.lookupTransform(world_frame_, camera_frame_, time_now,
-                                 *position);
+    tf_listener_.lookupTransform(world_frame_, camera_frame_,
+                                 time_last_processed_segment_, *position);
   } catch (tf::TransformException& ex) {
     LOG(FATAL) << "Error getting TF transform from sensor data: " << ex.what();
   }
@@ -174,9 +169,9 @@ void SlidingWindowController::getLabelsToPublish(std::vector<Label>* labels,
 }
 
 void SlidingWindowController::segmentPointCloudCallback(
-    const sensor_msgs::PointCloud2::Ptr &segment_point_cloud_msg) {
-
+    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   Controller::segmentPointCloudCallback(segment_point_cloud_msg);
+  time_last_processed_segment_ = segment_point_cloud_msg->header.stamp;
   checkTfCallback(ros::TimerEvent());
 }
 
