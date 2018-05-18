@@ -118,6 +118,12 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
 void SlidingWindowController::getCurrentPosition(
     tf::StampedTransform* position) {
   try {
+    // TODO fix
+    if (!tf_listener_.canTransform(world_frame_, camera_frame_,
+                                   time_last_processed_segment_)) {
+      time_last_processed_segment_ = ros::Time(0);
+      LOG(ERROR) << "Using latest TF transform instead of timestamp match.";
+    }
     tf_listener_.waitForTransform(
         world_frame_, camera_frame_, time_last_processed_segment_,
         ros::Duration(30.0));  // in case rosbag has not been started yet
