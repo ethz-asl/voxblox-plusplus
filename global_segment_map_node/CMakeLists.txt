@@ -18,9 +18,5 @@ target_link_libraries(${PROJECT_NAME}
   ${PROJECT_NAME}_library
 )
 
-cs_add_executable(${PROJECT_NAME}_util
-  src/ros_utils/pose_to_tf_node.cpp
-)
-
 cs_install()
 cs_export()
