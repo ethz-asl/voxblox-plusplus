@@ -56,12 +56,6 @@ class SlidingWindowController : public Controller {
   void removeSegmentsOutsideOfRadius(float radius, Point center);
 
   /**
-   * Looks up current transform of camera
-   * @param position output transform
-   */
-  void getCurrentPosition(tf::StampedTransform* position);
-
-  /**
    * Publishes position of new sliding window. Useful for debugging or display.
    * @param position
    */
@@ -84,14 +78,12 @@ class SlidingWindowController : public Controller {
    */
   void getLabelsToPublish(std::vector<Label>* labels, bool get_all) override;
 
-  tf::StampedTransform current_window_position_;
+  Transformation current_window_position_;
 
   std::unordered_map<Label, LayerPair> label_to_layers_;
-  Point current_window_position_point_;
   std::vector<Label> removed_segments_;
   float window_radius_ = 1.0f;
   float update_fraction_ = 0.5f;
-  bool window_has_moved_first_time_ = false;
   std::vector<geometry_msgs::PoseStamped> window_trajectory_;
 
   ros::Publisher trajectory_publisher_;
