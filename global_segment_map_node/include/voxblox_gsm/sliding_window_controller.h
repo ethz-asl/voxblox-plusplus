@@ -59,7 +59,7 @@ class SlidingWindowController : public Controller {
    * Publishes position of new sliding window. Useful for debugging or display.
    * @param position
    */
-  void publishWindowTrajectory(const Point &position);
+  void publishWindowTrajectory(const Point& position);
 
   /**
    * Calls base method and adds the position of the sliding window to the
