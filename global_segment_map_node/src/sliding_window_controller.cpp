@@ -79,11 +79,10 @@ void SlidingWindowController::checkTfCallback() {
   lookupTransform(camera_frame_, world_frame_, time_last_processed_segment_,
                   &camera_pose);
 
-  float distance =
+  const float distance =
       (camera_pose.getPosition() - current_window_position_.getPosition())
           .norm();
-
-  LOG(WARNING) << "Distance between camera and center of sliding window: "
+  LOG(INFO) << "Distance between camera and center of sliding window: "
                << distance;
 
   if (distance > window_radius_ * update_fraction_) {
