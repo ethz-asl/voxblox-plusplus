@@ -75,30 +75,22 @@ void SlidingWindowController::checkTfCallback() {
     return;
   }
 
-  tf::StampedTransform T_G_C;
-  getCurrentPosition(&T_G_C);
+  Transformation camera_pose;
+  lookupTransform(camera_frame_, world_frame_, time_last_processed_segment_,
+                  &camera_pose);
 
-  constexpr double kTimeout = 20.0;
-  ros::Duration time_since_last_update =
-      T_G_C.stamp_ - current_window_position_.stamp_;
+  float distance =
+      (camera_pose.getPosition() - current_window_position_.getPosition())
+          .norm();
 
-  tfScalar distance =
-      T_G_C.getOrigin().distance(current_window_position_.getOrigin());
   LOG(WARNING) << "Distance between camera and center of sliding window: "
                << distance;
 
-  if (distance > window_radius_ * update_fraction_ ||
-      (time_since_last_update.toSec() > kTimeout &&
-       window_has_moved_first_time_)) {
-    window_has_moved_first_time_ = true;
-    current_window_position_ = T_G_C;
+  if (distance > window_radius_ * update_fraction_) {
+    current_window_position_ = camera_pose;
 
-    Transformation kindr_transform;
-    tf::transformTFToKindr(T_G_C, &kindr_transform);
-    current_window_position_point_ = kindr_transform.getPosition();
-
-    updateAndPublishWindow(current_window_position_point_);
-    publishWindowTrajectory(current_window_position_point_);
+    updateAndPublishWindow(current_window_position_.getPosition());
+    publishWindowTrajectory(current_window_position_.getPosition());
   }
 }
 
@@ -115,31 +107,12 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
   LOG(WARNING) << "Publishing took " << (stop - start).toSec() << "s";
 }
 
-void SlidingWindowController::getCurrentPosition(
-    tf::StampedTransform* position) {
-  try {
-    // TODO fix
-    if (!tf_listener_.canTransform(world_frame_, camera_frame_,
-                                   time_last_processed_segment_)) {
-      time_last_processed_segment_ = ros::Time(0);
-      LOG(ERROR) << "Using latest TF transform instead of timestamp match.";
-    }
-    tf_listener_.waitForTransform(
-        world_frame_, camera_frame_, time_last_processed_segment_,
-        ros::Duration(30.0));  // in case rosbag has not been started yet
-    tf_listener_.lookupTransform(world_frame_, camera_frame_,
-                                 time_last_processed_segment_, *position);
-  } catch (tf::TransformException& ex) {
-    LOG(FATAL) << "Error getting TF transform from sensor data: " << ex.what();
-  }
-}
-
 void SlidingWindowController::publishGsmUpdate(
     const ros::Publisher& publisher, modelify_msgs::GsmUpdate& gsm_update) {
   geometry_msgs::Point point;
-  point.x = current_window_position_point_(0);
-  point.y = current_window_position_point_(1);
-  point.z = current_window_position_point_(2);
+  point.x = current_window_position_.getPosition()(0);
+  point.y = current_window_position_.getPosition()(1);
+  point.z = current_window_position_.getPosition()(2);
   gsm_update.sliding_window_position = point;
   Controller::publishGsmUpdate(publisher, gsm_update);
 }
@@ -147,7 +120,7 @@ void SlidingWindowController::publishGsmUpdate(
 void SlidingWindowController::publishWindowTrajectory(const Point& position) {
   // Publish position.
   geometry_msgs::PoseStamped pose;
-  pose.header.frame_id = "world";
+  pose.header.frame_id = world_frame_;
   pose.pose.position.x = position(0);
   pose.pose.position.y = position(1);
   pose.pose.position.z = position(2);
@@ -155,7 +128,7 @@ void SlidingWindowController::publishWindowTrajectory(const Point& position) {
 
   nav_msgs::Path msg;
   msg.poses = window_trajectory_;
-  msg.header.frame_id = "world";
+  msg.header.frame_id = world_frame_;
   trajectory_publisher_.publish(msg);
 }
 
