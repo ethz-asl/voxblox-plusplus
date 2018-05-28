@@ -19,9 +19,9 @@ max_ray_length_m: 2.5
 
 sliding_window:
   is_on: true
-  radius: 2.0
-  tf_check_t: 0.5
-  update_fraction: 0.5 # between 0 and 1
+  radius_m: 2.0
 
-save_scene_mesh: false
-publish_all_segments: true
+  # Between 0 and 1. As soon as the distance between sliding window and camera
+  # is larger than this fraction times the window radius, the window is updated
+  # and its position is set equal the camera position.
+  update_fraction: 0.5

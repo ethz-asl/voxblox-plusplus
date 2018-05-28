@@ -468,21 +468,16 @@ void Controller::segmentPointCloudCallback(
   }
 }
 
-bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
-                                      std_srvs::Empty::Response& response) {
-  // TODO(SebasRatz) make both parameters arguments of service?
-  bool save_scene_mesh = true;
-  node_handle_private_->param("save_scene_mesh", save_scene_mesh,
-                              save_scene_mesh);
+bool Controller::publishSceneCallback(std_srvs::SetBool::Request& request,
+                                      std_srvs::SetBool::Response& response) {
+  bool save_scene_mesh = request.data;
   if (save_scene_mesh) {
     constexpr bool kClearMesh = true;
     generateMesh(kClearMesh);
   }
   publishScene();
-  bool publish_all_segments = true;
-  node_handle_private_->param("publish_all_segments", publish_all_segments,
-                              publish_all_segments);
-  publishObjects(publish_all_segments);
+  constexpr bool kPublishAllSegments = true;
+  publishObjects(kPublishAllSegments);
   return true;
 }
 
@@ -671,8 +666,6 @@ bool Controller::lookupTransform(const std::string& from_frame,
 bool Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
-  // TODO(ff): Not sure if we want to use this or ros::Time::now();
-
   std::vector<Label> labels_to_publish;
   getLabelsToPublish(&labels_to_publish, publish_all);
 

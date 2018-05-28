@@ -26,8 +26,9 @@ class SlidingWindowController : public Controller {
 
  private:
   /**
-   * Additional to calling the base class method, which integrates the pcl
-   * segments into the gsm, at the end the checkTfCallback is triggered as well.
+   * Calls the base class implementation to integrate point cloud segments into
+   * the GSM. It then also checks the TF using the checkTfCallback, which might
+   * lead to an update of the sliding window.
    * @param segment_point_cloud_msg
    */
   void segmentPointCloudCallback(
@@ -53,7 +54,7 @@ class SlidingWindowController : public Controller {
    * @param radius
    * @param center
    */
-  void removeSegmentsOutsideOfRadius(float radius, Point center);
+  void removeSegmentsOutsideOfRadius(FloatingPoint radius, Point center);
 
   /**
    * Publishes position of new sliding window. Useful for debugging or display.
@@ -82,8 +83,8 @@ class SlidingWindowController : public Controller {
 
   std::unordered_map<Label, LayerPair> label_to_layers_;
   std::vector<Label> removed_segments_;
-  float window_radius_ = 1.0f;
-  float update_fraction_ = 0.5f;
+  FloatingPoint window_radius_ = 1.0f;
+  FloatingPoint update_fraction_ = 0.5f;
   std::vector<geometry_msgs::PoseStamped> window_trajectory_;
 
   ros::Publisher trajectory_publisher_;
