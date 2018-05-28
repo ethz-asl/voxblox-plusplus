@@ -17,7 +17,7 @@
     <remap from="/image_raw" to="$(arg depth_registered_topic)" />
   </node>
 
-  <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="screen">
+  <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="log">
     <remap from="/camera/depth_registered/image_raw" to="$(arg depth_registered_topic)" unless="$(arg dilate_depth)"/>
     <remap from="/camera/depth_registered/image_raw" to="/image_filtered" if="$(arg dilate_depth)"/>
     <remap from="/camera/rgb/image_raw" to="$(arg rgb_topic)" />

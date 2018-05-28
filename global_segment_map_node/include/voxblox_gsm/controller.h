@@ -15,6 +15,7 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <std_srvs/SetBool.h>
 #include <std_srvs/Empty.h>
 #include <tf/transform_listener.h>
 #include <voxblox/io/mesh_ply.h>
@@ -69,8 +70,8 @@ class Controller {
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
-  virtual bool publishSceneCallback(std_srvs::Empty::Request& request,
-                                    std_srvs::Empty::Response& response);
+  virtual bool publishSceneCallback(std_srvs::SetBool::Request& request,
+                                    std_srvs::SetBool::Response& response);
 
   bool validateMergedObjectCallback(
       modelify_msgs::ValidateMergedObject::Request& request,

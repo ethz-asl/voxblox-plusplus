@@ -9,7 +9,7 @@ namespace voxblox_gsm {
 
 SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
     : Controller(node_handle) {
-  node_handle_private_->param<float>("sliding_window/radius", window_radius_,
+  node_handle_private_->param<float>("sliding_window/radius_m", window_radius_,
                                      window_radius_);
   node_handle_private_->param<float>("sliding_window/update_fraction",
                                      update_fraction_, update_fraction_);
@@ -31,8 +31,8 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
     LayerPair& layer_pair = it->second;
 
     // Iterate over all blocks of segment. If one of the blocks is inside the
-    // window radius, the whole segment is valid. Otherwise, the segment is
-    // removed from the gsm
+    // window radius, the whole segment is valid. Otherwise, the blocks
+    // containing the segment are removed from the GSM
     BlockIndexList blocks_of_label;
     layer_pair.first.getAllAllocatedBlocks(&blocks_of_label);
     bool has_block_within_radius = false;
@@ -98,8 +98,10 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
   removeSegmentsOutsideOfRadius(window_radius_, new_center);
 
   LOG(INFO) << "Publish scene";
-  std_srvs::Empty::Request req;
-  std_srvs::Empty::Response res;
+  std_srvs::SetBool::Request req;
+  constexpr bool kCreateMesh = false;
+  req.data = kCreateMesh;
+  std_srvs::SetBool::Response res;
   ros::Time start = ros::Time::now();
   publishSceneCallback(req, res);
   ros::Time stop = ros::Time::now();
