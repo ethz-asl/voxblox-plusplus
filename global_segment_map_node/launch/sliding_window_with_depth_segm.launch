@@ -1,0 +1,18 @@
+<launch>
+	<arg name="slam"/>
+
+	<group if="$(arg slam)">
+        <include file="$(find gsm_node)/launch/rovioli.launch"/>
+        <arg name="tf_imu_depth" default="$(find gsm_node)/cfg/tf_imu_depth.yaml"/>
+	    <node name="rovioli_marker_to_tf" pkg="gsm_node" type="gsm_node_util" output="screen">
+            <rosparam command="load" file="$(arg tf_imu_depth)" />
+		</node>
+	</group>
+
+    <include file="$(find gsm_node)/launch/gsm_with_depth_segmentation.launch">
+        <arg name="sliding_window" default="true"/>
+        <arg if="$(arg slam)" name="camera_frame" value="depth_estimated"/>
+    </include>
+
+</launch>
+
