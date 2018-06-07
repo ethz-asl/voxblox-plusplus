@@ -1,4 +1,18 @@
 <launch>
+      <arg name="slim" default="false"/>
+      <group unless="$(arg slim)">
+            <arg name="tf_imu_depth" default="$(find gsm_node)/cfg/tf_imu_depth.yaml"/>
+            <node name="rovioli_marker_to_tf" pkg="gsm_node" type="gsm_node_util" output="screen">
+                  <rosparam command="load" file="$(arg tf_imu_depth)" />
+            </node>
+
+            <node pkg="hector_trajectory_server" type="hector_trajectory_server" name="hector_trajectory_server" output="screen">
+                  <param name="target_frame_name" type="string" value="/world" />
+                  <param name="source_frame_name" type="string" value="/depth" />
+                  <param name="trajectory_update_rate" type="double" value="4" />
+                  <param name="trajectory_publish_rate" type="double" value="0.25" />
+            </node>
+      </group>
       <node name="rovioli" pkg="rovioli" type="rovioli"
             output="screen" args = "--alsologtostderr=1 --v=2
       --ncamera_calibration=$(find rovioli)/share/ncamera-tango.yaml
