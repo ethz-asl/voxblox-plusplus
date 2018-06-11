@@ -79,7 +79,8 @@ class SlidingWindowController : public Controller {
    */
   void getLabelsToPublish(std::vector<Label>* labels, bool get_all) override;
 
-  Transformation current_window_position_;
+  Transformation current_window_pose_;
+  ros::Time current_window_timestamp_;
 
   std::unordered_map<Label, LayerPair> label_to_layers_;
   std::vector<Label> removed_segments_;

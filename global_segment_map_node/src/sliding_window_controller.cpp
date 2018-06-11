@@ -75,21 +75,23 @@ void SlidingWindowController::checkTfCallback() {
     return;
   }
 
+  // todo get pose timestamp
   Transformation camera_pose;
   lookupTransform(camera_frame_, world_frame_, time_last_processed_segment_,
                   &camera_pose);
 
   const float distance =
-      (camera_pose.getPosition() - current_window_position_.getPosition())
+      (camera_pose.getPosition() - current_window_pose_.getPosition())
           .norm();
   LOG(INFO) << "Distance between camera and center of sliding window: "
                << distance;
 
   if (distance > window_radius_ * update_fraction_) {
-    current_window_position_ = camera_pose;
+    current_window_pose_ = camera_pose;
+    current_window_timestamp_ = time_last_processed_segment_;
 
-    updateAndPublishWindow(current_window_position_.getPosition());
-    publishWindowTrajectory(current_window_position_.getPosition());
+    updateAndPublishWindow(current_window_pose_.getPosition());
+    publishWindowTrajectory(current_window_pose_.getPosition());
   }
 }
 
@@ -110,11 +112,18 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
 
 void SlidingWindowController::publishGsmUpdate(
     const ros::Publisher& publisher, modelify_msgs::GsmUpdate& gsm_update) {
-  geometry_msgs::Point point;
-  point.x = current_window_position_.getPosition()(0);
-  point.y = current_window_position_.getPosition()(1);
-  point.z = current_window_position_.getPosition()(2);
-  gsm_update.sliding_window_position = point;
+  geometry_msgs::PoseStamped pose;
+  pose.pose.position.x = current_window_pose_.getPosition()(0);
+  pose.pose.position.y = current_window_pose_.getPosition()(1);
+  pose.pose.position.z = current_window_pose_.getPosition()(2);
+  pose.pose.orientation.x = current_window_pose_.getRotation().x();
+  pose.pose.orientation.y = current_window_pose_.getRotation().y();
+  pose.pose.orientation.z = current_window_pose_.getRotation().z();
+  pose.pose.orientation.w = current_window_pose_.getRotation().w();
+  pose.header.frame_id = "world";
+  pose.header.stamp = current_window_timestamp_;
+
+  gsm_update.sliding_window_pose = pose;
   Controller::publishGsmUpdate(publisher, gsm_update);
 }
 
