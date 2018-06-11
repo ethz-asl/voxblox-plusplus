@@ -25,8 +25,8 @@ class PoseToTfNode {
 
   std::string world_frame_ = "world";
   std::string map_frame_ = "map";
+  std::string imu_estimated_frame_ = "imu_estimated";
   std::string depth_estimated_frame_ = "depth_estimated";
-  tf::Transform T_I_D;
 };
 
 PoseToTfNode::PoseToTfNode(ros::NodeHandle& node_handle)
@@ -36,15 +36,24 @@ PoseToTfNode::PoseToTfNode(ros::NodeHandle& node_handle)
   node_handle_.getParam("/rovioli_marker_to_tf/T_I_D/quaternion", rotation);
   node_handle_.getParam("/rovioli_marker_to_tf/T_I_D/translation_m", translation);
 
-  tf::Quaternion rot(rotation[0], rotation[1], rotation[2], rotation[3]);
-  tf::Vector3 trans(translation[0], translation[1], translation[2]);
-  T_I_D.setRotation(rot);
-  T_I_D.setOrigin(trans);
-
   std::string topic = "/maplab_rovio/T_G_I";
   node_handle.param<std::string>("/pose_to_tf/pose_topic", topic, topic);
   markers_sub =
       node_handle_.subscribe(topic, 2000, &PoseToTfNode::newPoseCallback, this);
+
+  tf::Quaternion rot(rotation[0], rotation[1], rotation[2], rotation[3]);
+  tf::Vector3 trans(translation[0], translation[1], translation[2]);
+  geometry_msgs::TransformStamped tf_imu_depth;
+  tf_imu_depth.transform.rotation.x = rot.x();
+  tf_imu_depth.transform.rotation.y = rot.y();
+  tf_imu_depth.transform.rotation.z = rot.z();
+  tf_imu_depth.transform.rotation.w = rot.w();
+  tf_imu_depth.transform.translation.x = trans.x();
+  tf_imu_depth.transform.translation.y = trans.y();
+  tf_imu_depth.transform.translation.z = trans.z();
+  tf_imu_depth.header.frame_id = imu_estimated_frame_;
+  tf_imu_depth.child_frame_id = depth_estimated_frame_;
+  tf_static.sendTransform(tf_imu_depth);
 
   geometry_msgs::TransformStamped tf_world_map;
   tf_world_map.transform.translation.x = 0;
@@ -62,24 +71,13 @@ PoseToTfNode::PoseToTfNode(ros::NodeHandle& node_handle)
 void PoseToTfNode::newPoseCallback(const geometry_msgs::PoseStamped& pose_msg) {
   tf::StampedTransform T_W_I;
   PoseStampedToTransformStamped(pose_msg, &T_W_I);
-  tf::Transform T_W_D;
-  T_W_D = T_W_I * T_I_D;
-
-  tf::StampedTransform T_W_D_msg;
-  T_W_D_msg.setData(T_W_D);
-  T_W_D_msg.frame_id_ = world_frame_;
-  T_W_D_msg.child_frame_id_ = depth_estimated_frame_;
-  T_W_D_msg.stamp_ = T_W_I.stamp_;
-
-  tf_broadcaster.sendTransform(T_W_D_msg);
-
+  tf_broadcaster.sendTransform(T_W_I);
 }
 
 void PoseToTfNode::PoseStampedToTransformStamped(
     const geometry_msgs::PoseStamped& pose, tf::StampedTransform* tf) {
-  tf->child_frame_id_ = depth_estimated_frame_;
+  tf->child_frame_id_ = imu_estimated_frame_;
   tf->frame_id_ = pose.header.frame_id;
-  LOG(WARNING) << "FRAME POSE MSG" << pose.header.frame_id;
   tf->stamp_ = pose.header.stamp;
   tf->setRotation(
       tf::Quaternion(pose.pose.orientation.x, pose.pose.orientation.y,
