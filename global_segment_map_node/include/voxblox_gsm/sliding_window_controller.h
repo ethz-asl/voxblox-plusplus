@@ -87,6 +87,7 @@ class SlidingWindowController : public Controller {
   FloatingPoint window_radius_ = 1.0f;
   FloatingPoint update_fraction_ = 0.5f;
   std::vector<geometry_msgs::PoseStamped> window_trajectory_;
+  std::string imu_frame_ = "imu";
 
   ros::Publisher trajectory_publisher_;
   ros::Time time_last_processed_segment_;
