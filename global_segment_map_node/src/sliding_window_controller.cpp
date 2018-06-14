@@ -13,6 +13,8 @@ SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
                                      window_radius_);
   node_handle_private_->param<float>("sliding_window/update_fraction",
                                      update_fraction_, update_fraction_);
+  node_handle_private_->param<std::string()>("sliding_window/imu_frame",
+                                             imu_frame_, imu_frame_);
 
   trajectory_publisher_ =
       node_handle_private_->advertise<nav_msgs::Path>("window_trajectory", 200);
@@ -77,14 +79,13 @@ void SlidingWindowController::checkTfCallback() {
 
   // todo get pose timestamp
   Transformation camera_pose;
-  lookupTransform(camera_frame_, world_frame_, time_last_processed_segment_,
+  lookupTransform(imu_frame_, world_frame_, time_last_processed_segment_,
                   &camera_pose);
 
   const float distance =
-      (camera_pose.getPosition() - current_window_pose_.getPosition())
-          .norm();
+      (camera_pose.getPosition() - current_window_pose_.getPosition()).norm();
   LOG(INFO) << "Distance between camera and center of sliding window: "
-               << distance;
+            << distance;
 
   if (distance > window_radius_ * update_fraction_) {
     current_window_pose_ = camera_pose;

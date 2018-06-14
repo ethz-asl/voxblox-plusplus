@@ -5,6 +5,7 @@
     <include file="$(find gsm_node)/launch/gsm_with_depth_segmentation.launch">
         <arg name="sliding_window" default="true"/>
         <arg if="$(arg slam)" name="camera_frame" value="depth_estimated"/>
+        <arg if="$(arg slam)" name="sliding_window/imu_frame" value="imu_estimated"/>
     </include>
 
 </launch>
