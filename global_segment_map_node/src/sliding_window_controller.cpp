@@ -13,7 +13,7 @@ SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
                                      window_radius_);
   node_handle_private_->param<float>("sliding_window/update_fraction",
                                      update_fraction_, update_fraction_);
-  node_handle_private_->param<std::string()>("sliding_window/imu_frame",
+  node_handle_private_->param<std::string>("sliding_window/imu_frame",
                                              imu_frame_, imu_frame_);
 
   trajectory_publisher_ =
