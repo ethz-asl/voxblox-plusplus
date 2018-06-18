@@ -26,12 +26,14 @@
   </node>
 
   <arg name="sliding_window" default="false"/>
+  <arg name="imu_frame" default="imu"/>
   <arg if="$(arg sliding_window)" name="gsm_node_params_name" default="$(find gsm_node)/cfg/sliding_window_tango.yaml"/>
   <arg if="$(arg sliding_window)" name="camera_frame" default="depth"/>
   <arg unless="$(arg sliding_window)" name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
 
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="log">
     <rosparam command="load" file="$(arg gsm_node_params_name)" />
     <param if="$(arg sliding_window)" name="camera_frame_id" value="$(arg camera_frame)"/>
+    <param if="$(arg sliding_window)" name="sliding_window/imu_frame" value="$(arg imu_frame)"/>
   </node>
 </launch>
