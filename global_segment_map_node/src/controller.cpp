@@ -670,10 +670,8 @@ bool Controller::publishObjects(const bool publish_all) {
   getLabelsToPublish(&labels_to_publish, publish_all);
 
   std::unordered_map<Label, LayerPair> label_to_layers;
-  constexpr bool kLabelsListIsComplete = true;
   ros::Time start = ros::Time::now();
-  extractSegmentLayers(labels_to_publish, &label_to_layers,
-                       kLabelsListIsComplete);
+  extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
   LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";

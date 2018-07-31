@@ -22,7 +22,7 @@ cs_add_library(${PROJECT_NAME}_utils_library
   src/sliding_window_controller.cpp
 )
 cs_add_executable(${PROJECT_NAME}_util
-  src/ros_utils/pose_to_tf_node.cpp
+  src/pose_to_tf_node.cpp
 )
 target_link_libraries(${PROJECT_NAME}_util
   ${PROJECT_NAME}_utils_library
