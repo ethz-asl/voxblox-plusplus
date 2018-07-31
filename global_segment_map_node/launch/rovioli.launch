@@ -19,7 +19,7 @@
       --imu_parameters_maplab=$(find rovioli)/share/imu-tango.yaml
       --imu_parameters_rovio=$(find rovioli)/share/imu-sigmas-rovio.yaml
       --datasource_type=rostopic
-      --save_map_folder=/home/sebastian/Desktop/rovioli_map
+      --save_map_folder=/tmp/rovioli_map
       --map_builder_save_image_as_resources=false
       --optimize_map_to_localization_map=false" />
 </launch>
