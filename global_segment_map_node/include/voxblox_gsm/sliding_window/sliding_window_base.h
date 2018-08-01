@@ -1,15 +1,15 @@
-#ifndef VOXBLOX_GSM_SLIDING_WINDOW_CONTROLLER_H
-#define VOXBLOX_GSM_SLIDING_WINDOW_CONTROLLER_H
+#ifndef VOXBLOX_GSM_SLIDING_WINDOW_SLIDING_WINDOW_BASE_H
+#define VOXBLOX_GSM_SLIDING_WINDOW_SLIDING_WINDOW_BASE_H
 
-#include "controller.h"
+#include "voxblox_gsm/controller.h"
 
 #include <tf/transform_broadcaster.h>
 
 namespace voxblox {
 namespace voxblox_gsm {
-class SlidingWindowController : public Controller {
+class SlidingWindowBase : public Controller {
  public:
-  explicit SlidingWindowController(ros::NodeHandle* node_handle);
+  explicit SlidingWindowBase(ros::NodeHandle* node_handle);
 
   /**
    * Checks whether the segments have already been extracted for the current
@@ -24,37 +24,32 @@ class SlidingWindowController : public Controller {
       std::unordered_map<Label, LayerPair>* label_layers_map,
       bool labels_list_is_complete = false) override;
 
- private:
+ protected:
   /**
    * Calls the base class implementation to integrate point cloud segments into
-   * the GSM. It then also checks the TF using the checkTfCallback, which might
-   * lead to an update of the sliding window.
+   * the GSM. It then also checks whether a window update is necessary. If true,
+   * the update is performed.
    * @param segment_point_cloud_msg
    */
   void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) override;
-  /**
-   * Sets the sliding window to the new position, removes segments which are
-   * completely outide of its volume and publishes the remaining scene and
-   * segments.
-   * @param new_center center position of the sliding window
-   */
-  void updateAndPublishWindow(const Point& new_center);
 
-  /**
-   * Checks whether the camera has moved more than a
-   * certain distance from the current window center. If so, the window is
-   * updated.
-   */
-  void checkTfCallback();
+  void checkAndUpdateWindow();
+  void publishWindowContent();
 
-  /**
-   * Removes segments from the gsm which are outside the ball volume defined
-   * by the radius and center.
-   * @param radius
-   * @param center
+  /*
+   * Implements the decision whether a window update is necessary or not. I.e.
+   * time based, spatial window...
    */
-  void removeSegmentsOutsideOfRadius(FloatingPoint radius, Point center);
+  virtual bool isWindowUpdateDue() = 0;
+
+  /*
+   * Used to determine whether a segment counts as inside or outside the sliding
+   * window.
+   */
+  virtual bool isBlockWithinWindow(const BlockIndex& block_index) = 0;
+
+  void updateWindowContent();
 
   /**
    * Publishes position of new sliding window. Useful for debugging or display.
@@ -81,11 +76,9 @@ class SlidingWindowController : public Controller {
 
   Transformation current_window_pose_;
   ros::Time current_window_timestamp_;
+  std::vector<Label> removed_segments_;
 
   std::unordered_map<Label, LayerPair> label_to_layers_;
-  std::vector<Label> removed_segments_;
-  FloatingPoint window_radius_ = 1.0f;
-  FloatingPoint update_fraction_ = 0.5f;
   std::vector<geometry_msgs::PoseStamped> window_trajectory_;
   std::string imu_frame_ = "imu";
 
@@ -95,4 +88,4 @@ class SlidingWindowController : public Controller {
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
-#endif  // VOXBLOX_GSM_SLIDING_WINDOW_CONTROLLER_H
+#endif  // VOXBLOX_GSM_SLIDING_WINDOW_SLIDING_WINDOW_BASE_H

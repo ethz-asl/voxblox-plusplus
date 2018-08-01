@@ -16,11 +16,15 @@ voxels_per_side: 8
 truncation_distance_factor: 5.0
 voxel_carving_enabled: false
 max_ray_length_m: 2.5
+gsm_mode: 2 # 0 - normal gsm, 1 - spatial sliding window
 
 sliding_window:
-  is_on: true
-  radius_m: 2.0
-  imu_frame_id: imu
+  spatial:
+    radius_m: 2.0
+    imu_frame_id: imu
+  time_based:
+    window_size_s: 10
+    overlap: 0.5 # 0.0 <= overlap < 1.0
 
   # Between 0 and 1. As soon as the distance between sliding window and camera
   # is larger than this fraction times the window radius, the window is updated

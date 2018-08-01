@@ -4,8 +4,33 @@
 #include <glog/logging.h>
 #include <ros/ros.h>
 
-#include "voxblox_gsm/controller.h"
-#include "voxblox_gsm/sliding_window_controller.h"
+#include "voxblox_gsm/sliding_window/spatial_sliding_window.h"
+#include "voxblox_gsm/sliding_window/time_based_sliding_window.h"
+
+enum class GsmMode { kVanilla, kSpatialSlidingWindow, kTimeBasedSlidingWindow };
+typedef std::unique_ptr<voxblox::voxblox_gsm::Controller> ControllerPtr;
+
+ControllerPtr controllerFactory(GsmMode mode, ros::NodeHandle* node_handle) {
+  switch (mode) {
+    case GsmMode::kVanilla:
+      LOG(INFO) << "Starting GSM";
+      return ControllerPtr(new voxblox::voxblox_gsm::Controller(node_handle));
+
+    case GsmMode::kSpatialSlidingWindow:
+      LOG(INFO) << "Starting spatial sliding window GSM";
+      return ControllerPtr(
+          new voxblox::voxblox_gsm::SpatialSlidingWindow(node_handle));
+
+    case GsmMode::kTimeBasedSlidingWindow:
+      LOG(INFO) << "Starting time based sliding window GSM";
+      return ControllerPtr(
+          new voxblox::voxblox_gsm::TimeBasedSlidingWindow(node_handle));
+
+    default:
+      LOG(FATAL) << "The selected gsm mode was not implemented yet.";
+      break;
+  }
+}
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "gsm_node");
@@ -17,19 +42,11 @@ int main(int argc, char** argv) {
   ros::NodeHandle node_handle;
   ros::NodeHandle node_handle_private("~");
 
-  bool sliding_window = false;
-  node_handle_private.param<bool>("sliding_window/is_on", sliding_window,
-                                  sliding_window);
+  int gsm_mode = 0;
+  node_handle_private.param<int>("gsm_mode", gsm_mode, gsm_mode);
 
-  voxblox::voxblox_gsm::Controller* controller;
-  if (sliding_window) {
-    LOG(INFO) << "Starting sliding window GSM";
-    controller =
-        new voxblox::voxblox_gsm::SlidingWindowController(&node_handle_private);
-  } else {
-    LOG(INFO) << "Starting GSM";
-    controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
-  }
+  ControllerPtr controller =
+      controllerFactory(static_cast<GsmMode>(gsm_mode), &node_handle_private);
 
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
