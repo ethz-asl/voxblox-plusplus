@@ -1,0 +1,22 @@
+- git: {local-name: benchmark_catkin, uri: 'git@github.com:ethz-asl/benchmark_catkin.git'}
+- git: {local-name: catkin_simple, uri: 'git@github.com:catkin/catkin_simple.git'}
+- git: {local-name: ceres_catkin, uri: 'git@github.com:ethz-asl/ceres_catkin.git'}
+- git: {local-name: depth_segmentation, uri: 'git@github.com:ethz-asl/depth_segmentation.git'}
+- git: {local-name: eigen_catkin, uri: 'git@github.com:ethz-asl/eigen_catkin.git'}
+- git: {local-name: eigen_checks, uri: 'git@github.com:ethz-asl/eigen_checks.git'}
+- git: {local-name: gflags_catkin, uri: 'git@github.com:ethz-asl/gflags_catkin.git'}
+- git: {local-name: glog_catkin, uri: 'git@github.com:ethz-asl/glog_catkin.git'}
+- git: {local-name: iclcv_catkin, uri: 'git@github.com:ethz-asl/iclcv_catkin.git'}
+- git: {local-name: infinitam, uri: 'git@github.com:ethz-asl/infinitam.git'}
+- git: {local-name: linter, uri: 'git@github.com:ethz-asl/linter.git'}
+- git: {local-name: minkindr_ros, uri: 'git@github.com:ethz-asl/minkindr_ros.git'}
+- git: {local-name: minkindr, uri: 'git@github.com:ethz-asl/minkindr.git'}
+- git: {local-name: modelify, uri: 'git@github.com:ethz-asl/modelify.git'}
+- git: {local-name: mve_catkin, uri: 'git@github.com:ethz-asl/mve_catkin.git'}
+- git: {local-name: opencv3_catkin, uri: 'git@github.com:ethz-asl/opencv3_catkin.git'}
+- git: {local-name: pcl_catkin, uri: 'git@github.com:ethz-asl/pcl_catkin.git'}
+- git: {local-name: protobuf_catkin, uri: 'git@github.com:ethz-asl/protobuf_catkin.git'}
+- git: {local-name: vcg_catkin, uri: 'git@github.com:ethz-asl/vcg_catkin.git'}
+- git: {local-name: vision_opencv, uri: 'git@github.com:ethz-asl/vision_opencv.git'}
+- git: {local-name: voxblox, uri: 'git@github.com:ethz-asl/voxblox.git', version: 'version/latest_gsm_compatible'}
+- git: {local-name: yaml_cpp_catkin, uri: 'git@github.com:ethz-asl/yaml_cpp_catkin.git'}
