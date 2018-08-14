@@ -315,6 +315,7 @@ void Controller::advertisePublishSceneService(
   *publish_scene_srv = node_handle_private_->advertiseService(
       kAdvertisePublishSceneServiceName, &Controller::publishSceneCallback,
       this);
+  ros::spinOnce();
 }
 
 void Controller::validateMergedObjectService(

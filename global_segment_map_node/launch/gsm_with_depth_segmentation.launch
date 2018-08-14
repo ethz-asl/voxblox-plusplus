@@ -27,7 +27,7 @@
 
   <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
 
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen" args="-v=1 --alsologtostderr">
     <rosparam command="load" file="$(arg gsm_node_params_name)" />
   </node>
 </launch>

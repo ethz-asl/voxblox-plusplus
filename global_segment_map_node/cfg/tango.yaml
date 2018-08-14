@@ -16,3 +16,4 @@ voxels_per_side: 8
 truncation_distance_factor: 5.0
 voxel_carving_enabled: false
 max_ray_length_m: 2.5
+no_update_timeout: 5

@@ -1,10 +1,19 @@
 // Copyright 2017 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
+#include <functional>
+
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <ros/ros.h>
 
 #include "voxblox_gsm/controller.h"
+
+namespace {
+std::function<void(int)> shutdown_callback;
+void signal_handler(int signum) {
+  shutdown_callback(signum);
+}
+}  // namespace
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "gsm_node");
@@ -16,6 +25,24 @@ int main(int argc, char** argv) {
   ros::NodeHandle node_handle_private("~");
 
   voxblox::voxblox_gsm::Controller controller(&node_handle_private);
+
+  shutdown_callback = [&](int signum) {
+    LOG(INFO) << "Received shutdown signal: " << signum;
+
+    LOG(INFO) << "Publishing Scene...";
+    controller.publishScene();
+    LOG(INFO) << "done.";
+
+    LOG(INFO) << "Publishing Objects...";
+    constexpr bool kPublishAllSegments = true;
+    controller.publishObjects(kPublishAllSegments);
+    LOG(INFO) << "done.";
+
+    ros::spinOnce();
+
+    ros::shutdown();
+  };
+  signal(SIGINT, signal_handler);
 
   ros::Subscriber segment_point_cloud_sub;
   controller.subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
@@ -52,9 +79,11 @@ int main(int argc, char** argv) {
     ros::spinOnce();
   }
 
-  controller.publishScene();
-  constexpr bool kPublishAllSegments = true;
-  controller.publishObjects(kPublishAllSegments);
+  // If we exited the ros loop due to time out, call the proper shutdown
+  // procedure.
+  if (ros::ok() && controller.noNewUpdatesReceived()) {
+    shutdown_callback(0);
+  }
 
   LOG(INFO) << "Shutting down.";
   return 0;
