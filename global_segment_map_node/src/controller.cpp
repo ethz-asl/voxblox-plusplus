@@ -3,9 +3,12 @@
 #include "voxblox_gsm/controller.h"
 
 #include <cmath>
+#include <memory>
 #include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
-#include <global_segment_map/layer_evaluation.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <modelify/file_utils.h>
@@ -506,7 +509,7 @@ bool Controller::validateMergedObjectCallback(
 
   std::vector<utils::VoxelEvaluationDetails> voxel_evaluation_details_vector;
 
-  evaluateLayerAtPoses<TsdfVoxelType>(
+  evaluateLayerRmseAtPoses<TsdfVoxelType>(
       voxel_evaluation_mode, map_->getTsdfLayer(),
       *(merged_object_layer_O.get()), transforms_W_O,
       &voxel_evaluation_details_vector);
