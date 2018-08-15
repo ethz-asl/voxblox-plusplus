@@ -5,9 +5,12 @@
   <arg name="rgb_topic" default="/camera/rgb/image_raw" />
   <arg name="depth_camera_info_topic" default="/camera/depth/camera_info" />
   <arg name="rgb_camera_info_topic" default="/camera/rgb/camera_info" />
+  <param name="use_sim_time" value="true"/>
+  <node pkg="tf" type="static_transform_publisher" name="primesense_rgb_tf" args="0.031186 0.033169 -0.0131087 -1.557 0.097 -1.544 /WRIST_3 /camera_rgb_optical_frame 10"/>
+  <node pkg="tf" type="static_transform_publisher" name="primesense_depth_tf" args="-0.025 0.0 0.0 0.0 0.0 0.0 /camera_rgb_optical_frame /camera_depth_optical_frame 10"/>
 
-  <arg name="depth_segmentation_params_name" default="$(find depth_segmentation)/cfg/tango_coconut_config.yaml"/>
-  <rosparam command="load" file="$(arg depth_segmentation_params_name)" />
+  <!-- <arg name="depth_segmentation_params_name" default="$(find depth_segmentation)/cfg/tango_coconut_config.yaml"/> -->
+  <!-- <rosparam command="load" file="$(arg depth_segmentation_params_name)" /> -->
 
   <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="screen">
     <remap from="/camera/depth_registered/image_raw" to="$(arg depth_registered_topic)" />
@@ -18,7 +21,7 @@
 
   <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
 
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+  <!-- <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
     <rosparam command="load" file="$(arg gsm_node_params_name)" />
-  </node>
+  </node> -->
 </launch>
