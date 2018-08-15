@@ -1,0 +1,3 @@
+[submodule "voxblox"]
+	path = voxblox
+	url = git@github.com:ethz-asl/voxblox.git
