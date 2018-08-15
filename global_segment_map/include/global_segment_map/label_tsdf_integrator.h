@@ -35,8 +35,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   typedef AnyIndexHashMapType<AlignedVector<size_t>>::type VoxelMap;
   typedef std::map<Label, int> LMap;
   typedef std::map<Label, int>::iterator LMapIt;
+  typedef std::map<SemanticLabel, int> SLMap;
   typedef std::map<Label, LMap> LLMap;
   typedef std::map<Label, LMap>::iterator LLMapIt;
+  typedef std::map<Label, SLMap> LSLMap;
   typedef std::set<Label> LSet;
   typedef std::set<Label>::iterator LSetIt;
   typedef std::map<Label, LSet> LLSet;
@@ -463,6 +465,23 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     temp_label_block_map_.clear();
   }
 
+  void increaseLabelClassCount(const Label& label,
+                               const SemanticLabel& semantic_label) {
+    auto label_it = label_class_count_.find(label);
+    if (label_it != label_class_count_.end()) {
+      auto class_it = label_it->second.find(semantic_label);
+      if (class_it != label_it->second.end()) {
+        ++class_it->second;
+      } else {
+        label_it->second.emplace(semantic_label, 1);
+      }
+    } else {
+      SLMap class_points_count;
+      class_points_count.emplace(semantic_label, 1);
+      label_class_count_.emplace(label, class_points_count);
+    }
+  }
+
   // Updates label_voxel. Thread safe.
   inline void updateLabelVoxel(const Point& point_G, const Label& label,
                                const SemanticLabel& semantic_label,
@@ -474,11 +493,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
     CHECK_NOTNULL(label_voxel);
 
-    label_voxel->semantic_label = semantic_label;
+    // label_voxel->semantic_label = semantic_label;
     Label previous_label = label_voxel->label;
     addVoxelLabelConfidence(label, confidence, label_voxel);
     updateVoxelLabelAndConfidence(label_voxel, label);
     Label new_label = label_voxel->label;
+
+    increaseLabelClassCount(new_label, semantic_label);
 
     if (new_label != previous_label) {
       // Both of the segments corresponding to the two labels are
@@ -763,6 +784,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
 
+  LSLMap* getLabelClassMapPtr() { return &label_class_count_; }
+
   void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label,
                                   int count) {
     LMapIt label_count_it = label_map_it->second.find(label);
@@ -928,6 +951,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Pairwise confidence merging.
   LLMap pairwise_confidence_;
+
+  // Per frame voxel count of label
+  LSLMap label_class_count_;
 
   // We need to prevent simultaneous access to the voxels in the map. We
   // could

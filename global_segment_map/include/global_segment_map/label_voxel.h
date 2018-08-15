@@ -17,7 +17,6 @@ struct LabelCount {
 struct LabelVoxel {
   Label label = 0u;
   LabelConfidence label_confidence = 0.0f;
-  SemanticLabel semantic_label = 0u;
   LabelCount label_count[20];
 };
 

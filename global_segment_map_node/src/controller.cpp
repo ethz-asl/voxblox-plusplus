@@ -35,7 +35,7 @@ boost::mutex updateMeshMutex;
 void visualizeMesh(const MeshLayer& mesh_layer) {
   boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
       new pcl::visualization::PCLVisualizer("GSM viewer"));
-  viewer->setBackgroundColor(0, 0, 0);
+  viewer->setBackgroundColor(255, 255, 255);
   // viewer->addCoordinateSystem(0.2);
   viewer->initCameraParameters();
   // TODO(grinvalm): find some general default parameters.
@@ -217,8 +217,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   mesh_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_layer_.get(), *integrator_->getLabelsAgeMapPtr(),
-      mesh_color_scheme_));
+      mesh_layer_.get(), *integrator_->getLabelClassMapPtr(),
+      *integrator_->getLabelsAgeMapPtr(), mesh_color_scheme_));
 
   // Visualization settings.
   bool visualize = false;
@@ -448,8 +448,6 @@ void Controller::segmentPointCloudCallback(
 
     segment->points_C_.reserve(point_cloud.points.size());
     segment->colors_.reserve(point_cloud.points.size());
-
-    LOG(ERROR) << point_cloud.points[0].label;
 
     for (size_t i = 0; i < point_cloud.points.size(); ++i) {
       if (!std::isfinite(point_cloud.points[i].x) ||
