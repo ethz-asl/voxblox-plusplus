@@ -11,8 +11,6 @@
 
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-#include <modelify/file_utils.h>
-#include <modelify/object_toolbox/object_toolbox.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -434,7 +432,7 @@ void Controller::segmentPointCloudCallback(
       }
     }
 
-    modelify::PointCloudType point_cloud;
+    pcl::PointCloud<pcl::PointXYZRGB> point_cloud;
     pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
 
     segment->points_C_.reserve(point_cloud.points.size());
@@ -549,7 +547,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
-      CHECK_EQ(modelify::file_utils::makePath("segments", 0777), 0);
+      CHECK_EQ(mkdir("segments", 0777), 0);
 
       std::string mesh_filename = "gsm_segments/gsm_segment_mesh_label_" +
                                   std::to_string(label) + ".ply";
