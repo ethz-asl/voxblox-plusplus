@@ -21,6 +21,7 @@ class PoseToTfNode {
    * Gets T_I_D from parameter server and publishes as static transform. T_I_D
    * brings points in the depth camera frame to the imu frame.
    */
+  void getAndPublishTangoT_I_D();
   void getAndPublishT_I_D();
   /*
    * Gets T_W_M from parameter server and publishes as static transform. T_W_M
@@ -50,6 +51,7 @@ class PoseToTfNode {
   std::string imu_estimated_frame_ = "imu_estimated";
   std::string depth_estimated_frame_ = "depth_estimated";
   bool first_run = true;
+  bool calculate_T_W_M = false;
 };
 
 PoseToTfNode::PoseToTfNode(ros::NodeHandle& node_handle)
@@ -59,7 +61,15 @@ PoseToTfNode::PoseToTfNode(ros::NodeHandle& node_handle)
   markers_sub = node_handle_.subscribe(topic, 200000000,
                                        &PoseToTfNode::newPoseCallback, this);
 
-  getAndPublishT_I_D();
+  node_handle.param<bool>("/pose_to_tf/calculate_T_W_M", calculate_T_W_M, calculate_T_W_M);
+  bool tango = false;
+  node_handle.param<bool>("/pose_to_tf/tango", tango, tango);
+  if (tango) {
+    getAndPublishTangoT_I_D();
+  }
+  else {
+    getAndPublishT_I_D();
+  }
 }
 
 void PoseToTfNode::newPoseCallback(const geometry_msgs::PoseStamped& pose_msg) {
@@ -75,6 +85,22 @@ void PoseToTfNode::newPoseCallback(const geometry_msgs::PoseStamped& pose_msg) {
 
 void PoseToTfNode::getAndPublishT_W_M() {
   ros::Time latest = ros::Time(0);
+  geometry_msgs::TransformStamped tf_w_m_stamped;
+  tf_w_m_stamped.header.stamp = latest;
+  tf_w_m_stamped.header.frame_id = world_frame_;
+  tf_w_m_stamped.child_frame_id = map_frame_;
+
+  if (!calculate_T_W_M) {
+    tf_w_m_stamped.transform.translation.x = 0.0;
+    tf_w_m_stamped.transform.translation.y = 0.0;
+    tf_w_m_stamped.transform.translation.z = 0.0;
+    tf_w_m_stamped.transform.rotation.x = 0.0;
+    tf_w_m_stamped.transform.rotation.y = 0.0;
+    tf_w_m_stamped.transform.rotation.z = 0.0;
+    tf_w_m_stamped.transform.rotation.w = 1.0;
+    tf_static.sendTransform(tf_w_m_stamped);
+    return;
+  }
   tf_listener_.waitForTransform(map_frame_, depth_estimated_frame_, latest, ros::Duration(50.0));
   tf::StampedTransform tf_m_d;
   tf_listener_.lookupTransform(map_frame_, depth_estimated_frame_, latest, tf_m_d);
@@ -87,11 +113,6 @@ void PoseToTfNode::getAndPublishT_W_M() {
   tf_w_m = tf_w_d * tf_m_d.inverse();
   tf_w_m.setRotation(tf_w_m.getRotation().normalize());
 
-
-  geometry_msgs::TransformStamped tf_w_m_stamped;
-  tf_w_m_stamped.header.stamp = latest;
-  tf_w_m_stamped.header.frame_id = world_frame_;
-  tf_w_m_stamped.child_frame_id = map_frame_;
   tf_w_m_stamped.transform.translation.x = tf_w_m.getOrigin().x();
   tf_w_m_stamped.transform.translation.y = tf_w_m.getOrigin().y();
   tf_w_m_stamped.transform.translation.z = tf_w_m.getOrigin().z();
@@ -126,7 +147,7 @@ Eigen::Matrix4f PoseToTfNode::getMatrix(std::vector<double> quaternions,
   return tf;
 }
 
-void PoseToTfNode::getAndPublishT_I_D() {
+void PoseToTfNode::getAndPublishTangoT_I_D() {
   std::vector<double> translation;
   std::vector<double> rotation;
 
@@ -156,6 +177,31 @@ void PoseToTfNode::getAndPublishT_I_D() {
   T_R_D = T_R_F * T_T_F.inverse() * T_T_D;
 
   publishStaticTransform(T_R_D, imu_estimated_frame_, depth_estimated_frame_);
+}
+
+void PoseToTfNode::getAndPublishT_I_D() {
+  std::vector<double> matrix;
+  node_handle_.getParam("/rovioli_marker_to_tf/T_I_D/matrix",
+                        matrix);
+  Eigen::Matrix4f T_I_D;
+
+  if (matrix.size()!=0) {
+    for (size_t i = 0; i < 4; ++i) {
+      for (size_t j = 0; j < 4; ++j) {
+        T_I_D(i, j) = matrix[4 * i + j];
+      }
+    }
+  }
+  else {
+    std::vector<double> translation;
+    std::vector<double> rotation;
+    node_handle_.getParam("/rovioli_marker_to_tf/T_I_D/quaternion", rotation);
+    node_handle_.getParam("/rovioli_marker_to_tf/T_I_D/translation_m",
+                          translation);
+      T_I_D = getMatrix(rotation, translation);
+  }
+
+  publishStaticTransform(T_I_D, imu_estimated_frame_, depth_estimated_frame_);
 }
 
 void PoseToTfNode::publishStaticTransform(const Eigen::Matrix4f matrix,

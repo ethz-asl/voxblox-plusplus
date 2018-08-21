@@ -49,6 +49,8 @@ class SlidingWindowBase : public Controller {
    */
   virtual bool isBlockWithinWindow(const BlockIndex& block_index) = 0;
 
+  Transformation getCurrentCameraPose();
+
   void updateWindowContent();
 
   /**
