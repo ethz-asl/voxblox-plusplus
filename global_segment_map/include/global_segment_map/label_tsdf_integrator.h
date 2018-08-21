@@ -527,7 +527,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
                            const bool freespace_points) {
     CHECK_EQ(points_C.size(), colors.size());
     CHECK_EQ(points_C.size(), labels.size());
-    CHECK_EQ(points_C.size(), semantic_labels.size());
+    // CHECK_EQ(points_C.size(), semantic_labels.size());
     CHECK_GE(points_C.size(), 0u);
 
     timing::Timer integrate_timer("integrate");
@@ -579,7 +579,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       const Point& point_C = points_C[pt_idx];
       const Color& color = colors[pt_idx];
       const Label& label = labels[pt_idx];
+      // TODO(grinvalm): if exists!
+      // if (semantic_labels.size() > 0) {
       const SemanticLabel& semantic_label = semantic_labels[pt_idx];
+      // }
 
       const float point_weight = getVoxelWeight(point_C);
       merged_point_C =
@@ -597,8 +600,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       } else {
         merged_label_confidence = 1.0f;
       }
-
+      // if (semantic_labels.size() > 0) {
       merged_semantic_label = semantic_label;
+      // }
 
       // only take first point when clearing
       if (clearing_ray) {

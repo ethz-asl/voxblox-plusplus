@@ -185,6 +185,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   } else if (mesh_color_scheme.compare("semantic_label") == 0) {
     mesh_color_scheme_ = MeshLabelIntegrator::SemanticLabelColor;
   } else {
+    // TODO(grinvalm): this doesn't seem to work! And change default to label.
     mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
   }
 
@@ -209,6 +210,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       "object_flushing_age_threshold",
       label_tsdf_integrator_config.object_flushing_age_threshold,
       label_tsdf_integrator_config.object_flushing_age_threshold);
+
+  integrator_config.integrator_threads = 1u;
 
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),

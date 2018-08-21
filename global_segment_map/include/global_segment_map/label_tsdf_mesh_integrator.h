@@ -109,15 +109,19 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
   Color getColorFromSemanticLabel(const SemanticLabel& semantic_label) {
     std::vector<std::array<float, 3>> nyu_color_code{
-        {20, 20, 20},    {0, 128, 128},   {250, 50, 50}, {102, 0, 204},
-        {50, 50, 250},   {220, 220, 220}, {255, 69, 20}, {255, 20, 127},
-        {50, 50, 150},   {222, 180, 140}, {50, 250, 50}, {255, 215, 0},
-        {150, 150, 150}, {0, 255, 255}};
+        {100, 100, 100}, {20, 20, 20},    {0, 128, 128},   {250, 50, 50},
+        {102, 0, 204},   {50, 50, 250},   {220, 220, 220}, {255, 69, 20},
+        {255, 20, 127},  {50, 50, 150},   {222, 180, 140}, {50, 250, 50},
+        {255, 215, 0},   {150, 150, 150}, {0, 255, 255}};
 
     Color color;
-    // color.r = nyu_color_code.at(semantic_label)[0];
-    // color.g = nyu_color_code.at(semantic_label)[1];
-    // color.b = nyu_color_code.at(semantic_label)[2];
+    color.r = nyu_color_code.at(semantic_label)[0];
+    color.g = nyu_color_code.at(semantic_label)[1];
+    color.b = nyu_color_code.at(semantic_label)[2];
+
+    if (semantic_label == 0) {
+      color.a = 0.5;
+    }
 
     // uint8_t ind = semantic_label;
     // color.r = 0;
@@ -130,16 +134,16 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     //   ind >>= 3;
     // }
 
-    color.r = 0;
-    color.g = 0;
-    color.b = 0;
-    uint8_t c = semantic_label;
-    for (int i = 7; i >= 0; --i) {
-      color.r |= ((c & (1 << 0)) << i);
-      color.g |= ((c & (1 << 1)) << i);
-      color.b |= ((c & (1 << 2)) << i);
-      c >>= 3;
-    }
+    // color.r = 0;
+    // color.g = 0;
+    // color.b = 0;
+    // uint8_t c = semantic_label;
+    // for (int i = 7; i >= 0; --i) {
+    //   color.r |= ((c & (1 << 0)) << i);
+    //   color.g |= ((c & (1 << 1)) << i);
+    //   color.b |= ((c & (1 << 2)) << i);
+    //   c >>= 3;
+    // }
 
     return color;
   }
@@ -150,7 +154,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     auto label_it = label_class_count_ptr_->find(label);
     if (label_it != label_class_count_ptr_->end()) {
       for (auto const& class_count : label_it->second) {
-        if (class_count.second > max_count) {
+        if (class_count.second > max_count && class_count.first != 0u) {
           semantic_label = class_count.first;
           max_count = class_count.second;
         }
