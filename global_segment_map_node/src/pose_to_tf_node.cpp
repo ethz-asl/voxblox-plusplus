@@ -1,12 +1,11 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <glog/logging.h>
-#include <modelify/object_toolbox/common.h>
 #include <ros/ros.h>
 #include <tf/transform_broadcaster.h>
 #include <tf/transform_listener.h>
 #include <tf2_ros/static_transform_broadcaster.h>
-#include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <thread>
 
 namespace modelify {
