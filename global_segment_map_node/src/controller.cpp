@@ -708,9 +708,11 @@ bool Controller::publishObjects(const bool publish_all) {
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
 
     // Extract surfel cloud from layer.
+    MeshIntegratorConfig mesh_config;
+    node_handle_private_->param<float>("mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
-    convertVoxelGridToPointCloud(tsdf_layer, surfel_cloud.get());
+    convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
 
     if (surfel_cloud->empty()) {
       LOG(WARNING) << "Labelled segment does not contain enough data to "
