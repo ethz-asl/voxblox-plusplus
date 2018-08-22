@@ -2,10 +2,26 @@
 	<arg name="slam"/>
     <include if="$(arg slam)" file="$(find gsm_node)/launch/rovioli.launch"/>
 
-    <include file="$(find gsm_node)/launch/gsm_with_depth_segmentation.launch">
+    <arg name="primesense" default="true"/>
+    <arg name="realsense" default="false"/>
+    <arg name="tango" default="false"/>
+
+    <include if="$(arg tango)" file="$(find gsm_node)/launch/gsm_with_depth_segmentation.launch">
         <arg name="sliding_window" default="true"/>
         <arg if="$(arg slam)" name="camera_frame" value="depth_estimated"/>
         <arg if="$(arg slam)" name="imu_frame" value="imu_estimated"/>
+    </include>
+
+    <include if="$(arg primesense)" file="$(find gsm_node)/launch/primesense_gsm.launch">
+        <arg name="sliding_window" default="true"/>
+        <param if="$(arg slam)" name="camera_frame" value="depth_estimated"/>
+        <param if="$(arg slam)" name="imu_frame" value="imu_estimated"/>
+    </include>
+
+    <include if="$(arg realsense)" file="$(find gsm_node)/launch/realsense_gsm.launch">
+        <arg name="sliding_window" default="true"/>
+        <param if="$(arg slam)" name="camera_frame" value="depth_estimated"/>
+        <param if="$(arg slam)" name="imu_frame" value="imu_estimated"/>
     </include>
 
 </launch>

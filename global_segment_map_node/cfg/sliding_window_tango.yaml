@@ -20,10 +20,10 @@ gsm_mode: 2 # 0 - normal gsm, 1 - spatial sliding window
 
 sliding_window:
   spatial:
-    radius_m: 2.0
+    radius_m: 3.0
     imu_frame_id: imu
   time_based:
-    window_size_s: 10
+    window_size_s: 20
     overlap: 0.5 # 0.0 <= overlap < 1.0
 
   # Between 0 and 1. As soon as the distance between sliding window and camera

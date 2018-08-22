@@ -1,0 +1,25 @@
+<launch>
+  <arg name="bag" default="/home/sebastian/Desktop/test1.bag" />
+  <remap from="/jay/color/image_raw" to="/camera/rgb/image_raw"/>
+  <remap from="/jay/color/camera_info" to="/camera/rgb/camera_info"/>
+
+  <node pkg  = "rosbag"
+          type = "play"
+          name = "player"
+          args = "$(arg bag) -r 0.5"/>
+
+  <arg name="depth_segmentation_params_name" default="$(find depth_segmentation)/cfg/primesense_config.yaml"/>
+  <rosparam command="load" file="$(arg depth_segmentation_params_name)" />
+
+  <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="log">
+  </node>
+
+  <arg name="sliding_window" />
+  <arg name="camera_frame" />
+  <arg name="imu_frame" />
+  <include file="$(find gsm_node)/launch/gsm.launch">
+    <arg name="sliding_window" value="$(arg sliding_window)"/>
+    <param name="camera_frame" value="$(arg camera_frame)"/>
+    <param name="imu_frame" value="$(arg imu_frame)"/>
+  </include>
+</launch>

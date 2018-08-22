@@ -1,0 +1,52 @@
+<launch>
+  <arg name="primesense" default="false"/>
+  <arg name="realsense" default="false"/>
+  <arg name="bag_realsense" default="false"/>
+  <arg name="tango" default="true" />
+  <arg name="dilate_depth" default="$(arg tango)" />
+
+  <group if="$(arg realsense)">
+      <remap from="/camera/aligned_depth_to_color/image_raw" to="/camera/depth/image_raw" if="$(arg tango)"/>
+      <remap from="/camera/color/image_raw" to="/camera/rgb/image_raw"/>
+      <remap from="/camera/aligned_depth_to_color/camera_info" to="/camera/depth/camera_info"/>
+      <remap from="/camera/color/camera_info" to="/camera/rgb/camera_info"/>
+    <include file="$(find realsense2_camera)/launch/rs_rgbd.launch">
+    </include>
+  </group>
+  <group if="$(arg bag_realsense)">
+    <remap from="/jay/aligned_depth_to_color/image_raw" to="/camera/depth/image_raw" if="$(arg tango)"/>
+    <remap from="/jay/aligned_depth_to_color/image_raw" to="/camera/depth_registered/image_raw" unless="$(arg tango)"/>
+    <remap from="/jay/color/image_raw" to="/camera/rgb/image_raw"/>
+    <remap from="/jay/aligned_depth_to_color/camera_info" to="/camera/depth/camera_info"/>
+    <remap from="/jay/color/camera_info" to="/camera/rgb/camera_info"/>
+
+    <node pkg  = "rosbag"
+            type = "play"
+            name = "player"
+            args = "$(arg bag) -r 0.5"/>
+  </group>
+  <group if="$(arg primesense)">
+   <include file="$(find openni2_launch)/launch/openni2.launch"/>
+  </group>
+
+  <arg name="depth_registered_topic" default="/camera/depth_registered/image_raw" unless="$(arg tango)"/>
+  <arg name="depth_registered_topic" default="/camera/depth/image_raw" if="$(arg tango)"/>
+  <arg name="rgb_topic" default="/camera/rgb/image_raw" />
+  <arg name="depth_camera_info_topic" default="/camera/depth/camera_info" />
+  <arg name="rgb_camera_info_topic" default="/camera/rgb/camera_info" />
+
+  <arg name="depth_segmentation_params_name" default="$(find depth_segmentation)/cfg/primesense_config.yaml"/>
+  <rosparam command="load" file="$(arg depth_segmentation_params_name)" if="$(arg tango)"/>
+
+  <node name="image_filter_node" pkg="depth_segmentation" type="image_filter.py" output="screen" if="$(arg dilate_depth)">
+    <remap from="/image_raw" to="$(arg depth_registered_topic)" />
+  </node>
+
+  <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="log">
+    <remap from="/camera/depth_registered/image_raw" to="$(arg depth_registered_topic)" unless="$(arg dilate_depth)"/>
+    <remap from="/camera/depth_registered/image_raw" to="/image_filtered" if="$(arg dilate_depth)"/>
+    <remap from="/camera/rgb/image_raw" to="$(arg rgb_topic)" />
+    <remap from="/camera/depth/camera_info" to="$(arg depth_camera_info_topic)" />
+    <remap from="/camera/rgb/camera_info" to="$(arg rgb_camera_info_topic)" />
+  </node>
+</launch>

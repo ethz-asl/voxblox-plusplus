@@ -8,10 +8,8 @@
   <arg name="depth_camera_info_topic" default="/camera/depth/camera_info" />
   <arg name="rgb_camera_info_topic" default="/camera/rgb/camera_info" />
 
-
   <arg name="depth_segmentation_params_name" default="$(find depth_segmentation)/cfg/tango_coconut_config.yaml"/>
   <rosparam command="load" file="$(arg depth_segmentation_params_name)" if="$(arg tango)"/>
-
 
   <node name="image_filter_node" pkg="depth_segmentation" type="image_filter.py" output="screen" if="$(arg dilate_depth)">
     <remap from="/image_raw" to="$(arg depth_registered_topic)" />
@@ -25,15 +23,12 @@
     <remap from="/camera/rgb/camera_info" to="$(arg rgb_camera_info_topic)" />
   </node>
 
-  <arg name="sliding_window" default="false"/>
-  <arg name="imu_frame" default="imu"/>
-  <arg if="$(arg sliding_window)" name="gsm_node_params_name" default="$(find gsm_node)/cfg/sliding_window_tango.yaml"/>
-  <arg if="$(arg sliding_window)" name="camera_frame" default="depth"/>
-  <arg unless="$(arg sliding_window)" name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
-
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="log">
-    <rosparam command="load" file="$(arg gsm_node_params_name)" />
-    <param if="$(arg sliding_window)" name="camera_frame_id" value="$(arg camera_frame)"/>
-    <param if="$(arg sliding_window)" name="sliding_window/imu_frame" value="$(arg imu_frame)"/>
-  </node>
+  <arg name="sliding_window" />
+  <arg name="camera_frame" />
+  <arg name="imu_frame" />
+  <include file="$(find gsm_node)/launch/gsm.launch">
+    <arg name="sliding_window" value="$(arg sliding_window)"/>
+    <param name="camera_frame" value="$(arg camera_frame)"/>
+    <param name="imu_frame" value="$(arg imu_frame)"/>
+  </include>
 </launch>

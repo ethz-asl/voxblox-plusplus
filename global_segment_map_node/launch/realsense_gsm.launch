@@ -1,0 +1,44 @@
+<launch>
+    <arg name="dilate_depth" default="true" />
+    <arg name="bag" default="/home/sebastian/Desktop/trial2.bag" />
+
+    <remap from="/jay/aligned_depth_to_color/image_raw" to="/camera/depth/image_raw" if="$(arg tango)"/>
+    <remap from="/jay/aligned_depth_to_color/image_raw" to="/camera/depth_registered/image_raw" unless="$(arg tango)"/>
+    <remap from="/jay/color/image_raw" to="/camera/rgb/image_raw"/>
+    <remap from="/jay/aligned_depth_to_color/camera_info" to="/camera/depth/camera_info"/>
+    <remap from="/jay/color/camera_info" to="/camera/rgb/camera_info"/>
+
+    <node pkg  = "rosbag"
+          type = "play"
+          name = "player"
+          args = "$(arg bag) -r 0.5"/>
+
+    <arg name="depth_registered_topic" default="/camera/depth/image_raw" />
+    <arg name="rgb_topic" default="/camera/rgb/image_raw" />
+    <arg name="depth_camera_info_topic" default="/camera/depth/camera_info" />
+    <arg name="rgb_camera_info_topic" default="/camera/rgb/camera_info" />
+
+    <arg name="depth_segmentation_params_name" default="$(find depth_segmentation)/cfg/realsense_config.yaml"/>
+    <rosparam command="load" file="$(arg depth_segmentation_params_name)"/>
+
+    <node name="image_filter_node" pkg="depth_segmentation" type="image_filter.py" output="screen" if="$(arg dilate_depth)">
+    <remap from="/image_raw" to="$(arg depth_registered_topic)" />
+    </node>
+
+    <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="log">
+    <remap from="/camera/depth_registered/image_raw" to="$(arg depth_registered_topic)" unless="$(arg dilate_depth)"/>
+    <remap from="/camera/depth_registered/image_raw" to="/image_filtered" if="$(arg dilate_depth)"/>
+    <remap from="/camera/rgb/image_raw" to="$(arg rgb_topic)" />
+    <remap from="/camera/depth/camera_info" to="$(arg depth_camera_info_topic)" />
+    <remap from="/camera/rgb/camera_info" to="$(arg rgb_camera_info_topic)" />
+    </node>
+
+    <arg name="sliding_window" />
+    <arg name="camera_frame" />
+    <arg name="imu_frame" />
+    <include file="$(find gsm_node)/launch/gsm.launch">
+        <arg name="sliding_window" value="$(arg sliding_window)"/>
+        <param name="camera_frame" value="$(arg camera_frame)"/>
+        <param name="imu_frame" value="$(arg imu_frame)"/>
+    </include>
+</launch>

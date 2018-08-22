@@ -11,6 +11,7 @@ cs_add_library(${PROJECT_NAME}_library
   src/sliding_window/sliding_window_base.cpp
   src/sliding_window/spatial_sliding_window.cpp
   src/sliding_window/time_based_sliding_window.cpp
+  src/sliding_window/view_based_sliding_window.cpp
 )
 cs_add_executable(${PROJECT_NAME}
   src/node.cpp
