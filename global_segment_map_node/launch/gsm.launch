@@ -1,7 +1,7 @@
 <launch>
   <arg name="sliding_window" default="false"/>
-  <arg name="imu_frame" default="imu"/>
-  <arg name="camera_frame" default="depth"/>
+  <arg name="imu_frame" />
+  <arg name="camera_frame"/>
   <arg if="$(arg sliding_window)" name="gsm_node_params_name" default="$(find gsm_node)/cfg/sliding_window_tango.yaml"/>
   <arg unless="$(arg sliding_window)" name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
 

@@ -38,7 +38,7 @@
     <arg name="imu_frame" />
     <include file="$(find gsm_node)/launch/gsm.launch">
         <arg name="sliding_window" value="$(arg sliding_window)"/>
-        <param name="camera_frame" value="$(arg camera_frame)"/>
-        <param name="imu_frame" value="$(arg imu_frame)"/>
+        <arg name="camera_frame" value="$(arg camera_frame)"/>
+        <arg name="imu_frame" value="$(arg imu_frame)"/>
     </include>
 </launch>

@@ -1,5 +1,6 @@
 <launch>
-  <arg name="bag" default="/home/sebastian/Desktop/test1.bag" />
+  <arg name="bag" default="/home/sebastian/Desktop/test_lounge.bag" />
+  <remap from="/camera/depth/image_raw" to="/camera/depth_registered/image_raw"/>
   <remap from="/jay/color/image_raw" to="/camera/rgb/image_raw"/>
   <remap from="/jay/color/camera_info" to="/camera/rgb/camera_info"/>
 
@@ -19,7 +20,7 @@
   <arg name="imu_frame" />
   <include file="$(find gsm_node)/launch/gsm.launch">
     <arg name="sliding_window" value="$(arg sliding_window)"/>
-    <param name="camera_frame" value="$(arg camera_frame)"/>
-    <param name="imu_frame" value="$(arg imu_frame)"/>
+    <arg name="camera_frame" value="$(arg camera_frame)"/>
+    <arg name="imu_frame" value="$(arg imu_frame)"/>
   </include>
 </launch>

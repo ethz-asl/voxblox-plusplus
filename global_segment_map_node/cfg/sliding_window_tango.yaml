@@ -16,7 +16,7 @@ voxels_per_side: 8
 truncation_distance_factor: 5.0
 voxel_carving_enabled: false
 max_ray_length_m: 2.5
-gsm_mode: 2 # 0 - normal gsm, 1 - spatial sliding window
+gsm_mode: 1 # 0 - normal gsm, 1 - spatial sliding window
 
 sliding_window:
   spatial:
