@@ -716,6 +716,12 @@ bool Controller::publishObjects(const bool publish_all) {
       continue;
     }
 
+    constexpr size_t kMaxNumPoints = 1000000u;
+    if (surfel_cloud->size() > kMaxNumPoints) {
+      LOG(WARNING) << "Labelled segment contains too many points -> skipping.";
+      continue;
+    }
+
     modelify_msgs::GsmUpdate gsm_update_msg;
     constexpr bool kSerializeOnlyUpdated = false;
     gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
