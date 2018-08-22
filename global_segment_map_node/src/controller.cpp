@@ -571,13 +571,12 @@ void Controller::extractSegmentLayers(
 
   // Build map from labels to tsdf and label layers. Each will contain the
   // segment of the corresponding layer.
-  Layer<TsdfVoxel> tsdf_layer_empty(map_config_.voxel_size,
-                                    map_config_.voxels_per_side);
-  Layer<LabelVoxel> label_layer_empty(map_config_.voxel_size,
-                                      map_config_.voxels_per_side);
+  Layer<TsdfVoxel> tsdf_layer(map_config_.voxel_size,
+                              map_config_.voxels_per_side);
+  Layer<LabelVoxel> label_layer(map_config_.voxel_size,
+                                map_config_.voxels_per_side);
   for (const Label& label : labels) {
-    label_layers_map->emplace(
-        label, std::make_pair(tsdf_layer_empty, label_layer_empty));
+    label_layers_map->emplace(label, std::make_pair(tsdf_layer, label_layer));
   }
 
   BlockIndexList all_label_blocks;
@@ -588,6 +587,8 @@ void Controller::extractSegmentLayers(
         map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
     Block<LabelVoxel>::Ptr global_label_block =
         map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
+    Block<TsdfVoxel>::Ptr tsdf_block;
+    Block<LabelVoxel>::Ptr label_block;
 
     const size_t vps = global_label_block->voxels_per_side();
     for (size_t i = 0; i < vps * vps * vps; ++i) {
@@ -612,10 +613,10 @@ void Controller::extractSegmentLayers(
       Layer<TsdfVoxel>& tsdf_layer = it->second.first;
       Layer<LabelVoxel>& label_layer = it->second.second;
 
-      Block<TsdfVoxel>::Ptr tsdf_block =
-          tsdf_layer.allocateBlockPtrByIndex(block_index);
-      Block<LabelVoxel>::Ptr label_block =
-          label_layer.allocateBlockPtrByIndex(block_index);
+      if (!tsdf_block) {
+        tsdf_block = tsdf_layer.allocateBlockPtrByIndex(block_index);
+        label_block = label_layer.allocateBlockPtrByIndex(block_index);
+      }
       CHECK(tsdf_block);
       CHECK(label_block);
 
