@@ -58,7 +58,7 @@ PoseToTfNode::PoseToTfNode(ros::NodeHandle& node_handle)
     : node_handle_(node_handle) {
   std::string topic = "/maplab_rovio/T_G_I";
   node_handle.param<std::string>("/pose_to_tf/pose_topic", topic, topic);
-  markers_sub = node_handle_.subscribe(topic, 200000000,
+  markers_sub = node_handle_.subscribe(topic, 20,
                                        &PoseToTfNode::newPoseCallback, this);
 
   node_handle.param<bool>("/pose_to_tf/calculate_T_W_M", calculate_T_W_M, calculate_T_W_M);

@@ -23,6 +23,9 @@ target_link_libraries(${PROJECT_NAME}
 cs_add_executable(${PROJECT_NAME}_util
   src/pose_to_tf_node.cpp
 )
+cs_add_executable(${PROJECT_NAME}_cam
+  src/camera_info_node.cpp
+  )
 
 cs_install()
 cs_export()
