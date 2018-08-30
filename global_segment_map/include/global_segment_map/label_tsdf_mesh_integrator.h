@@ -19,8 +19,9 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
  public:
   enum ColorScheme {
     LabelColor = 1,
-    SemanticLabelColor = 2,
-    ConfidenceColor = 3
+    SemanticColor = 2,
+    InstanceColor = 3,
+    ConfidenceColor = 4
   };
 
   MeshLabelIntegrator(const MeshIntegratorConfig& config,
@@ -28,12 +29,15 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
                       Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
                       const std::map<Label, std::map<SemanticLabel, int>>&
                           label_class_count = {},
+                      const std::map<Label, std::map<SemanticLabel, int>>&
+                          label_instance_count = {},
                       const std::map<Label, int>& label_age_map = {},
                       ColorScheme color_scheme = LabelColor)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(CHECK_NOTNULL(label_layer)),
         label_layer_const_(CHECK_NOTNULL(label_layer)),
         label_class_count_ptr_(&label_class_count),
+        label_instance_count_ptr_(&label_instance_count),
         label_age_map_ptr_(&label_age_map),
         color_scheme_(color_scheme) {}
 
@@ -43,12 +47,15 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
                       MeshLayer* mesh_layer,
                       const std::map<Label, std::map<SemanticLabel, int>>&
                           label_class_count = {},
+                      const std::map<Label, std::map<SemanticLabel, int>>&
+                          label_instance_count = {},
                       const std::map<Label, int>& label_age_map = {},
                       ColorScheme color_scheme = LabelColor)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(nullptr),
         label_layer_const_(CHECK_NOTNULL(&label_layer)),
         label_class_count_ptr_(&label_class_count),
+        label_instance_count_ptr_(&label_instance_count),
         label_age_map_ptr_(&label_age_map),
         color_scheme_(color_scheme) {}
 
@@ -107,9 +114,29 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     }
   }
 
+  Color getColorFromInstanceLabel(const SemanticLabel& instance_label) {
+    Color color;
+    auto instance_color_map_it = instance_color_map_.find(instance_label);
+
+    if (instance_color_map_it != instance_color_map_.end()) {
+      color = instance_color_map_it->second;
+    } else {
+      color = randomColor();
+      if (instance_label == 0u) {
+        color.r = 200;
+        color.g = 200;
+        color.b = 200;
+      }
+      instance_color_map_.insert(
+          std::pair<SemanticLabel, Color>(instance_label, color));
+    }
+
+    return color;
+  }
+
   Color getColorFromSemanticLabel(const SemanticLabel& semantic_label) {
     std::vector<std::array<float, 3>> nyu_color_code{
-        {100, 100, 100}, {20, 20, 20},    {0, 128, 128},   {250, 50, 50},
+        {200, 200, 200}, {20, 20, 20},    {0, 128, 128},   {250, 50, 50},
         {102, 0, 204},   {50, 50, 250},   {220, 220, 220}, {255, 69, 20},
         {255, 20, 127},  {50, 50, 150},   {222, 180, 140}, {50, 250, 50},
         {255, 215, 0},   {150, 150, 150}, {0, 255, 255}};
@@ -160,9 +187,26 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         }
       }
     } else {
-      LOG(ERROR) << "No semantic class for label?";
+      // LOG(ERROR) << "No semantic class for label?";
     }
     return semantic_label;
+  }
+
+  SemanticLabel getLabelInstance(const Label& label) {
+    SemanticLabel instance_label = 0u;
+    int max_count = 0;
+    auto label_it = label_instance_count_ptr_->find(label);
+    if (label_it != label_instance_count_ptr_->end()) {
+      for (auto const& instance_count : label_it->second) {
+        if (instance_count.second > max_count && instance_count.first != 0u) {
+          instance_label = instance_count.first;
+          max_count = instance_count.second;
+        }
+      }
+    } else {
+      // LOG(ERROR) << "No semantic class for label?";
+    }
+    return instance_label;
   }
 
   Color getColorFromLabel(const Label& label) {
@@ -262,9 +306,17 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
               rainbowColorMap(voxel.label_confidence / expected_max_confidence);
         } else if (color_scheme_ == LabelColor) {
           color = getColorFromLabel(voxel.label);
-        } else {
+        } else if (color_scheme_ == SemanticColor) {
           SemanticLabel semantic_label = getLabelClass(voxel.label);
-          color = getColorFromSemanticLabel(semantic_label);
+          color = getColorFromInstanceLabel(semantic_label);
+        } else if (color_scheme_ == InstanceColor) {
+          SemanticLabel instance_label = getLabelInstance(voxel.label);
+          if (instance_label == 0u) {
+            // LOG(ERROR) << "Label 0";
+          } else {
+            // LOG(ERROR) << unsigned(instance_label);
+          }
+          color = getColorFromInstanceLabel(instance_label);
         }
         mesh->colors[i] = color;
       } else {
@@ -279,9 +331,12 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
               rainbowColorMap(voxel.label_confidence / expected_max_confidence);
         } else if (color_scheme_ == LabelColor) {
           color = getColorFromLabel(voxel.label);
-        } else {
+        } else if (color_scheme_ == SemanticColor) {
           SemanticLabel semantic_label = getLabelClass(voxel.label);
-          color = getColorFromSemanticLabel(semantic_label);
+          color = getColorFromInstanceLabel(semantic_label);
+        } else if (color_scheme_ == InstanceColor) {
+          SemanticLabel instance_label = getLabelInstance(voxel.label);
+          color = getColorFromInstanceLabel(instance_label);
         }
         mesh->colors[i] = color;
       }
@@ -301,8 +356,11 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   ColorScheme color_scheme_;
 
   std::map<Label, Color> label_color_map_;
+  std::map<SemanticLabel, Color> instance_color_map_;
   const std::map<Label, int>* label_age_map_ptr_;
   const std::map<Label, std::map<SemanticLabel, int>>* label_class_count_ptr_;
+  const std::map<Label, std::map<SemanticLabel, int>>*
+      label_instance_count_ptr_;
 };  // namespace voxblox
 
 }  // namespace voxblox
