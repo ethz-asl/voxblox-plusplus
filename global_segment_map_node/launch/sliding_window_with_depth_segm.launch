@@ -14,8 +14,8 @@
 
     <include if="$(arg primesense)" file="$(find gsm_node)/launch/primesense_gsm.launch">
         <arg name="sliding_window" default="true"/>
-        <arg if="$(arg slam)" name="camera_frame" value="depth_estimated"/>
-        <arg if="$(arg slam)" name="imu_frame" value="imu_estimated"/>
+        <arg if="$(arg slam)" name="camera_frame" value="depth"/>
+        <arg if="$(arg slam)" name="imu_frame" value="imu"/>
     </include>
 
     <include if="$(arg realsense)" file="$(find gsm_node)/launch/realsense_gsm.launch">

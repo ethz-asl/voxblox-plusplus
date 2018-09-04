@@ -1,5 +1,5 @@
 <launch>
-  <arg name="bag" default="/home/sebastian/Desktop/test_lounge.bag" />
+  <arg name="bag" default="/home/sebastian/Desktop/line.bag" />
   <remap from="/camera/depth/image_raw" to="/camera/depth_registered/image_raw"/>
   <remap from="/jay/color/image_raw" to="/camera/rgb/image_raw"/>
   <remap from="/jay/color/camera_info" to="/camera/rgb/camera_info"/>

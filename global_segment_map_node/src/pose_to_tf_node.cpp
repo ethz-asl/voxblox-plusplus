@@ -48,8 +48,8 @@ class PoseToTfNode {
 
   std::string world_frame_ = "world";
   std::string map_frame_ = "map";
-  std::string imu_estimated_frame_ = "imu_estimated";
-  std::string depth_estimated_frame_ = "depth_estimated";
+  std::string imu_estimated_frame_ = "imu";
+  std::string depth_estimated_frame_ = "depth";
   bool first_run = true;
   bool calculate_T_W_M = false;
 };
@@ -73,9 +73,9 @@ PoseToTfNode::PoseToTfNode(ros::NodeHandle& node_handle)
 }
 
 void PoseToTfNode::newPoseCallback(const geometry_msgs::PoseStamped& pose_msg) {
-  tf::StampedTransform T_W_I;
-  PoseStampedToTransformStamped(pose_msg, &T_W_I);
-  tf_broadcaster.sendTransform(T_W_I);
+  //tf::StampedTransform T_W_I;
+  //PoseStampedToTransformStamped(pose_msg, &T_W_I);
+  //tf_broadcaster.sendTransform(T_W_I);
 
   if (first_run) {
     getAndPublishT_W_M();

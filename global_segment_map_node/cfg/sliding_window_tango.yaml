@@ -1,4 +1,6 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
+#visualize: true
+#update_mesh_every_n_sec: 1.0
 world_frame_id: "world"
 camera_frame_id: "depth"
 scene_gsm_update_topic: "all_gsm_updates"

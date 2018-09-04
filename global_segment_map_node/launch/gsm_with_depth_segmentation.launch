@@ -23,12 +23,12 @@
     <remap from="/camera/rgb/camera_info" to="$(arg rgb_camera_info_topic)" />
   </node>
 
-  <arg name="sliding_window" />
-  <arg name="camera_frame" />
-  <arg name="imu_frame" />
+  <arg name="sliding_window" default="true"/>
+  <arg name="camera_frame" default="depth"/>
+  <arg name="imu_frame" default="imu"/>
   <include file="$(find gsm_node)/launch/gsm.launch">
     <arg name="sliding_window" value="$(arg sliding_window)"/>
-    <param name="camera_frame" value="$(arg camera_frame)"/>
-    <param name="imu_frame" value="$(arg imu_frame)"/>
+    <arg name="camera_frame" value="$(arg camera_frame)"/>
+    <arg name="imu_frame" value="$(arg imu_frame)"/>
   </include>
 </launch>
