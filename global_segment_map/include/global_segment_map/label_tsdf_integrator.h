@@ -381,28 +381,18 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
           (*segment_it)->labels_.push_back(fresh);
         }
         labelled_segments.insert(*segment_it);
-
-        // // Instance stuff
-        // if ((*segment_it)->instance_ != 0u) {
-        //   auto global_instance_it =
-        //       current_to_global_instance_map_.find((*segment_it)->instance_);
-        //   if (global_instance_it != current_to_global_instance_map_.end()) {
-        //     increaseLabelInstanceCount(fresh, global_instance_it->second);
-        //   } else {
-        //     // If current instance is not mappd to any global instance, get
-        //     // fresh one.
-        //     SemanticLabel fresh_instance = getFreshInstance();
-        //     current_to_global_instance_map_.emplace((*segment_it)->instance_,
-        //                                             fresh_instance);
-        //     increaseLabelInstanceCount(fresh, fresh_instance);
-        //   }
-        // }
       }
     }
+
+    // Instance stuff.
 
     for (auto segment_it = labelled_segments.begin();
          segment_it != labelled_segments.end(); ++segment_it) {
       Label label = (*segment_it)->labels_[0];
+      if ((*segment_it)->points_C_.size() > 0) {
+        increaseLabelFramesCount(label);
+      }
+
       // Loop through all the segments.
       if ((*segment_it)->instance_ != 0u) {
         // It's a segment with a current frame instance.
@@ -439,43 +429,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         if (instance_label != 0u) {
           assigned_instances.emplace(instance_label);
         }
+        // if ((*segment_it)->points_C_.size() > 2500) {
+        //   decreaseLabelInstanceCount(label, instance_label);
+        // }
       }
     }
-
-    // // Instance stuff
-    // if (segment->instance_ != 0u) {
-    //   auto global_instance_it =
-    //       current_to_global_instance_map_.find(segment->instance_);
-    //   if (global_instance_it != current_to_global_instance_map_.end()) {
-    //     // If current frame instance maps to a global instance, use it.
-    //     increaseLabelInstanceCount(label, global_instance_it->second);
-    //   } else {
-    //     // Current frame instance doesn't map to any global instance.
-    //     // Get the global instance with max count.
-    //     int ith_highest = 0;
-    //     SemanticLabel instance_label =
-    //         getLabelInstance(label, assigned_instances);
-    //
-    //     if (instance_label != 0u) {
-    //       current_to_global_instance_map_.emplace(segment->instance_,
-    //                                               instance_label);
-    //       assigned_instances.emplace(instance_label);
-    //     } else {
-    //       // Create new global instance.
-    //       SemanticLabel fresh_instance = getFreshInstance();
-    //       current_to_global_instance_map_.emplace(segment->instance_,
-    //                                               fresh_instance);
-    //       increaseLabelInstanceCount(label, fresh_instance);
-    //     }
-    //   }
-    // } else {
-    //   // Get the instance label this segment maps to and exclude other
-    //   // instances to be mapped to it.
-    //   SemanticLabel instance_label = getLabelInstance(label);
-    //   if (instance_label != 0u) {
-    //     assigned_instances.emplace(instance_label);
-    //   }
-    // }
   }
 
   SemanticLabel getLabelInstance(const Label& label) {
@@ -493,14 +451,30 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         if (instance_count.second > max_count && instance_count.first != 0u &&
             assigned_instances.find(instance_count.first) ==
                 assigned_instances.end()) {
-          instance_label = instance_count.first;
-          max_count = instance_count.second;
+          int frames_count = 0;
+          auto label_count_it = label_frames_count_.find(label);
+          if (label_count_it != label_frames_count_.end()) {
+            frames_count = label_count_it->second;
+          }
+          if (instance_count.second > 0.0 * (float)frames_count) {
+            instance_label = instance_count.first;
+            max_count = instance_count.second;
+          }
         }
       }
     } else {
       // LOG(ERROR) << "No semantic class for label?";
     }
     return instance_label;
+  }
+
+  void increaseLabelFramesCount(const Label& label) {
+    auto label_count_it = label_frames_count_.find(label);
+    if (label_count_it != label_frames_count_.end()) {
+      ++label_count_it->second;
+    } else {
+      label_frames_count_.insert(std::make_pair(label, 1));
+    }
   }
 
   // Increase or decrease the voxel count for a label.
@@ -612,6 +586,23 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     //                << instance_it.second;
     //   }
     // }
+  }
+
+  void decreaseLabelInstanceCount(const Label& label,
+                                  const SemanticLabel& instance_label) {
+    auto label_it = label_instance_count_.find(label);
+    if (label_it != label_instance_count_.end()) {
+      auto instance_it = label_it->second.find(instance_label);
+      if (instance_it != label_it->second.end()) {
+        --instance_it->second;
+      } else {
+        // label_it->second.emplace(instance_label, 1);
+      }
+    } else {
+      // SLMap instance_count;
+      // instance_count.emplace(instance_label, 1);
+      // label_instance_count_.emplace(label, instance_count);
+    }
   }
 
   void increaseLabelClassCount(const Label& label,
@@ -933,6 +924,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   LSLMap* getLabelInstanceCountPtr() { return &label_instance_count_; }
 
+  LMap* getLabelsFrameCountPtr() { return &label_frames_count_; }
+
   void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label,
                                   int count) {
     LMapIt label_count_it = label_map_it->second.find(label);
@@ -1110,6 +1103,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   SemanticLabel highest_instance_;
   std::map<SemanticLabel, SemanticLabel> current_to_global_instance_map_;
   LSLMap label_instance_count_;
+  LMap label_frames_count_;
 
   // We need to prevent simultaneous access to the voxels in the map. We
   // could

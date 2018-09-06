@@ -31,6 +31,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
                           label_class_count = {},
                       const std::map<Label, std::map<SemanticLabel, int>>&
                           label_instance_count = {},
+                      const std::map<Label, int>& label_frames_count = {},
                       const std::map<Label, int>& label_age_map = {},
                       ColorScheme color_scheme = LabelColor)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
@@ -39,6 +40,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         label_class_count_ptr_(&label_class_count),
         label_instance_count_ptr_(&label_instance_count),
         label_age_map_ptr_(&label_age_map),
+        label_frames_count_ptr_(&label_frames_count),
         color_scheme_(color_scheme) {}
 
   MeshLabelIntegrator(const MeshIntegratorConfig& config,
@@ -49,6 +51,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
                           label_class_count = {},
                       const std::map<Label, std::map<SemanticLabel, int>>&
                           label_instance_count = {},
+                      const std::map<Label, int>& label_frames_count = {},
                       const std::map<Label, int>& label_age_map = {},
                       ColorScheme color_scheme = LabelColor)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
@@ -57,6 +60,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         label_class_count_ptr_(&label_class_count),
         label_instance_count_ptr_(&label_instance_count),
         label_age_map_ptr_(&label_age_map),
+        label_frames_count_ptr_(&label_frames_count),
         color_scheme_(color_scheme) {}
 
   // Generates mesh for the tsdf layer.
@@ -199,8 +203,15 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     if (label_it != label_instance_count_ptr_->end()) {
       for (auto const& instance_count : label_it->second) {
         if (instance_count.second > max_count && instance_count.first != 0u) {
-          instance_label = instance_count.first;
-          max_count = instance_count.second;
+          int frames_count = 0;
+          auto label_count_it = label_frames_count_ptr_->find(label);
+          if (label_count_it != label_frames_count_ptr_->end()) {
+            frames_count = label_count_it->second;
+          }
+          if (instance_count.second > 0.0f * (float)frames_count) {
+            instance_label = instance_count.first;
+            max_count = instance_count.second;
+          }
         }
       }
     } else {
@@ -307,7 +318,11 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         } else if (color_scheme_ == LabelColor) {
           color = getColorFromLabel(voxel.label);
         } else if (color_scheme_ == SemanticColor) {
-          SemanticLabel semantic_label = getLabelClass(voxel.label);
+          SemanticLabel instance_label = getLabelInstance(voxel.label);
+          SemanticLabel semantic_label = 0u;
+          if (instance_label != 0u) {
+            semantic_label = getLabelClass(voxel.label);
+          }
           color = getColorFromInstanceLabel(semantic_label);
         } else if (color_scheme_ == InstanceColor) {
           SemanticLabel instance_label = getLabelInstance(voxel.label);
@@ -332,7 +347,11 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         } else if (color_scheme_ == LabelColor) {
           color = getColorFromLabel(voxel.label);
         } else if (color_scheme_ == SemanticColor) {
-          SemanticLabel semantic_label = getLabelClass(voxel.label);
+          SemanticLabel instance_label = getLabelInstance(voxel.label);
+          SemanticLabel semantic_label = 0u;
+          if (instance_label != 0u) {
+            semantic_label = getLabelClass(voxel.label);
+          }
           color = getColorFromInstanceLabel(semantic_label);
         } else if (color_scheme_ == InstanceColor) {
           SemanticLabel instance_label = getLabelInstance(voxel.label);
@@ -361,6 +380,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   const std::map<Label, std::map<SemanticLabel, int>>* label_class_count_ptr_;
   const std::map<Label, std::map<SemanticLabel, int>>*
       label_instance_count_ptr_;
+  const std::map<Label, int>* label_frames_count_ptr_;
 };  // namespace voxblox
 
 }  // namespace voxblox

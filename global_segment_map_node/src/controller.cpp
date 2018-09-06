@@ -131,13 +131,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
                                            camera_frame_);
 
   // Determine map parameters.
-  map_config_.voxel_size = 0.01f;
+  map_config_.voxel_size = 0.001f;
   map_config_.voxels_per_side = 8u;
 
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
-  double voxel_size = map_config_.voxel_size;
-  int voxels_per_side = map_config_.voxels_per_side;
+  double& voxel_size = map_config_.voxel_size;
+  int& voxels_per_side = map_config_.voxels_per_side;
   node_handle_private_->param<double>("voxel_size", voxel_size, voxel_size);
   node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
                                    voxels_per_side);
@@ -231,16 +231,19 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_layer_.get(), *integrator_->getLabelClassCountPtr(),
       *integrator_->getLabelInstanceCountPtr(),
+      *integrator_->getLabelsFrameCountPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::LabelColor));
   mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_semantic_layer_.get(), *integrator_->getLabelClassCountPtr(),
       *integrator_->getLabelInstanceCountPtr(),
+      *integrator_->getLabelsFrameCountPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::SemanticColor));
   mesh_instance_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_instance_layer_.get(), *integrator_->getLabelClassCountPtr(),
       *integrator_->getLabelInstanceCountPtr(),
+      *integrator_->getLabelsFrameCountPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::InstanceColor));
 
   // Visualization settings.
@@ -398,6 +401,7 @@ void Controller::advertiseExtractSegmentsService(
     ros::ServiceServer* extract_segments_srv) {
   CHECK_NOTNULL(extract_segments_srv);
   *extract_segments_srv = node_handle_private_->advertiseService(
+      // "extract_segments", &Controller::extractTSDFCallback, this);
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
@@ -580,6 +584,12 @@ bool Controller::generateMeshCallback(
   generateMesh(kClearMesh);
   return true;
 }
+
+// bool Controller::extractTSDFCallback(std_srvs::Empty::Request& request,
+//                                          std_srvs::Empty::Response& response)
+//                                          {
+//
+//                                          }
 
 bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
                                          std_srvs::Empty::Response& response) {
