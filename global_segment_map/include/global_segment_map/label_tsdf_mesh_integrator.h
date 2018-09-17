@@ -21,12 +21,14 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     LabelColor = 1,
     SemanticColor = 2,
     InstanceColor = 3,
-    ConfidenceColor = 4
+    GeometricInstanceColor = 4,
+    ConfidenceColor = 5
   };
 
   MeshLabelIntegrator(const MeshIntegratorConfig& config,
                       Layer<TsdfVoxel>* tsdf_layer,
                       Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
+                      std::set<SemanticLabel>& all_semantic_labels,
                       const std::map<Label, std::map<SemanticLabel, int>>&
                           label_class_count = {},
                       const std::map<Label, std::map<SemanticLabel, int>>&
@@ -39,6 +41,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         label_layer_const_(CHECK_NOTNULL(label_layer)),
         label_class_count_ptr_(&label_class_count),
         label_instance_count_ptr_(&label_instance_count),
+        all_semantic_labels_ptr_(&all_semantic_labels),
         label_age_map_ptr_(&label_age_map),
         label_frames_count_ptr_(&label_frames_count),
         color_scheme_(color_scheme) {}
@@ -47,6 +50,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
                       const Layer<TsdfVoxel>& tsdf_layer,
                       const Layer<LabelVoxel>& label_layer,
                       MeshLayer* mesh_layer,
+                      std::set<SemanticLabel>& all_semantic_labels,
                       const std::map<Label, std::map<SemanticLabel, int>>&
                           label_class_count = {},
                       const std::map<Label, std::map<SemanticLabel, int>>&
@@ -59,6 +63,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         label_layer_const_(CHECK_NOTNULL(&label_layer)),
         label_class_count_ptr_(&label_class_count),
         label_instance_count_ptr_(&label_instance_count),
+        all_semantic_labels_ptr_(&all_semantic_labels),
         label_age_map_ptr_(&label_age_map),
         label_frames_count_ptr_(&label_frames_count),
         color_scheme_(color_scheme) {}
@@ -118,65 +123,29 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     }
   }
 
-  Color getColorFromInstanceLabel(const SemanticLabel& instance_label) {
-    Color color;
-    auto instance_color_map_it = instance_color_map_.find(instance_label);
-
-    if (instance_color_map_it != instance_color_map_.end()) {
-      color = instance_color_map_it->second;
-    } else {
-      color = randomColor();
-      if (instance_label == 0u) {
-        color.r = 200;
-        color.g = 200;
-        color.b = 200;
+  SemanticLabel getLabelInstance(const Label& label) {
+    SemanticLabel instance_label = 0u;
+    int max_count = 0;
+    auto label_it = label_instance_count_ptr_->find(label);
+    if (label_it != label_instance_count_ptr_->end()) {
+      for (auto const& instance_count : label_it->second) {
+        if (instance_count.second > max_count && instance_count.first != 0u) {
+          int frames_count = 0;
+          auto label_count_it = label_frames_count_ptr_->find(label);
+          if (label_count_it != label_frames_count_ptr_->end()) {
+            frames_count = label_count_it->second;
+          }
+          if (instance_count.second >
+              0.1f * (float)(frames_count - instance_count.second)) {
+            instance_label = instance_count.first;
+            max_count = instance_count.second;
+          }
+        }
       }
-      instance_color_map_.insert(
-          std::pair<SemanticLabel, Color>(instance_label, color));
+    } else {
+      // LOG(ERROR) << "No semantic class for label?";
     }
-
-    return color;
-  }
-
-  Color getColorFromSemanticLabel(const SemanticLabel& semantic_label) {
-    std::vector<std::array<float, 3>> nyu_color_code{
-        {200, 200, 200}, {20, 20, 20},    {0, 128, 128},   {250, 50, 50},
-        {102, 0, 204},   {50, 50, 250},   {220, 220, 220}, {255, 69, 20},
-        {255, 20, 127},  {50, 50, 150},   {222, 180, 140}, {50, 250, 50},
-        {255, 215, 0},   {150, 150, 150}, {0, 255, 255}};
-
-    Color color;
-    color.r = nyu_color_code.at(semantic_label)[0];
-    color.g = nyu_color_code.at(semantic_label)[1];
-    color.b = nyu_color_code.at(semantic_label)[2];
-
-    if (semantic_label == 0) {
-      color.a = 0.5;
-    }
-
-    // uint8_t ind = semantic_label;
-    // color.r = 0;
-    // color.g = 0;
-    // color.b = 0;
-    // for (int i = 7; i >= 0; --i) {
-    //   color.r |= (((ind >> 0) & 1) << i);
-    //   color.g |= (((ind >> 1) & 1) << i);
-    //   color.b |= (((ind >> 2) & 1) << i);
-    //   ind >>= 3;
-    // }
-
-    // color.r = 0;
-    // color.g = 0;
-    // color.b = 0;
-    // uint8_t c = semantic_label;
-    // for (int i = 7; i >= 0; --i) {
-    //   color.r |= ((c & (1 << 0)) << i);
-    //   color.g |= ((c & (1 << 1)) << i);
-    //   color.b |= ((c & (1 << 2)) << i);
-    //   c >>= 3;
-    // }
-
-    return color;
+    return instance_label;
   }
 
   SemanticLabel getLabelClass(const Label& label) {
@@ -194,30 +163,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       // LOG(ERROR) << "No semantic class for label?";
     }
     return semantic_label;
-  }
-
-  SemanticLabel getLabelInstance(const Label& label) {
-    SemanticLabel instance_label = 0u;
-    int max_count = 0;
-    auto label_it = label_instance_count_ptr_->find(label);
-    if (label_it != label_instance_count_ptr_->end()) {
-      for (auto const& instance_count : label_it->second) {
-        if (instance_count.second > max_count && instance_count.first != 0u) {
-          int frames_count = 0;
-          auto label_count_it = label_frames_count_ptr_->find(label);
-          if (label_count_it != label_frames_count_ptr_->end()) {
-            frames_count = label_count_it->second;
-          }
-          if (instance_count.second > 0.0f * (float)frames_count) {
-            instance_label = instance_count.first;
-            max_count = instance_count.second;
-          }
-        }
-      }
-    } else {
-      // LOG(ERROR) << "No semantic class for label?";
-    }
-    return instance_label;
   }
 
   Color getColorFromLabel(const Label& label) {
@@ -266,6 +211,132 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     //   color.g = shade_of_gray;
     //   color.b = shade_of_gray;
     // }
+    return color;
+  }
+
+  Color getColorFromInstanceLabel(const SemanticLabel& instance_label) {
+    Color color;
+    auto instance_color_map_it = instance_color_map_.find(instance_label);
+
+    if (instance_color_map_it != instance_color_map_.end()) {
+      color = instance_color_map_it->second;
+    } else {
+      color = randomColor();
+      if (instance_label == 0u) {
+        color.r = 200;
+        color.g = 200;
+        color.b = 200;
+      }
+      instance_color_map_.insert(
+          std::pair<SemanticLabel, Color>(instance_label, color));
+    }
+
+    return color;
+  }
+
+  Color getColorFromSemanticLabel(const SemanticLabel& semantic_label) {
+    // std::vector<std::array<float, 3>> nyu_color_code{
+    //     {200, 200, 200}, {20, 20, 20},    {0, 128, 128},   {250, 50, 50},
+    //     {102, 0, 204},   {50, 50, 250},   {220, 220, 220}, {255, 69, 20},
+    //     {255, 20, 127},  {50, 50, 150},   {222, 180, 140}, {50, 250, 50},
+    //     {255, 215, 0},   {150, 150, 150}, {0, 255, 255}};
+    std::vector<std::array<float, 3>> coco_color_code{
+        {200, 200, 200}, {128, 0, 0},    {0, 128, 0},    {128, 128, 0},
+        {0, 0, 128},     {128, 0, 128},  {0, 128, 128},  {128, 128, 128},
+        {64, 0, 0},      {192, 0, 0},    {64, 128, 0},   {192, 128, 0},
+        {64, 0, 128},    {192, 0, 128},  {64, 128, 128}, {192, 128, 128},
+        {0, 64, 0},      {128, 64, 0},   {0, 192, 0},    {128, 192, 0},
+        {0, 64, 128},    {128, 64, 128}, {0, 192, 128},  {128, 192, 128},
+        {64, 64, 0},     {192, 64, 0},   {64, 192, 0},   {192, 192, 0},
+        {64, 64, 128},   {192, 64, 128}, {64, 192, 128}, {192, 192, 128},
+        {0, 0, 64},      {128, 0, 64},   {0, 128, 64},   {128, 128, 64},
+        {0, 0, 192},     {128, 0, 192},  {0, 128, 192},  {128, 128, 192},
+        {64, 0, 64},     {192, 0, 64},   {64, 128, 64},  {192, 128, 64},
+        {64, 0, 192},    {192, 0, 192},  {64, 128, 192}, {192, 128, 192},
+        {0, 64, 64},     {128, 64, 64},  {0, 192, 64},   {128, 192, 64},
+        {0, 64, 192},    {128, 64, 192}, {0, 192, 192},  {128, 192, 192},
+        {64, 64, 64},    {192, 64, 64},  {64, 192, 64},  {192, 192, 64},
+        {64, 64, 192},   {192, 64, 192}, {64, 192, 192}, {192, 192, 192},
+        {32, 0, 0},      {160, 0, 0},    {32, 128, 0},   {160, 128, 0},
+        {32, 0, 128},    {160, 0, 128},  {32, 128, 128}, {160, 128, 128},
+        {96, 0, 0},      {224, 0, 0},    {96, 128, 0},   {224, 128, 0},
+        {96, 0, 128},    {224, 0, 128},  {96, 128, 128}, {224, 128, 128},
+        {32, 64, 0},     {160, 64, 0},   {32, 192, 0},   {160, 192, 0},
+        {32, 64, 128},   {160, 64, 128}, {32, 192, 128}, {160, 192, 128},
+        {96, 64, 0},     {224, 64, 0},   {96, 192, 0},   {224, 192, 0},
+        {96, 64, 128},   {224, 64, 128}, {96, 192, 128}, {224, 192, 128},
+        {32, 0, 64},     {160, 0, 64},   {32, 128, 64},  {160, 128, 64},
+        {32, 0, 192},    {160, 0, 192},  {32, 128, 192}, {160, 128, 192},
+        {96, 0, 64},     {224, 0, 64},   {96, 128, 64},  {224, 128, 64},
+        {96, 0, 192},    {224, 0, 192},  {96, 128, 192}, {224, 128, 192},
+        {32, 64, 64},    {160, 64, 64},  {32, 192, 64},  {160, 192, 64},
+        {32, 64, 192},   {160, 64, 192}, {32, 192, 192}, {160, 192, 192},
+        {96, 64, 64},    {224, 64, 64},  {96, 192, 64},  {224, 192, 64},
+        {96, 64, 192},   {224, 64, 192}, {96, 192, 192}, {224, 192, 192},
+        {0, 32, 0},      {128, 32, 0},   {0, 160, 0},    {128, 160, 0},
+        {0, 32, 128},    {128, 32, 128}, {0, 160, 128},  {128, 160, 128},
+        {64, 32, 0},     {192, 32, 0},   {64, 160, 0},   {192, 160, 0},
+        {64, 32, 128},   {192, 32, 128}, {64, 160, 128}, {192, 160, 128},
+        {0, 96, 0},      {128, 96, 0},   {0, 224, 0},    {128, 224, 0},
+        {0, 96, 128},    {128, 96, 128}, {0, 224, 128},  {128, 224, 128},
+        {64, 96, 0},     {192, 96, 0},   {64, 224, 0},   {192, 224, 0},
+        {64, 96, 128},   {192, 96, 128}, {64, 224, 128}, {192, 224, 128},
+        {0, 32, 64},     {128, 32, 64},  {0, 160, 64},   {128, 160, 64},
+        {0, 32, 192},    {128, 32, 192}, {0, 160, 192},  {128, 160, 192},
+        {64, 32, 64},    {192, 32, 64},  {64, 160, 64},  {192, 160, 64},
+        {64, 32, 192},   {192, 32, 192}, {64, 160, 192}, {192, 160, 192},
+        {0, 96, 64},     {128, 96, 64},  {0, 224, 64},   {128, 224, 64},
+        {0, 96, 192},    {128, 96, 192}, {0, 224, 192},  {128, 224, 192},
+        {64, 96, 64},    {192, 96, 64},  {64, 224, 64},  {192, 224, 64},
+        {64, 96, 192},   {192, 96, 192}, {64, 224, 192}, {192, 224, 192},
+        {32, 32, 0},     {160, 32, 0},   {32, 160, 0},   {160, 160, 0},
+        {32, 32, 128},   {160, 32, 128}, {32, 160, 128}, {160, 160, 128},
+        {96, 32, 0},     {224, 32, 0},   {96, 160, 0},   {224, 160, 0},
+        {96, 32, 128},   {224, 32, 128}, {96, 160, 128}, {224, 160, 128},
+        {32, 96, 0},     {160, 96, 0},   {32, 224, 0},   {160, 224, 0},
+        {32, 96, 128},   {160, 96, 128}, {32, 224, 128}, {160, 224, 128},
+        {96, 96, 0},     {224, 96, 0},   {96, 224, 0},   {224, 224, 0},
+        {96, 96, 128},   {224, 96, 128}, {96, 224, 128}, {224, 224, 128},
+        {32, 32, 64},    {160, 32, 64},  {32, 160, 64},  {160, 160, 64},
+        {32, 32, 192},   {160, 32, 192}, {32, 160, 192}, {160, 160, 192},
+        {96, 32, 64},    {224, 32, 64},  {96, 160, 64},  {224, 160, 64},
+        {96, 32, 192},   {224, 32, 192}, {96, 160, 192}, {224, 160, 192},
+        {32, 96, 64},    {160, 96, 64},  {32, 224, 64},  {160, 224, 64},
+        {32, 96, 192},   {160, 96, 192}, {32, 224, 192}, {160, 224, 192},
+        {96, 96, 64},    {224, 96, 64},  {96, 224, 64},  {224, 224, 64},
+        {96, 96, 192},   {224, 96, 192}, {96, 224, 192}, {224, 224, 192}};
+
+    Color color;
+    color.r = coco_color_code.at(semantic_label)[0];
+    color.g = coco_color_code.at(semantic_label)[1];
+    color.b = coco_color_code.at(semantic_label)[2];
+
+    // if (semantic_label == 0) {
+    //   color.a = 0.5;
+    // }
+
+    // uint8_t ind = semantic_label;
+    // color.r = 0;
+    // color.g = 0;
+    // color.b = 0;
+    // for (int i = 7; i >= 0; --i) {
+    //   color.r |= (((ind >> 0) & 1) << i);
+    //   color.g |= (((ind >> 1) & 1) << i);
+    //   color.b |= (((ind >> 2) & 1) << i);
+    //   ind >>= 3;
+    // }
+
+    // color.r = 0;
+    // color.g = 0;
+    // color.b = 0;
+    // uint8_t c = semantic_label;
+    // for (int i = 7; i >= 0; --i) {
+    //   color.r |= ((c & (1 << 0)) << i);
+    //   color.g |= ((c & (1 << 1)) << i);
+    //   color.b |= ((c & (1 << 2)) << i);
+    //   c >>= 3;
+    // }
+
     return color;
   }
 
@@ -322,8 +393,10 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           SemanticLabel semantic_label = 0u;
           if (instance_label != 0u) {
             semantic_label = getLabelClass(voxel.label);
+            all_semantic_labels_ptr_->insert(semantic_label);
           }
-          color = getColorFromInstanceLabel(semantic_label);
+          // color = getColorFromInstanceLabel(semantic_label);
+          color = getColorFromSemanticLabel(semantic_label);
         } else if (color_scheme_ == InstanceColor) {
           SemanticLabel instance_label = getLabelInstance(voxel.label);
           if (instance_label == 0u) {
@@ -332,6 +405,13 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
             // LOG(ERROR) << unsigned(instance_label);
           }
           color = getColorFromInstanceLabel(instance_label);
+        } else if (color_scheme_ == GeometricInstanceColor) {
+          SemanticLabel instance_label = getLabelInstance(voxel.label);
+          if (instance_label == 0u) {
+            color = getColorFromLabel(voxel.label);
+          } else {
+            color = getColorFromInstanceLabel(instance_label);
+          }
         }
         mesh->colors[i] = color;
       } else {
@@ -351,11 +431,20 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           SemanticLabel semantic_label = 0u;
           if (instance_label != 0u) {
             semantic_label = getLabelClass(voxel.label);
+            all_semantic_labels_ptr_->insert(semantic_label);
           }
-          color = getColorFromInstanceLabel(semantic_label);
+          // color = getColorFromInstanceLabel(semantic_label);
+          color = getColorFromSemanticLabel(semantic_label);
         } else if (color_scheme_ == InstanceColor) {
           SemanticLabel instance_label = getLabelInstance(voxel.label);
           color = getColorFromInstanceLabel(instance_label);
+        } else if (color_scheme_ == GeometricInstanceColor) {
+          SemanticLabel instance_label = getLabelInstance(voxel.label);
+          if (instance_label == 0u) {
+            color = getColorFromLabel(voxel.label);
+          } else {
+            color = getColorFromInstanceLabel(instance_label);
+          }
         }
         mesh->colors[i] = color;
       }
@@ -381,6 +470,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   const std::map<Label, std::map<SemanticLabel, int>>*
       label_instance_count_ptr_;
   const std::map<Label, int>* label_frames_count_ptr_;
+  std::set<SemanticLabel>* all_semantic_labels_ptr_;
 };  // namespace voxblox
 
 }  // namespace voxblox

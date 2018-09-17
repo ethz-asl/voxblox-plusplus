@@ -228,8 +228,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     }
     if (updated == false) {
-      LOG(FATAL) << "Out-of-memory for storing labels and confidences for this "
-                    "voxel. Please increse size of array.";
+      // LOG(FATAL) << "Out-of-memory for storing labels and confidences for
+      // this " "voxel. Please increse size of array.";
     }
   }
 
@@ -404,7 +404,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         } else {
           // Current frame instance doesn't map to any global instance.
           // Get the global instance with max count.
-          int ith_highest = 0;
           SemanticLabel instance_label =
               getLabelInstance(label, assigned_instances);
 
@@ -426,6 +425,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         // It's a segment with no instance prediction in the current frame.
         // Get the global instance it maps to, as set it as assigned.
         SemanticLabel instance_label = getLabelInstance(label);
+        // TODO(grinvalm) : also pass assigned instances here?
         if (instance_label != 0u) {
           assigned_instances.emplace(instance_label);
         }
@@ -456,7 +456,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
           if (label_count_it != label_frames_count_.end()) {
             frames_count = label_count_it->second;
           }
-          if (instance_count.second > 0.0 * (float)frames_count) {
+          if (instance_count.second >
+              0.0 * (float)(frames_count - instance_count.second)) {
             instance_label = instance_count.first;
             max_count = instance_count.second;
           }
@@ -638,6 +639,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     updateVoxelLabelAndConfidence(label_voxel, label);
     Label new_label = label_voxel->label;
 
+    // This old semantic stuff per voxel was not thread safe.
+    // Now all is good.
     // increaseLabelClassCount(new_label, semantic_label);
 
     if (new_label != previous_label) {
@@ -770,8 +773,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
           global_voxel_idx, &label_block, &block_idx);
 
-      updateLabelVoxel(merged_point_G, merged_label, label_voxel,
-                       merged_label_confidence);
+      if (!config_.voxel_carving_enabled ||
+          std::abs(tsdf_voxel->distance) <
+              config_.default_truncation_distance) {
+        updateLabelVoxel(merged_point_G, merged_label, label_voxel,
+                         merged_label_confidence);
+      }
     }
   }
 

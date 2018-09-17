@@ -27,6 +27,88 @@
 namespace voxblox {
 namespace voxblox_gsm {
 
+std::string classes[81] = {"BG",
+                           "person",
+                           "bicycle",
+                           "car",
+                           "motorcycle",
+                           "airplane",
+                           "bus",
+                           "train",
+                           "truck",
+                           "boat",
+                           "traffic light",
+                           "fire hydrant",
+                           "stop sign",
+                           "parking meter",
+                           "bench",
+                           "bird",
+                           "cat",
+                           "dog",
+                           "horse",
+                           "sheep",
+                           "cow",
+                           "elephant",
+                           "bear",
+                           "zebra",
+                           "giraffe",
+                           "backpack",
+                           "umbrella",
+                           "handbag",
+                           "tie",
+                           "suitcase",
+                           "frisbee",
+                           "skis",
+                           "snowboard",
+                           "sports ball",
+                           "kite",
+                           "baseball bat",
+                           "baseball glove",
+                           "skateboard",
+                           "surfboard",
+                           "tennis racket",
+                           "bottle",
+                           "wine glass",
+                           "cup",
+                           "fork",
+                           "knife",
+                           "spoon",
+                           "bowl",
+                           "banana",
+                           "apple",
+                           "sandwich",
+                           "orange",
+                           "broccoli",
+                           "carrot",
+                           "hot dog",
+                           "pizza",
+                           "donut",
+                           "cake",
+                           "chair",
+                           "couch",
+                           "potted plant",
+                           "bed",
+                           "dining table",
+                           "toilet",
+                           "tv",
+                           "laptop",
+                           "mouse",
+                           "remote",
+                           "keyboard",
+                           "cell phone",
+                           "microwave",
+                           "oven",
+                           "toaster",
+                           "sink",
+                           "refrigerator",
+                           "book",
+                           "clock",
+                           "vase",
+                           "scissors",
+                           "teddy bear",
+                           "hair drier",
+                           "toothbrush"};
+
 bool updatedMesh;
 boost::mutex updateMeshMutex;
 boost::mutex viewerSpin;
@@ -116,7 +198,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       // Increased time limit for lookup in the past of tf messages
       // to give some slack to the pipeline and not lose any messages.
       integrated_frames_count_(0u),
-      tf_listener_(ros::Duration(100)),
+      tf_listener_(ros::Duration(1000)),
       world_frame_("world"),
       camera_frame_(""),
       no_update_timeout_(0.0),
@@ -130,14 +212,10 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
                                            camera_frame_);
 
-  // Determine map parameters.
-  map_config_.voxel_size = 0.001f;
-  map_config_.voxels_per_side = 8u;
-
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
-  double& voxel_size = map_config_.voxel_size;
-  int& voxels_per_side = map_config_.voxels_per_side;
+  double voxel_size = 0.001f;
+  int voxels_per_side = 8u;
   node_handle_private_->param<double>("voxel_size", voxel_size, voxel_size);
   node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
                                    voxels_per_side);
@@ -145,6 +223,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
     voxels_per_side = map_config_.voxels_per_side;
   }
+
+  map_config_.voxel_size = static_cast<FloatingPoint>(voxel_size);
+  map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
 
@@ -190,6 +271,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
   } else if (mesh_color_scheme.compare("instance_label") == 0) {
     mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
+  } else if (mesh_color_scheme.compare("geometric_instance_label") == 0) {
+    mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
   } else if (mesh_color_scheme.compare("confidence") == 0) {
     mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
   } else {
@@ -218,7 +301,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config.object_flushing_age_threshold,
       label_tsdf_integrator_config.object_flushing_age_threshold);
 
-  integrator_config.integrator_threads = 1u;
+  // integrator_config.integrator_threads = 1u;
 
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
@@ -227,24 +310,36 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   mesh_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
+  mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_layer_.get(), *integrator_->getLabelClassCountPtr(),
+      mesh_layer_.get(), all_semantic_labels_,
+      *integrator_->getLabelClassCountPtr(),
       *integrator_->getLabelInstanceCountPtr(),
       *integrator_->getLabelsFrameCountPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::LabelColor));
   mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_semantic_layer_.get(), *integrator_->getLabelClassCountPtr(),
+      mesh_semantic_layer_.get(), all_semantic_labels_,
+      *integrator_->getLabelClassCountPtr(),
       *integrator_->getLabelInstanceCountPtr(),
       *integrator_->getLabelsFrameCountPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::SemanticColor));
   mesh_instance_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_instance_layer_.get(), *integrator_->getLabelClassCountPtr(),
+      mesh_instance_layer_.get(), all_semantic_labels_,
+      *integrator_->getLabelClassCountPtr(),
       *integrator_->getLabelInstanceCountPtr(),
       *integrator_->getLabelsFrameCountPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::InstanceColor));
+  mesh_merged_integrator_.reset(new MeshLabelIntegrator(
+      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
+      mesh_merged_layer_.get(), all_semantic_labels_,
+      *integrator_->getLabelClassCountPtr(),
+      *integrator_->getLabelInstanceCountPtr(),
+      *integrator_->getLabelsFrameCountPtr(),
+      *integrator_->getLabelsAgeMapPtr(),
+      MeshLabelIntegrator::GeometricInstanceColor));
 
   // Visualization settings.
   bool visualize = false;
@@ -255,7 +350,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     // boost::thread semanticVisualizerThread(
     //     visualizeMesh, boost::ref(*mesh_semantic_layer_), "GSM Semantics");
     boost::thread instanceVisualizerThread(
-        visualizeMesh, boost::ref(*mesh_instance_layer_), "GSM Instances");
+        visualizeMesh, boost::ref(*mesh_merged_layer_), "GSM Instances");
   }
 
   node_handle_private_->param<bool>(
@@ -797,7 +892,8 @@ bool Controller::publishObjects(const bool publish_all) {
       mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
       // mesh_layer.reset(new MeshLayer(map_->block_size()));
       MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer,
-                                          &label_layer, mesh_layer.get());
+                                          &label_layer, mesh_layer.get(),
+                                          all_semantic_labels_);
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = true;
       mesh_integrator.generateMesh(only_mesh_updated_blocks,
@@ -853,10 +949,16 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     constexpr bool clear_updated_flag = true;
     mesh_integrator_->generateMesh(only_mesh_updated_blocks,
                                    clear_updated_flag);
+    all_semantic_labels_.clear();
     mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
                                             clear_updated_flag);
+    for (auto sl : all_semantic_labels_) {
+      LOG(ERROR) << classes[(unsigned)sl];
+    }
     mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
                                             clear_updated_flag);
+    mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+                                          clear_updated_flag);
 
   } else {
     constexpr bool only_mesh_updated_blocks = true;
@@ -867,6 +969,8 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
                                             clear_updated_flag);
     mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
                                             clear_updated_flag);
+    mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+                                          clear_updated_flag);
   }
   generate_mesh_timer.Stop();
 
@@ -888,12 +992,15 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 
   if (!mesh_filename_.empty()) {
     timing::Timer output_mesh_timer("mesh/output");
-    bool success = outputMeshLayerAsPly(mesh_filename_, false, *mesh_layer_);
+    bool success =
+        outputMeshLayerAsPly("label_" + mesh_filename_, false, *mesh_layer_);
     // bool success =
-    success &=
-        outputMeshLayerAsPly("semantic.ply", false, *mesh_semantic_layer_);
-    success &=
-        outputMeshLayerAsPly("instance.ply", false, *mesh_instance_layer_);
+    success &= outputMeshLayerAsPly("semantic_" + mesh_filename_, false,
+                                    *mesh_semantic_layer_);
+    success &= outputMeshLayerAsPly("instance_" + mesh_filename_, false,
+                                    *mesh_instance_layer_);
+    success &= outputMeshLayerAsPly("merged_" + mesh_filename_, false,
+                                    *mesh_merged_layer_);
     output_mesh_timer.Stop();
     if (success) {
       ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
@@ -912,8 +1019,8 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   timing::Timer generate_mesh_timer("mesh/update");
   constexpr bool only_mesh_updated_blocks = true;
   constexpr bool clear_updated_flag = true;
-  updatedMesh = mesh_instance_integrator_->generateMesh(
-      only_mesh_updated_blocks, clear_updated_flag);
+  updatedMesh = mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                      clear_updated_flag);
   updateMeshLock.unlock();
 
   generate_mesh_timer.Stop();
