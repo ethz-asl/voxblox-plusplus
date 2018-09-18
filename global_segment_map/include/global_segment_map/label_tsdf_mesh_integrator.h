@@ -116,7 +116,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         << "If you would like to modify the updated flag in the blocks, please "
         << "use the constructor that provides a non-const link to the sdf and "
            "label layers!";
-     DCHECK(index_getter != n
     DCHECK(index_getter != nullptr);
 
     size_t list_idx;
