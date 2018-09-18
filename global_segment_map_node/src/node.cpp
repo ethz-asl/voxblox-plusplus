@@ -48,14 +48,25 @@ int main(int argc, char** argv) {
   ros::ServiceServer extract_segments_srv;
   controller.advertiseExtractSegmentsService(&extract_segments_srv);
 
-  while (ros::ok() && !controller.noNewUpdatesReceived()) {
-    ros::spinOnce();
-  }
+  ros::AsyncSpinner spinner(0);
+  spinner.start();
+  ros::waitForShutdown();
 
-  controller.publishScene();
-  constexpr bool kPublishAllSegments = true;
-  controller.publishObjects(kPublishAllSegments);
+  // constexpr double kNoUpdateTimeout = 5.0;
+  // !controller.noNewUpdatesReceived(kNoUpdateTimeout)
+  // while (ros::ok()) {
+  //   ros::spinOnce();
+  // }
 
-  LOG(INFO) << "Shutting down.";
+  // while (ros::ok() && !controller.noNewUpdatesReceived()) {
+  //   ros::spinOnce();
+  // }
+  //
+  // controller.publishScene();
+  // constexpr bool kPublishAllSegments = true;
+  // controller.publishObjects(kPublishAllSegments);
+
+  LOG(INFO) << "Shutting down";
+
   return 0;
 }

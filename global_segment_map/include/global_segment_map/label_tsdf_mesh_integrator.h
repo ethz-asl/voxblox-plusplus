@@ -70,12 +70,18 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
   // Generates mesh for the tsdf layer.
   bool generateMesh(bool only_mesh_updated_blocks, bool clear_updated_flag) {
+    CHECK(!clear_updated_flag || ((sdf_layer_mutable_ != nullptr) &&
+                                  (label_layer_mutable_ != nullptr)))
+        << "If you would like to modify the updated flag in the blocks, please "
+        << "use the constructor that provides a non-const link to the sdf and "
+           "label layers!";
+
     BlockIndexList all_tsdf_blocks;
     BlockIndexList all_label_blocks;
     if (only_mesh_updated_blocks) {
       sdf_layer_const_->getAllUpdatedBlocks(&all_tsdf_blocks);
       // TODO(grinvalm) unique union of block indices here.
-      label_layer_const_->getAllUpdatedBlocks(&all_label_blocks);
+      label_layer_mutable_->getAllUpdatedBlocks(&all_label_blocks);
       if (all_label_blocks.size() == 0u && all_tsdf_blocks.size() == 0u)
         return false;
     } else {
@@ -92,8 +98,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     std::list<std::thread> integration_threads;
     for (size_t i = 0; i < config_.integrator_threads; ++i) {
       integration_threads.emplace_back(
-          &MeshIntegrator::generateMeshBlocksFunction, this, all_tsdf_blocks,
-          clear_updated_flag, &index_getter);
+          &MeshLabelIntegrator::generateMeshBlocksFunction, this,
+          all_tsdf_blocks, clear_updated_flag, &index_getter);
     }
 
     for (std::thread& thread : integration_threads) {
@@ -105,6 +111,12 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   void generateMeshBlocksFunction(const BlockIndexList& all_tsdf_blocks,
                                   bool clear_updated_flag,
                                   ThreadSafeIndex* index_getter) {
+    CHECK(!clear_updated_flag || (sdf_layer_mutable_ != nullptr) ||
+          (label_layer_mutable_ != nullptr))
+        << "If you would like to modify the updated flag in the blocks, please "
+        << "use the constructor that provides a non-const link to the sdf and "
+           "label layers!";
+     DCHECK(index_getter != n
     DCHECK(index_getter != nullptr);
 
     size_t list_idx;
@@ -117,6 +129,11 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
       updateMeshForBlock(block_idx);
       if (clear_updated_flag) {
+        typename Block<TsdfVoxel>::Ptr tsdf_block =
+            sdf_layer_mutable_->getBlockPtrByIndex(block_idx);
+        typename Block<LabelVoxel>::Ptr label_block =
+            label_layer_mutable_->getBlockPtrByIndex(block_idx);
+
         tsdf_block->updated() = false;
         label_block->updated() = false;
       }

@@ -379,7 +379,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<double>("no_update_timeout", no_update_timeout_,
                                       no_update_timeout_);
 
-  ros::spinOnce();
+  // ros::spinOnce();
 }
 
 Controller::~Controller() {}
