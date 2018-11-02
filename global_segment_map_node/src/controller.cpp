@@ -601,10 +601,11 @@ void Controller::extractSegmentLayers(
       auto it = label_layers_map->find(global_label_voxel.label);
       if (it == label_layers_map->end()) {
         if (labels_list_is_complete) {
-          LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
+      /*    LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
                      << global_label_voxel.label
                      << " which is not in the given "
                         "list of labels to retrieve.";
+*/
         }
         continue;
       }

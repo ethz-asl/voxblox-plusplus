@@ -3,6 +3,7 @@ world_frame_id: "world"
 camera_frame_id: "depth"
 scene_gsm_update_topic: "scene_update"
 segment_gsm_update_topic: "gsm_update"
+publish_gsm_updates: true
 object_flushing_age_threshold: 6
 validate_merged_object: "validate_merged_object"
 enable_pairwise_confidence_merging: false
