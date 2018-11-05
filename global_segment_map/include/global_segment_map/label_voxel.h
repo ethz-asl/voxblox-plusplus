@@ -11,13 +11,13 @@ namespace voxblox {
 
 struct LabelCount {
   Label label = 0u;
-  LabelConfidence label_confidence = 0.0f;
+  LabelConfidence label_confidence = 0u;
 };
 
 struct LabelVoxel {
   Label label = 0u;
-  LabelConfidence label_confidence = 0.0f;
-  LabelCount label_count[45];
+  LabelConfidence label_confidence = 0u;
+  LabelCount label_count[15];
 };
 
 namespace voxel_types {

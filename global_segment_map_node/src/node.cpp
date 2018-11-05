@@ -51,13 +51,7 @@ int main(int argc, char** argv) {
   ros::AsyncSpinner spinner(0);
   spinner.start();
   ros::waitForShutdown();
-
-  // constexpr double kNoUpdateTimeout = 5.0;
-  // !controller.noNewUpdatesReceived(kNoUpdateTimeout)
-  // while (ros::ok()) {
-  //   ros::spinOnce();
-  // }
-
+  //
   // while (ros::ok() && !controller.noNewUpdatesReceived()) {
   //   ros::spinOnce();
   // }
@@ -66,7 +60,6 @@ int main(int argc, char** argv) {
   // constexpr bool kPublishAllSegments = true;
   // controller.publishObjects(kPublishAllSegments);
 
-  LOG(INFO) << "Shutting down";
-
+  LOG(INFO) << "Shutting down.";
   return 0;
 }

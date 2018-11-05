@@ -35,7 +35,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
                           label_instance_count = {},
                       const std::map<Label, int>& label_frames_count = {},
                       const std::map<Label, int>& label_age_map = {},
-                      ColorScheme color_scheme = LabelColor)
+                      ColorScheme color_scheme = LabelColor,
+                      bool* remesh = false)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(CHECK_NOTNULL(label_layer)),
         label_layer_const_(CHECK_NOTNULL(label_layer)),
@@ -44,20 +45,20 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         all_semantic_labels_ptr_(&all_semantic_labels),
         label_age_map_ptr_(&label_age_map),
         label_frames_count_ptr_(&label_frames_count),
-        color_scheme_(color_scheme) {}
+        color_scheme_(color_scheme),
+        remesh_ptr_(remesh) {}
 
-  MeshLabelIntegrator(const MeshIntegratorConfig& config,
-                      const Layer<TsdfVoxel>& tsdf_layer,
-                      const Layer<LabelVoxel>& label_layer,
-                      MeshLayer* mesh_layer,
-                      std::set<SemanticLabel>& all_semantic_labels,
-                      const std::map<Label, std::map<SemanticLabel, int>>&
-                          label_class_count = {},
-                      const std::map<Label, std::map<SemanticLabel, int>>&
-                          label_instance_count = {},
-                      const std::map<Label, int>& label_frames_count = {},
-                      const std::map<Label, int>& label_age_map = {},
-                      ColorScheme color_scheme = LabelColor)
+  MeshLabelIntegrator(
+      const MeshIntegratorConfig& config, const Layer<TsdfVoxel>& tsdf_layer,
+      const Layer<LabelVoxel>& label_layer, MeshLayer* mesh_layer,
+      std::set<SemanticLabel>& all_semantic_labels,
+      const std::map<Label, std::map<SemanticLabel, int>>& label_class_count =
+          {},
+      const std::map<Label, std::map<SemanticLabel, int>>&
+          label_instance_count = {},
+      const std::map<Label, int>& label_frames_count = {},
+      const std::map<Label, int>& label_age_map = {},
+      ColorScheme color_scheme = LabelColor, bool* remesh = false)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(nullptr),
         label_layer_const_(CHECK_NOTNULL(&label_layer)),
@@ -66,7 +67,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         all_semantic_labels_ptr_(&all_semantic_labels),
         label_age_map_ptr_(&label_age_map),
         label_frames_count_ptr_(&label_frames_count),
-        color_scheme_(color_scheme) {}
+        color_scheme_(color_scheme),
+        remesh_ptr_(remesh) {}
 
   // Generates mesh for the tsdf layer.
   bool generateMesh(bool only_mesh_updated_blocks, bool clear_updated_flag) {
@@ -77,13 +79,16 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
            "label layers!";
 
     BlockIndexList all_tsdf_blocks;
-    BlockIndexList all_label_blocks;
+    // BlockIndexList all_label_blocks;
     if (only_mesh_updated_blocks) {
       sdf_layer_const_->getAllUpdatedBlocks(&all_tsdf_blocks);
       // TODO(grinvalm) unique union of block indices here.
-      label_layer_mutable_->getAllUpdatedBlocks(&all_label_blocks);
-      if (all_label_blocks.size() == 0u && all_tsdf_blocks.size() == 0u)
+      // label_layer_mutable_->getAllUpdatedBlocks(&all_label_blocks);
+      if (all_tsdf_blocks.size() == 0u) {
         return false;
+      }
+      // all_tsdf_blocks.insert(all_tsdf_blocks.end(), all_label_blocks.begin(),
+      //                        all_label_blocks.end());
     } else {
       sdf_layer_const_->getAllAllocatedBlocks(&all_tsdf_blocks);
     }
@@ -105,6 +110,24 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     for (std::thread& thread : integration_threads) {
       thread.join();
     }
+
+    // // Allocate all the mesh memory
+    // for (const BlockIndex& block_index : all_label_blocks) {
+    //   mesh_layer_->allocateMeshPtrByIndex(block_index);
+    // }
+    //
+    // ThreadSafeIndex index_getter_labels(all_label_blocks.size());
+    //
+    // std::list<std::thread> integration_threads_labels;
+    // for (size_t i = 0; i < config_.integrator_threads; ++i) {
+    //   integration_threads_labels.emplace_back(
+    //       &MeshLabelIntegrator::generateMeshBlocksFunction, this,
+    //       all_label_blocks, clear_updated_flag, &index_getter_labels);
+    // }
+    //
+    // for (std::thread& thread : integration_threads_labels) {
+    //   thread.join();
+    // }
     return true;
   }
 
@@ -134,7 +157,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
             label_layer_mutable_->getBlockPtrByIndex(block_idx);
 
         tsdf_block->updated() = false;
-        label_block->updated() = false;
+        // label_block->updated() = false;
       }
     }
   }
@@ -161,6 +184,13 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     } else {
       // LOG(ERROR) << "No semantic class for label?";
     }
+    auto prev_instance_it = label_instance_map_.find(label);
+    if (prev_instance_it != label_instance_map_.end()) {
+      if (prev_instance_it->second != instance_label) {
+        *remesh_ptr_ = true;
+      }
+    }
+    label_instance_map_[label] = instance_label;
     return instance_label;
   }
 
@@ -190,6 +220,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       color = label_color_map_it->second;
     } else {
       color = randomColor();
+
       label_color_map_.insert(std::pair<Label, Color>(label, color));
     }
 
@@ -370,15 +401,33 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       LOG(ERROR) << "Trying to mesh a non-existent block at index: "
                  << block_index.transpose();
       return;
-    } else if (!(tsdf_block && label_block)) {
-      LOG(FATAL) << "Block allocation differs between the two layers.";
     }
+    // } else if (!(tsdf_block && label_block)) {
+    //   LOG(FATAL) << "Block allocation differs between the two layers.";
+    // }
 
     extractBlockMesh(tsdf_block, mesh);
     // Update colors if needed.
+    // updateMeshColor(*tsdf_block, mesh.get());
     if (config_.use_color) {
       if (label_block) {
         updateMeshColor(*label_block, mesh.get());
+      } else {
+        // updateMeshColor(*tsdf_block, mesh.get());
+        LOG(FATAL) << "NO LABEL VOXELS TO COLOR " << mesh->indices.size()
+                   << " mesh indices.";
+
+        mesh->colors.clear();
+        mesh->colors.resize(mesh->indices.size());
+
+        // Use nearest-neighbor search.
+        for (size_t i = 0; i < mesh->vertices.size(); ++i) {
+          Color color;
+          color.r = 255;
+          color.g = 0;
+          color.b = 0;
+          mesh->colors[i] = color;
+        }
       }
     }
   }
@@ -487,6 +536,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       label_instance_count_ptr_;
   const std::map<Label, int>* label_frames_count_ptr_;
   std::set<SemanticLabel>* all_semantic_labels_ptr_;
+  bool* remesh_ptr_;
+  std::map<Label, SemanticLabel> label_instance_map_;
 };  // namespace voxblox
 
 }  // namespace voxblox

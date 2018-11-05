@@ -12,7 +12,7 @@ mesh_color_scheme: "geometric_instance_label"
 mesh_filename: "gsm_scenenn_mesh.ply"
 publish_segment_mesh: false
 publish_scene_mesh: false
-update_mesh_every_n_sec: 0.5
+update_mesh_every_n_sec: 5.0
 visualize: true
 voxel_size: 0.01
 voxels_per_side: 8
