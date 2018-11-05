@@ -287,6 +287,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     //     {102, 0, 204},   {50, 50, 250},   {220, 220, 220}, {255, 69, 20},
     //     {255, 20, 127},  {50, 50, 150},   {222, 180, 140}, {50, 250, 50},
     //     {255, 215, 0},   {150, 150, 150}, {0, 255, 255}};
+
     std::vector<std::array<float, 3>> coco_color_code{
         {200, 200, 200}, {128, 0, 0},    {0, 128, 0},    {128, 128, 0},
         {0, 0, 128},     {128, 0, 128},  {0, 128, 128},  {128, 128, 128},
@@ -353,12 +354,25 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         {96, 96, 64},    {224, 96, 64},  {96, 224, 64},  {224, 224, 64},
         {96, 96, 192},   {224, 96, 192}, {96, 224, 192}, {224, 224, 192}};
 
+    coco_color_code[61] = {0, 128, 64};
+    coco_color_code[57] = {192, 64, 64};
+    coco_color_code[14] = {64, 128, 128};
+    coco_color_code[63] = {64, 0, 192};
+    coco_color_code[25] = {128, 64, 192};
+    coco_color_code[42] = {64, 128, 64};
+    coco_color_code[29] = {192, 128, 64};
+    coco_color_code[65] = {96, 0, 128};
+    coco_color_code[67] = {160, 128, 0};
+    coco_color_code[69] = {160, 0, 128};
+    coco_color_code[59] = {64, 64, 128};
+    coco_color_code[73] = {64, 0, 0};
+
     Color color;
     color.r = coco_color_code.at(semantic_label)[0];
     color.g = coco_color_code.at(semantic_label)[1];
     color.b = coco_color_code.at(semantic_label)[2];
 
-    // if (semantic_label == 0) {
+    // if (semantic_label == 0) [
     //   color.a = 0.5;
     // }
 
