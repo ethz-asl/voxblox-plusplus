@@ -133,15 +133,16 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
-  double voxel_size = map_config_.voxel_size;
+  // double voxel_size = map_config_.voxel_size;
   int voxels_per_side = map_config_.voxels_per_side;
-  node_handle_private_->param<double>("voxel_size", voxel_size, voxel_size);
+  node_handle_private_->param<FloatingPoint>("voxel_size", map_config_.voxel_size, map_config_.voxel_size);
   node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
                                    voxels_per_side);
   if (!isPowerOfTwo(voxels_per_side)) {
     ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
     voxels_per_side = map_config_.voxels_per_side;
   }
+  map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
 
