@@ -7,12 +7,12 @@ object_flushing_age_threshold: 6
 validate_merged_object: "validate_merged_object"
 enable_pairwise_confidence_merging: true
 pairwise_confidence_ratio_threshold: 0.15
-pairwise_confidence_count_threshold: 17
+pairwise_confidence_count_threshold: 14
 mesh_color_scheme: "geometric_instance_label"
 mesh_filename: "gsm_scenenn_mesh.ply"
 publish_segment_mesh: false
 publish_scene_mesh: false
-update_mesh_every_n_sec: 5.0
+update_mesh_every_n_sec: 0.5
 visualize: true
 voxel_size: 0.01
 voxels_per_side: 8

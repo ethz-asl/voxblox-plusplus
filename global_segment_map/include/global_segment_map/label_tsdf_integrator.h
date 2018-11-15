@@ -773,7 +773,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       // within twice the truncation distance from the surface.
       if (!config_.voxel_carving_enabled ||
           std::abs(tsdf_voxel->distance) <
-              2 * config_.default_truncation_distance) {
+              10 * config_.default_truncation_distance) {
         Block<LabelVoxel>::Ptr label_block = nullptr;
         LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
             global_voxel_idx, &label_block, &block_idx);

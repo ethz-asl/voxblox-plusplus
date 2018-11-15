@@ -354,18 +354,18 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         {96, 96, 64},    {224, 96, 64},  {96, 224, 64},  {224, 224, 64},
         {96, 96, 192},   {224, 96, 192}, {96, 224, 192}, {224, 224, 192}};
 
-    coco_color_code[61] = {0, 128, 64};
+    coco_color_code[61] = {192, 128, 192};
     coco_color_code[57] = {192, 64, 64};
     coco_color_code[14] = {64, 128, 128};
-    coco_color_code[63] = {64, 0, 192};
+    coco_color_code[63] = {0, 64, 192};
     coco_color_code[25] = {128, 64, 192};
     coco_color_code[42] = {64, 128, 64};
-    coco_color_code[29] = {192, 128, 64};
-    coco_color_code[65] = {96, 0, 128};
+    coco_color_code[29] = {128, 192, 192};
+    coco_color_code[65] = {64, 0, 128};
     coco_color_code[67] = {160, 128, 0};
     coco_color_code[69] = {160, 0, 128};
     coco_color_code[59] = {64, 64, 128};
-    coco_color_code[73] = {64, 0, 0};
+    coco_color_code[73] = {64, 192, 0};
 
     Color color;
     color.r = coco_color_code.at(semantic_label)[0];
@@ -428,20 +428,20 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         updateMeshColor(*label_block, mesh.get());
       } else {
         // updateMeshColor(*tsdf_block, mesh.get());
-        LOG(FATAL) << "NO LABEL VOXELS TO COLOR " << mesh->indices.size()
-                   << " mesh indices.";
+        // LOG(FATAL) << "NO LABEL VOXELS TO COLOR " << mesh->indices.size()
+        //            << " mesh indices.";
 
-        mesh->colors.clear();
-        mesh->colors.resize(mesh->indices.size());
-
-        // Use nearest-neighbor search.
-        for (size_t i = 0; i < mesh->vertices.size(); ++i) {
-          Color color;
-          color.r = 255;
-          color.g = 0;
-          color.b = 0;
-          mesh->colors[i] = color;
-        }
+        // mesh->colors.clear();
+        // mesh->colors.resize(mesh->indices.size());
+        //
+        // // Use nearest-neighbor search.
+        // for (size_t i = 0; i < mesh->vertices.size(); ++i) {
+        //   Color color;
+        //   color.r = 255;
+        //   color.g = 0;
+        //   color.b = 0;
+        //   mesh->colors[i] = color;
+        // }
       }
     }
   }
