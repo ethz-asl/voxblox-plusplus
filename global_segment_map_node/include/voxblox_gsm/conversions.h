@@ -52,12 +52,13 @@ inline void voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
 
 inline void convertVoxelGridToPointCloud(
     const voxblox::Layer<voxblox::TsdfVoxel>& tsdf_voxels,
+    const MeshIntegratorConfig& mesh_config,
     pcl::PointCloud<pcl::PointSurfel>* surfel_cloud) {
   CHECK_NOTNULL(surfel_cloud);
 
   static constexpr bool kConnectedMesh = false;
   voxblox::Mesh mesh;
-  io::convertLayerToMesh(tsdf_voxels, &mesh, kConnectedMesh);
+  io::convertLayerToMesh(tsdf_voxels, mesh_config, &mesh, kConnectedMesh);
 
   surfel_cloud->reserve(mesh.vertices.size());
 
