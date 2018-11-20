@@ -36,7 +36,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
                       const std::map<Label, int>& label_frames_count = {},
                       const std::map<Label, int>& label_age_map = {},
                       ColorScheme color_scheme = LabelColor,
-                      bool* remesh = false)
+                      bool* remesh = nullptr)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(CHECK_NOTNULL(label_layer)),
         label_layer_const_(CHECK_NOTNULL(label_layer)),
@@ -46,7 +46,11 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         label_age_map_ptr_(&label_age_map),
         label_frames_count_ptr_(&label_frames_count),
         color_scheme_(color_scheme),
-        remesh_ptr_(remesh) {}
+        remesh_ptr_(remesh) {
+    if (remesh_ptr_ == nullptr) {
+      remesh_ptr_ = &remesh_;
+    }
+  }
 
   MeshLabelIntegrator(
       const MeshIntegratorConfig& config, const Layer<TsdfVoxel>& tsdf_layer,
@@ -58,7 +62,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           label_instance_count = {},
       const std::map<Label, int>& label_frames_count = {},
       const std::map<Label, int>& label_age_map = {},
-      ColorScheme color_scheme = LabelColor, bool* remesh = false)
+      ColorScheme color_scheme = LabelColor, bool* remesh = nullptr)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_(nullptr),
         label_layer_const_(CHECK_NOTNULL(&label_layer)),
@@ -68,7 +72,11 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         label_age_map_ptr_(&label_age_map),
         label_frames_count_ptr_(&label_frames_count),
         color_scheme_(color_scheme),
-        remesh_ptr_(remesh) {}
+        remesh_ptr_(remesh) {
+    if (remesh_ptr_ == nullptr) {
+      remesh_ptr_ = &remesh_;
+    }
+  }
 
   // Generates mesh for the tsdf layer.
   bool generateMesh(bool only_mesh_updated_blocks, bool clear_updated_flag) {
@@ -551,6 +559,9 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   const std::map<Label, int>* label_frames_count_ptr_;
   std::set<SemanticLabel>* all_semantic_labels_ptr_;
   bool* remesh_ptr_;
+  // This parameter is used if no valid remesh_ptr is provided to the class at
+  // construction time.
+  bool remesh_ = false;
   std::map<Label, SemanticLabel> label_instance_map_;
 };  // namespace voxblox
 

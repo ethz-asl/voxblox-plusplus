@@ -19,6 +19,7 @@
   <depend>glog_catkin</depend>
   <depend>minkindr_conversions</depend>
   <depend>modelify_msgs</depend>
+  <depend>modelify_common</depend>
   <depend>pcl_catkin</depend>
   <depend>pcl_conversions</depend>
   <depend>roscpp</depend>

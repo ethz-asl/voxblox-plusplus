@@ -10,8 +10,10 @@
 #include <utility>
 #include <vector>
 
+#include <global_segment_map/label_voxel.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
+#include <modelify/file_utils.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -648,7 +650,7 @@ void Controller::segmentPointCloudCallback(
       }
     }
 
-    pcl::PointCloud<pcl::PointXYZRGB> point_cloud;
+    pcl::PointCloud<voxblox::PointType> point_cloud;
     pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
 
     segment->points_C_.reserve(point_cloud.points.size());
