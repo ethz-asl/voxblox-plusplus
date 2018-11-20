@@ -62,9 +62,15 @@ int main(int argc, char** argv) {
   ros::ServiceServer extract_segments_srv;
   controller->advertiseExtractSegmentsService(&extract_segments_srv);
 
-  while (ros::ok() && !controller->noNewUpdatesReceived()) {
-    ros::spinOnce();
-  }
+  // Spinner that uses a number of threads equal to the number of cores.
+  ros::AsyncSpinner spinner(0);
+  spinner.start();
+  ros::waitForShutdown();
+
+  // NOTE: single thread spinner
+  // while (ros::ok() && !controller->noNewUpdatesReceived()) {
+  //   ros::spinOnce();
+  // }
 
   controller->publishScene();
   constexpr bool kPublishAllSegments = true;

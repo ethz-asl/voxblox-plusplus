@@ -2,6 +2,7 @@
 
 #include "voxblox_gsm/controller.h"
 
+#include <stdlib.h>
 #include <cmath>
 #include <memory>
 #include <string>
@@ -9,8 +10,10 @@
 #include <utility>
 #include <vector>
 
+#include <global_segment_map/label_voxel.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
+#include <modelify/file_utils.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -28,83 +31,223 @@
 namespace voxblox {
 namespace voxblox_gsm {
 
+std::string classes[81] = {"BG",
+                           "person",
+                           "bicycle",
+                           "car",
+                           "motorcycle",
+                           "airplane",
+                           "bus",
+                           "train",
+                           "truck",
+                           "boat",
+                           "traffic light",
+                           "fire hydrant",
+                           "stop sign",
+                           "parking meter",
+                           "bench",
+                           "bird",
+                           "cat",
+                           "dog",
+                           "horse",
+                           "sheep",
+                           "cow",
+                           "elephant",
+                           "bear",
+                           "zebra",
+                           "giraffe",
+                           "backpack",
+                           "umbrella",
+                           "handbag",
+                           "tie",
+                           "suitcase",
+                           "frisbee",
+                           "skis",
+                           "snowboard",
+                           "sports ball",
+                           "kite",
+                           "baseball bat",
+                           "baseball glove",
+                           "skateboard",
+                           "surfboard",
+                           "tennis racket",
+                           "bottle",
+                           "wine glass",
+                           "cup",
+                           "fork",
+                           "knife",
+                           "spoon",
+                           "bowl",
+                           "banana",
+                           "apple",
+                           "sandwich",
+                           "orange",
+                           "broccoli",
+                           "carrot",
+                           "hot dog",
+                           "pizza",
+                           "donut",
+                           "cake",
+                           "chair",
+                           "couch",
+                           "potted plant",
+                           "bed",
+                           "dining table",
+                           "toilet",
+                           "tv",
+                           "laptop",
+                           "mouse",
+                           "remote",
+                           "keyboard",
+                           "cell phone",
+                           "microwave",
+                           "oven",
+                           "toaster",
+                           "sink",
+                           "refrigerator",
+                           "book",
+                           "clock",
+                           "vase",
+                           "scissors",
+                           "teddy bear",
+                           "hair drier",
+                           "toothbrush"};
+
 bool updatedMesh;
 boost::mutex updateMeshMutex;
+boost::mutex viewerSpin;
+bool remesh;
+int frame_count;
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
-void visualizeMesh(const MeshLayer& mesh_layer) {
-  boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(
-      new pcl::visualization::PCLVisualizer("GSM viewer"));
-  viewer->setBackgroundColor(0, 0, 0);
-  // viewer->addCoordinateSystem(0.2);
-  viewer->initCameraParameters();
-  // TODO(grinvalm): find some general default parameters.
-  // // 066 position
-  // viewer->setCameraPosition(-0.258698, 2.4965, 2.50443, -0.40446, 0.988025,
-  //                           0.279138, -0.0487525, 0.828238, -0.558252);
-  // viewer->setCameraClipDistances(1.35139, 6.41007);
-  // Tango1 position
-  viewer->setCameraPosition(0.728046, -1.6836, 2.64582, -0.933718, -0.127688,
-                            -0.572224, -0.757564, 0.341492, 0.556309);
-  viewer->setCameraClipDistances(0.0106726, 10.6726);
+void visualizeMesh(const MeshLayer& mesh_layer,
+                   const MeshLayer& mesh_merged_layer,
+                   const MeshLayer& mesh_semantic_layer,
+                   const MeshLayer& mesh_instance_layer, std::string name) {
+  frame_count = 0;
+  std::array<std::shared_ptr<pcl::visualization::PCLVisualizer>, 4> viewer;
+  for (int count = 0; count < viewer.size(); count++) {
+    viewer[count] = std::make_shared<pcl::visualization::PCLVisualizer>();
+    std::string name = name + std::to_string(count + 1);
+    viewer[count]->setWindowName(name.c_str());
+    viewer[count]->setBackgroundColor(255, 255, 255);
+    viewer[count]->initCameraParameters();
+    // TODO(grinvalm): find some general default parameters.
+    // // 066 position
+    // viewer->setCameraPosition(-0.258698, 2.4965, 2.50443, -0.40446, 0.988025,
+    //                           0.279138, -0.0487525, 0.828238, -0.558252);
+    // viewer->setCameraClipDistances(1.35139, 6.41007);
+    // scenenn231
+    viewer[count]->setCameraPosition(-1.41162, 6.28602, -0.300336, -1.49346,
+                                     0.117437, 0.0843885, 0.0165199, -0.0624571,
+                                     -0.997911);
+    viewer[count]->setCameraClipDistances(1.79126, 8.86051);
+    // ycb
+    // viewer[count]->setCameraPosition(0.202015, 0.0747601, 0.353257, -0.01501,
+    //                                  0.00435276, -0.0620349, -0.833126,
+    //                                  -0.272117, 0.481512);
+    // viewer[count]->setCameraClipDistances(0.00135658, 1.35658);
+    viewer[count]->setSize(1898, 1301);
+    viewer[count]->setPosition(646, 801);
+  }
+  // viewer->setBackgroundColor(255, 255, 255);
+  // // viewer->addCoordinateSystem(0.2);
+  // viewer->initCameraParameters();
+  // // TODO(grinvalm): find some general default parameters.
+  // // // 066 position
+  // // viewer->setCameraPosition(-0.258698, 2.4965, 2.50443, -0.40446,
+  // 0.988025,
+  // //                           0.279138, -0.0487525, 0.828238, -0.558252);
+  // // viewer->setCameraClipDistances(1.35139, 6.41007);
+  // // Tango1 position
+  // viewer->setCameraPosition(1.77882, 2.88621, -0.791648, -1.19562, 0.365496,
+  //                           -1.37201, -0.611348, 0.766607, -0.196386);
+  // viewer->setCameraClipDistances(1.62481, 6.95296);
 
-  pcl::PointCloud<pcl::PointXYZRGBA> cloud;
-  pcl::PointCloud<pcl::PointXYZRGBA>::ConstPtr cloud_ptr(&cloud);
+  // pcl::PointCloud<pcl::PointXYZRGBA> cloud;
+  std::array<pcl::PointCloud<pcl::PointXYZRGBA>, 4> cloud;
+  while (1) {
+    for (int count = 0; count < viewer.size(); count++) {
+      // if (viewer->wasStopped()) {
 
-  while (!viewer->wasStopped()) {
-    voxblox::Mesh mesh;
-    constexpr int updateIntervalms = 1000;
-    viewer->spinOnce(updateIntervalms);
+      constexpr int updateIntervalms = 1000;
+      viewer[count]->spinOnce(updateIntervalms);
+    }
 
     boost::mutex::scoped_lock updatedMeshLock(updateMeshMutex);
-
+    std::array<voxblox::Mesh, 4> mesh;
+    mesh[0] = voxblox::Mesh();
+    mesh[1] = voxblox::Mesh();
+    mesh[2] = voxblox::Mesh();
+    mesh[3] = voxblox::Mesh();
     if (updatedMesh) {
-      cloud.points.clear();
-
-      mesh_layer.getMesh(&mesh);
-
-      size_t vert_idx = 0;
-      for (const Point& vert : mesh.vertices) {
-        const Color& color = mesh.colors[vert_idx];
-        pcl::PointXYZRGBA point;
-        point.r = color.r;
-        point.g = color.g;
-        point.b = color.b;
-        point.a = color.a;
-        // = pcl::PointXYZRGBA(color.r, color.g, color.b, color.a);
-        point.x = vert(0);
-        point.y = vert(1);
-        point.z = vert(2);
-        cloud.points.push_back(point);
-
-        vert_idx++;
+      for (int count = 0; count < viewer.size(); count++) {
+        cloud[count].points.clear();
       }
+
+      mesh_layer.getMesh(&mesh[0]);
+      mesh_merged_layer.getMesh(&mesh[1]);
+      mesh_semantic_layer.getMesh(&mesh[2]);
+      mesh_instance_layer.getMesh(&mesh[3]);
+
+      // if (mesh[0].vertices.size() != mesh[1].vertices.size() ||
+      //     mesh[0].vertices.size() != mesh[2].vertices.size()) {
+      //   LOG(FATAL) << "Different number of vertices?";
+      // }
 
       pcl::PCLPointCloud2 pcl_pc;
-      pcl::toPCLPointCloud2(cloud, pcl_pc);
       std::vector<pcl::Vertices> polygons;
+      std::array<pcl::PolygonMesh, 4> polygon_mesh;
 
-      for (size_t i = 0u; i < mesh.indices.size(); i += 3u) {
-        pcl::Vertices face;
-        for (int j = 0; j < 3; j++) {
-          face.vertices.push_back(mesh.indices.at(i + j));
+      for (int count = 0; count < viewer.size(); count++) {
+        size_t vert_idx = 0;
+        for (const Point& vert : mesh[count].vertices) {
+          pcl::PointXYZRGBA point;
+          point.x = vert(0);
+          point.y = vert(1);
+          point.z = vert(2);
+          // = pcl::PointXYZRGBA(color.r, color.g, color.b, color.a);
+
+          const Color& color = mesh[count].colors[vert_idx];
+          point.r = color.r;
+          point.g = color.g;
+          point.b = color.b;
+          point.a = color.a;
+          cloud[count].points.push_back(point);
+          // cloud.points.push_back(point);
+
+          vert_idx++;
         }
-        polygons.push_back(face);
+
+        for (size_t i = 0u; i < mesh[count].indices.size(); i += 3u) {
+          pcl::Vertices face;
+          for (int j = 0; j < 3; j++) {
+            face.vertices.push_back(mesh[count].indices.at(i + j));
+          }
+          polygons.push_back(face);
+        }
+
+        pcl::toPCLPointCloud2(cloud[count], pcl_pc);
+        polygon_mesh[count].cloud = pcl_pc;
+        polygon_mesh[count].polygons = polygons;
       }
 
-      pcl::PolygonMesh polygon_mesh;
-      polygon_mesh.cloud = pcl_pc;
-      polygon_mesh.polygons = polygons;
-      //
-      viewer->removePolygonMesh("meshes");
-      if (!viewer->updatePolygonMesh(polygon_mesh, "meshes")) {
-        viewer->addPolygonMesh(polygon_mesh, "meshes", 0);
+      for (int count = 0; count < viewer.size(); count++) {
+        viewer[count]->removePolygonMesh("meshes");
+        if (!viewer[count]->updatePolygonMesh(polygon_mesh[count], "meshes")) {
+          viewer[count]->addPolygonMesh(polygon_mesh[count], "meshes", 0);
+        }
+        viewer[count]->saveScreenshot(std::to_string(count) + "/frame_" +
+                                      std::to_string(frame_count) + ".png");
       }
+      frame_count++;
 
       updatedMesh = false;
+
+      updatedMeshLock.unlock();
+      // viewerSpinLock.unlock();
     }
-    updatedMeshLock.unlock();
   }
 }
 
@@ -113,7 +256,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       // Increased time limit for lookup in the past of tf messages
       // to give some slack to the pipeline and not lose any messages.
       integrated_frames_count_(0u),
-      tf_listener_(ros::Duration(100)),
+      tf_listener_(ros::Duration(1000)),
       world_frame_("world"),
       camera_frame_(""),
       no_update_timeout_(0.0),
@@ -121,20 +264,16 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_scene_mesh_(false),
       received_first_message_(false) {
   CHECK_NOTNULL(node_handle_private_);
-
+  // srand(50);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
   node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
                                            camera_frame_);
 
-  // Determine map parameters.
-  map_config_.voxel_size = 0.01f;
-  map_config_.voxels_per_side = 8u;
-
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
-  double voxel_size = map_config_.voxel_size;
-  int voxels_per_side = map_config_.voxels_per_side;
+  double voxel_size = 0.001f;
+  int voxels_per_side = 8u;
   node_handle_private_->param<double>("voxel_size", voxel_size, voxel_size);
   node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
                                    voxels_per_side);
@@ -142,6 +281,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
     voxels_per_side = map_config_.voxels_per_side;
   }
+
+  map_config_.voxel_size = static_cast<FloatingPoint>(voxel_size);
+  map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
 
@@ -178,6 +320,23 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     integrator_config.enable_anti_grazing = false;
   }
 
+  std::string mesh_color_scheme("label");
+  node_handle_private_->param<std::string>(
+      "mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
+  if (mesh_color_scheme.compare("label") == 0) {
+    mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
+  } else if (mesh_color_scheme.compare("semantic_label") == 0) {
+    mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
+  } else if (mesh_color_scheme.compare("instance_label") == 0) {
+    mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
+  } else if (mesh_color_scheme.compare("geometric_instance_label") == 0) {
+    mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
+  } else if (mesh_color_scheme.compare("confidence") == 0) {
+    mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
+  } else {
+    mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
+  }
+
   // Determine label integrator parameters.
   LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
@@ -200,20 +359,61 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config.object_flushing_age_threshold,
       label_tsdf_integrator_config.object_flushing_age_threshold);
 
+  // integrator_config.integrator_threads = 1u;
+
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
       map_->getLabelLayerPtr(), map_->getHighestLabelPtr()));
 
   mesh_layer_.reset(new MeshLayer(map_->block_size()));
+  mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
+  mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
+  mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_layer_.get(), *integrator_->getLabelsAgeMapPtr()));
+      mesh_layer_.get(), all_semantic_labels_,
+      *integrator_->getLabelClassCountPtr(),
+      *integrator_->getLabelInstanceCountPtr(),
+      *integrator_->getLabelsFrameCountPtr(),
+      *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::LabelColor,
+      &remesh));
+  mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
+      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
+      mesh_semantic_layer_.get(), all_semantic_labels_,
+      *integrator_->getLabelClassCountPtr(),
+      *integrator_->getLabelInstanceCountPtr(),
+      *integrator_->getLabelsFrameCountPtr(),
+      *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::SemanticColor,
+      &remesh));
+  mesh_instance_integrator_.reset(new MeshLabelIntegrator(
+      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
+      mesh_instance_layer_.get(), all_semantic_labels_,
+      *integrator_->getLabelClassCountPtr(),
+      *integrator_->getLabelInstanceCountPtr(),
+      *integrator_->getLabelsFrameCountPtr(),
+      *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::InstanceColor,
+      &remesh));
+  mesh_merged_integrator_.reset(new MeshLabelIntegrator(
+      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
+      mesh_merged_layer_.get(), all_semantic_labels_,
+      *integrator_->getLabelClassCountPtr(),
+      *integrator_->getLabelInstanceCountPtr(),
+      *integrator_->getLabelsFrameCountPtr(),
+      *integrator_->getLabelsAgeMapPtr(),
+      MeshLabelIntegrator::GeometricInstanceColor, &remesh));
 
   // Visualization settings.
   bool visualize = false;
   node_handle_private_->param<bool>("visualize", visualize, visualize);
   if (visualize) {
-    boost::thread visualizerThread(visualizeMesh, boost::ref(*mesh_layer_));
+    // boost::thread visualizerThread(visualizeMesh, boost::ref(*mesh_layer_),
+    // "GSM Labels");
+    // boost::thread semanticVisualizerThread(
+    //     visualizeMesh, boost::ref(*mesh_semantic_layer_), "GSM Semantics");
+    boost::thread instanceVisualizerThread(
+        visualizeMesh, boost::ref(*mesh_layer_),
+        boost::ref(*mesh_merged_layer_), boost::ref(*mesh_semantic_layer_),
+        boost::ref(*mesh_instance_layer_), "Map");
   }
 
   node_handle_private_->param<bool>(
@@ -242,7 +442,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<double>("no_update_timeout", no_update_timeout_,
                                       no_update_timeout_);
 
-  ros::spinOnce();
+  // ros::spinOnce();
 }
 
 Controller::~Controller() {}
@@ -259,7 +459,7 @@ void Controller::subscribeSegmentPointCloudTopic(
   // Large queue size to give slack to the
   // pipeline and not lose any messages.
   *segment_point_cloud_sub = node_handle_private_->subscribe(
-      segment_point_cloud_topic, 2000, &Controller::segmentPointCloudCallback,
+      segment_point_cloud_topic, 6000, &Controller::segmentPointCloudCallback,
       this);
 }
 
@@ -340,10 +540,26 @@ void Controller::advertiseGenerateMeshService(
       "generate_mesh", &Controller::generateMeshCallback, this);
 }
 
+// void Controller::advertiseGenerateSemanticMeshService(
+//     ros::ServiceServer* generate_semantic_mesh_srv) {
+//   CHECK_NOTNULL(generate_semantic_mesh_srv);
+//   *generate_semantic_mesh_srv = node_handle_private_->advertiseService(
+//       "generate_semantic_mesh", "generate_mesh",
+//       &Controller::generateMeshCallback, this);
+// }
+//
+// void Controller::advertiseGenerateInstanceMeshService(
+//     ros::ServiceServer* generate_instance_mesh_srv) {
+//   CHECK_NOTNULL(generate_instance_mesh_srv);
+//   *generate_mesh_srv = node_handle_private_->advertiseService(
+//       "generate_mesh", &Controller::generateMeshCallback, this);
+// }
+
 void Controller::advertiseExtractSegmentsService(
     ros::ServiceServer* extract_segments_srv) {
   CHECK_NOTNULL(extract_segments_srv);
   *extract_segments_srv = node_handle_private_->advertiseService(
+      // "extract_segments", &Controller::extractTSDFCallback, this);
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
@@ -374,11 +590,13 @@ void Controller::segmentPointCloudCallback(
 
     start = ros::WallTime::now();
 
+    boost::mutex::scoped_lock updatedMeshLock(updateMeshMutex);
     for (const auto& segment : segments_to_integrate_) {
       integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                        segment->colors_, segment->labels_,
                                        kIsFreespacePointcloud);
     }
+    updatedMeshLock.unlock();
 
     end = ros::WallTime::now();
     ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
@@ -432,7 +650,7 @@ void Controller::segmentPointCloudCallback(
       }
     }
 
-    pcl::PointCloud<pcl::PointXYZRGB> point_cloud;
+    pcl::PointCloud<voxblox::PointType> point_cloud;
     pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
 
     segment->points_C_.reserve(point_cloud.points.size());
@@ -453,7 +671,8 @@ void Controller::segmentPointCloudCallback(
           Color(point_cloud.points[i].r, point_cloud.points[i].g,
                 point_cloud.points[i].b, point_cloud.points[i].a));
     }
-
+    segment->semantic_label_ = point_cloud.points[0].label;
+    segment->instance_ = point_cloud.points[0].instance;
     segment->T_G_C_ = T_G_C;
 
     ros::WallTime start = ros::WallTime::now();
@@ -462,7 +681,8 @@ void Controller::segmentPointCloudCallback(
 
     ros::WallTime end = ros::WallTime::now();
     ROS_INFO(
-        "Computed label candidates for a pointcloud of size %lu in %f seconds.",
+        "Computed label candidates for a pointcloud of size %lu in %f "
+        "seconds.",
         segment->points_C_.size(), (end - start).toSec());
 
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
@@ -528,6 +748,13 @@ bool Controller::generateMeshCallback(
   return true;
 }
 
+// bool Controller::extractTSDFCallback(std_srvs::Empty::Request& request,
+//                                          std_srvs::Empty::Response&
+//                                          response)
+//                                          {
+//
+//                                          }
+
 bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
                                          std_srvs::Empty::Response& response) {
   // Get list of all labels in the map.
@@ -541,8 +768,8 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
-    CHECK(it != label_to_layers.end()) << "Layers for label " << label
-                                       << "could not be extracted.";
+    CHECK(it != label_to_layers.end())
+        << "Layers for label " << label << "could not be extracted.";
 
     const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
     const Layer<LabelVoxel>& segment_label_layer = it->second.second;
@@ -550,7 +777,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
-      CHECK_EQ(mkdir("segments", 0777), 0);
+      CHECK_EQ(modelify::file_utils::makePath("gsm_segments", 0777), 0);
 
       std::string mesh_filename = "gsm_segments/gsm_segment_mesh_label_" +
                                   std::to_string(label) + ".ply";
@@ -663,6 +890,7 @@ bool Controller::lookupTransform(const std::string& from_frame,
 
 // TODO(ff): Create this somewhere:
 // void serializeGsmAsMsg(const map&, const label&, const parent_labels&, msg*);
+
 bool Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
@@ -678,8 +906,8 @@ bool Controller::publishObjects(const bool publish_all) {
 
   for (const Label& label : labels_to_publish) {
     auto it = label_to_layers.find(label);
-    CHECK(it != label_to_layers.end()) << "Layers for " << label
-                                       << "could not be extracted.";
+    CHECK(it != label_to_layers.end())
+        << "Layers for " << label << "could not be extracted.";
 
     Layer<TsdfVoxel>& tsdf_layer = it->second.first;
     Layer<LabelVoxel>& label_layer = it->second.second;
@@ -703,7 +931,9 @@ bool Controller::publishObjects(const bool publish_all) {
 
     // Extract surfel cloud from layer.
     MeshIntegratorConfig mesh_config;
-    node_handle_private_->param<float>("mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
+    node_handle_private_->param<float>("mesh_config/min_weight",
+                                       mesh_config.min_weight,
+                                       mesh_config.min_weight);
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
     convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
@@ -765,7 +995,8 @@ bool Controller::publishObjects(const bool publish_all) {
       mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
       // mesh_layer.reset(new MeshLayer(map_->block_size()));
       MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer,
-                                          &label_layer, mesh_layer.get());
+                                          &label_layer, mesh_layer.get(),
+                                          all_semantic_labels_);
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = true;
       mesh_integrator.generateMesh(only_mesh_updated_blocks,
@@ -822,11 +1053,28 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     constexpr bool clear_updated_flag = true;
     mesh_integrator_->generateMesh(only_mesh_updated_blocks,
                                    clear_updated_flag);
+    all_semantic_labels_.clear();
+    mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                            clear_updated_flag);
+    for (auto sl : all_semantic_labels_) {
+      LOG(ERROR) << classes[(unsigned)sl];
+    }
+    mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                            clear_updated_flag);
+    mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+                                          clear_updated_flag);
+
   } else {
     constexpr bool only_mesh_updated_blocks = true;
     constexpr bool clear_updated_flag = true;
     mesh_integrator_->generateMesh(only_mesh_updated_blocks,
                                    clear_updated_flag);
+    mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                            clear_updated_flag);
+    mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                            clear_updated_flag);
+    mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+                                          clear_updated_flag);
   }
   generate_mesh_timer.Stop();
 
@@ -848,7 +1096,15 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 
   if (!mesh_filename_.empty()) {
     timing::Timer output_mesh_timer("mesh/output");
-    bool success = outputMeshLayerAsPly(mesh_filename_, false, *mesh_layer_);
+    bool success =
+        outputMeshLayerAsPly("label_" + mesh_filename_, false, *mesh_layer_);
+    // bool success =
+    success &= outputMeshLayerAsPly("semantic_" + mesh_filename_, false,
+                                    *mesh_semantic_layer_);
+    success &= outputMeshLayerAsPly("instance_" + mesh_filename_, false,
+                                    *mesh_instance_layer_);
+    success &= outputMeshLayerAsPly("merged_" + mesh_filename_, false,
+                                    *mesh_merged_layer_);
     output_mesh_timer.Stop();
     if (success) {
       ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
@@ -865,10 +1121,23 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
 
   timing::Timer generate_mesh_timer("mesh/update");
-  constexpr bool only_mesh_updated_blocks = true;
-  constexpr bool clear_updated_flag = true;
-  updatedMesh = mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                               clear_updated_flag);
+  bool only_mesh_updated_blocks = true;
+  if (remesh) {
+    only_mesh_updated_blocks = false;
+    remesh = false;
+  }
+  bool clear_updated_flag = false;
+  updatedMesh |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                clear_updated_flag);
+  updatedMesh |= mesh_instance_integrator_->generateMesh(
+      only_mesh_updated_blocks, clear_updated_flag);
+
+  updatedMesh |= mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                       clear_updated_flag);
+
+  clear_updated_flag = true;
+  updatedMesh |= mesh_semantic_integrator_->generateMesh(
+      only_mesh_updated_blocks, clear_updated_flag);
   updateMeshLock.unlock();
 
   generate_mesh_timer.Stop();

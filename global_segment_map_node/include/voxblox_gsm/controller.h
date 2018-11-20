@@ -28,6 +28,13 @@ typedef std::pair<Layer<TsdfVoxel>, Layer<LabelVoxel>> LayerPair;
 
 class Controller {
  public:
+  enum ColorScheme {
+    LabelColor = 1,
+    SemanticLabelColor = 2,
+    InstanceColor = 3,
+    ConfidenceColor = 4
+  };
+
   Controller(ros::NodeHandle* node_handle);
 
   ~Controller();
@@ -49,6 +56,12 @@ class Controller {
       ros::ServiceServer* validate_merged_object_srv);
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
+
+  // void advertiseGenerateSemanticMeshService(
+  //     ros::ServiceServer* generate_semantic_mesh_srv);
+  //
+  // void advertiseGenerateInstanceMeshService(
+  //     ros::ServiceServer* generate_instance_mesh_srv);
 
   void advertiseExtractSegmentsService(
       ros::ServiceServer* extract_segments_srv);
@@ -127,6 +140,7 @@ class Controller {
   ros::Timer update_mesh_timer_;
   ros::Publisher* scene_mesh_pub_;
   ros::Publisher* segment_mesh_pub_;
+  MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
   std::string mesh_filename_;
 
   std::string world_frame_;
@@ -140,7 +154,15 @@ class Controller {
   MeshIntegratorConfig mesh_config_;
 
   std::shared_ptr<MeshLayer> mesh_layer_;
+  std::shared_ptr<MeshLayer> mesh_semantic_layer_;
+  std::shared_ptr<MeshLayer> mesh_instance_layer_;
+  std::shared_ptr<MeshLayer> mesh_merged_layer_;
   std::shared_ptr<MeshLabelIntegrator> mesh_integrator_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_semantic_integrator_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_instance_integrator_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_merged_integrator_;
+
+  std::set<SemanticLabel> all_semantic_labels_;
 
   std::vector<Segment*> segments_to_integrate_;
   std::map<Label, std::map<Segment*, size_t>> segment_label_candidates;

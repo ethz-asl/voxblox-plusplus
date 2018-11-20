@@ -26,6 +26,8 @@ class Segment {
   voxblox::Transformation T_G_C_;
   voxblox::Colors colors_;
   voxblox::Labels labels_;
+  voxblox::SemanticLabel semantic_label_;
+  voxblox::SemanticLabel instance_;
 };
 
 class LabelTsdfIntegrator : public MergedTsdfIntegrator {
@@ -35,8 +37,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   typedef VoxelMap::value_type VoxelMapElement;
   typedef std::map<Label, int> LMap;
   typedef std::map<Label, int>::iterator LMapIt;
+  typedef std::map<SemanticLabel, int> SLMap;
   typedef std::map<Label, LMap> LLMap;
   typedef std::map<Label, LMap>::iterator LLMapIt;
+  typedef std::map<Label, SLMap> LSLMap;
   typedef std::set<Label> LSet;
   typedef std::set<Label>::iterator LSetIt;
   typedef std::map<Label, LSet> LLSet;
@@ -45,7 +49,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   struct LabelTsdfConfig {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    // TODO (grinvalm): maybe use a relative measure, not absolue voxel count.
+    // TODO(grinvalm): maybe use a relative measure, not absolue voxel count.
     // Minimum number of label voxels count for label propagation.
     size_t min_label_voxel_count = 20;
     // Factor determining the label propagation truncation distance.
@@ -73,7 +77,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       : MergedTsdfIntegrator(config, CHECK_NOTNULL(tsdf_layer)),
         label_tsdf_config_(label_tsdf_config),
         label_layer_(CHECK_NOTNULL(label_layer)),
-        highest_label_(CHECK_NOTNULL(highest_label)) {
+        highest_label_(CHECK_NOTNULL(highest_label)),
+        highest_instance_(0u) {
     CHECK(label_layer_);
   }
 
@@ -224,8 +229,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     }
     if (updated == false) {
-      LOG(FATAL) << "Out-of-memory for storing labels and confidences for this "
-                    "voxel. Please increse size of array.";
+      // LOG(FATAL) << "Out-of-memory for storing labels and confidences for
+      // this " "voxel. Please increse size of array.";
     }
   }
 
@@ -324,7 +329,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     assigned_labels->emplace(max_label);
 
     // For all segments that need to have their label
-    // count recomputer, first clean their relative entries and recompute.
+    // count recomputed, first clean their relative entries and recompute.
     for (auto segment : segments_to_recompute) {
       if (segment.first != max_segment) {
         for (auto label_it = candidates->begin(); label_it != candidates->end();
@@ -348,13 +353,17 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     std::set<Label> assigned_labels;
     std::set<Segment*> labelled_segments;
     std::pair<Segment*, Label> pair;
+    std::set<SemanticLabel> assigned_instances;
 
     while (getNextSegmentLabelPair(labelled_segments, &assigned_labels,
                                    candidates, segment_merge_candidates,
                                    &pair)) {
-      for (size_t i = 0u; i < pair.first->points_C_.size(); ++i) {
-        pair.first->labels_.push_back(pair.second);
+      Segment* segment = pair.first;
+      Label& label = pair.second;
+      for (size_t i = 0u; i < segment->points_C_.size(); ++i) {
+        segment->labels_.push_back(label);
       }
+
       labelled_segments.insert(pair.first);
       candidates->erase(pair.second);
     }
@@ -374,6 +383,99 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         }
         labelled_segments.insert(*segment_it);
       }
+    }
+
+    // Instance stuff.
+
+    for (auto segment_it = labelled_segments.begin();
+         segment_it != labelled_segments.end(); ++segment_it) {
+      Label label = (*segment_it)->labels_[0];
+      if ((*segment_it)->points_C_.size() > 0) {
+        increaseLabelFramesCount(label);
+      }
+
+      // Loop through all the segments.
+      if ((*segment_it)->instance_ != 0u) {
+        // It's a segment with a current frame instance.
+        auto global_instance_it =
+            current_to_global_instance_map_.find((*segment_it)->instance_);
+        if (global_instance_it != current_to_global_instance_map_.end()) {
+          // If current frame instance maps to a global instance, use it.
+          increaseLabelInstanceCount(label, global_instance_it->second);
+        } else {
+          // Current frame instance doesn't map to any global instance.
+          // Get the global instance with max count.
+          SemanticLabel instance_label =
+              getLabelInstance(label, assigned_instances);
+
+          if (instance_label != 0u) {
+            current_to_global_instance_map_.emplace((*segment_it)->instance_,
+                                                    instance_label);
+            increaseLabelInstanceCount(label, instance_label);
+            assigned_instances.emplace(instance_label);
+          } else {
+            // Create new global instance.
+            SemanticLabel fresh_instance = getFreshInstance();
+            current_to_global_instance_map_.emplace((*segment_it)->instance_,
+                                                    fresh_instance);
+            increaseLabelInstanceCount(label, fresh_instance);
+          }
+        }
+        increaseLabelClassCount(label, (*segment_it)->semantic_label_);
+      } else {
+        // It's a segment with no instance prediction in the current frame.
+        // Get the global instance it maps to, as set it as assigned.
+        SemanticLabel instance_label = getLabelInstance(label);
+        // TODO(grinvalm) : also pass assigned instances here?
+        if (instance_label != 0u) {
+          assigned_instances.emplace(instance_label);
+        }
+        // if ((*segment_it)->points_C_.size() > 2500) {
+        //   decreaseLabelInstanceCount(label, instance_label);
+        // }
+      }
+    }
+  }
+
+  SemanticLabel getLabelInstance(const Label& label) {
+    std::set<SemanticLabel> assigned_instances;
+    return getLabelInstance(label, assigned_instances);
+  }
+
+  SemanticLabel getLabelInstance(const Label& label,
+                                 std::set<SemanticLabel>& assigned_instances) {
+    SemanticLabel instance_label = 0u;
+    int max_count = 0;
+    auto label_it = label_instance_count_.find(label);
+    if (label_it != label_instance_count_.end()) {
+      for (auto const& instance_count : label_it->second) {
+        if (instance_count.second > max_count && instance_count.first != 0u &&
+            assigned_instances.find(instance_count.first) ==
+                assigned_instances.end()) {
+          int frames_count = 0;
+          auto label_count_it = label_frames_count_.find(label);
+          if (label_count_it != label_frames_count_.end()) {
+            frames_count = label_count_it->second;
+          }
+          if (instance_count.second >
+              0.0 * (float)(frames_count - instance_count.second)) {
+            instance_label = instance_count.first;
+            max_count = instance_count.second;
+          }
+        }
+      }
+    } else {
+      // LOG(ERROR) << "No semantic class for label?";
+    }
+    return instance_label;
+  }
+
+  void increaseLabelFramesCount(const Label& label) {
+    auto label_count_it = label_frames_count_.find(label);
+    if (label_count_it != label_frames_count_.end()) {
+      ++label_count_it->second;
+    } else {
+      label_frames_count_.insert(std::make_pair(label, 1));
     }
   }
 
@@ -463,20 +565,84 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     temp_label_block_map_.clear();
   }
 
+  void increaseLabelInstanceCount(const Label& label,
+                                  const SemanticLabel& instance_label) {
+    auto label_it = label_instance_count_.find(label);
+    if (label_it != label_instance_count_.end()) {
+      auto instance_it = label_it->second.find(instance_label);
+      if (instance_it != label_it->second.end()) {
+        ++instance_it->second;
+      } else {
+        label_it->second.emplace(instance_label, 1);
+      }
+    } else {
+      SLMap instance_count;
+      instance_count.emplace(instance_label, 1);
+      label_instance_count_.emplace(label, instance_count);
+    }
+    // for (auto label_it : label_instance_count_) {
+    //   LOG(ERROR) << "Loop labels";
+    //   for (auto instance_it : label_it.second) {
+    //     LOG(ERROR) << "Count " << label_it.first << " for instance "
+    //                << unsigned(instance_it.first) << " is "
+    //                << instance_it.second;
+    //   }
+    // }
+  }
+
+  void decreaseLabelInstanceCount(const Label& label,
+                                  const SemanticLabel& instance_label) {
+    auto label_it = label_instance_count_.find(label);
+    if (label_it != label_instance_count_.end()) {
+      auto instance_it = label_it->second.find(instance_label);
+      if (instance_it != label_it->second.end()) {
+        --instance_it->second;
+      } else {
+        // label_it->second.emplace(instance_label, 1);
+      }
+    } else {
+      // SLMap instance_count;
+      // instance_count.emplace(instance_label, 1);
+      // label_instance_count_.emplace(label, instance_count);
+    }
+  }
+
+  void increaseLabelClassCount(const Label& label,
+                               const SemanticLabel& semantic_label) {
+    auto label_it = label_class_count_.find(label);
+    if (label_it != label_class_count_.end()) {
+      auto class_it = label_it->second.find(semantic_label);
+      if (class_it != label_it->second.end()) {
+        ++class_it->second;
+      } else {
+        label_it->second.emplace(semantic_label, 1);
+      }
+    } else {
+      SLMap class_points_count;
+      class_points_count.emplace(semantic_label, 1);
+      label_class_count_.emplace(label, class_points_count);
+    }
+  }
+
   // Updates label_voxel. Thread safe.
   inline void updateLabelVoxel(const Point& point_G, const Label& label,
                                LabelVoxel* label_voxel,
                                const LabelConfidence& confidence = 1.0f) {
-    // Lookup the mutex that is responsible for this voxel and lock it
+    // Lookup the mutex that is responsible for this voxel and lock it.
     std::lock_guard<std::mutex> lock(mutexes_.get(
         getGridIndexFromPoint<GlobalIndex>(point_G, voxel_size_inv_)));
 
     CHECK_NOTNULL(label_voxel);
 
+    // label_voxel->semantic_label = semantic_label;
     Label previous_label = label_voxel->label;
     addVoxelLabelConfidence(label, confidence, label_voxel);
     updateVoxelLabelAndConfidence(label_voxel, label);
     Label new_label = label_voxel->label;
+
+    // This old semantic stuff per voxel was not thread safe.
+    // Now all is good.
+    // increaseLabelClassCount(new_label, semantic_label);
 
     if (new_label != previous_label) {
       // Both of the segments corresponding to the two labels are
@@ -499,10 +665,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void integratePointCloud(const Transformation& T_G_C,
                            const Pointcloud& points_C, const Colors& colors,
-                           const Labels& labels, const bool freespace_points) {
+                           const Labels& labels,
+
+                           const bool freespace_points) {
     CHECK_EQ(points_C.size(), colors.size());
     CHECK_EQ(points_C.size(), labels.size());
-    CHECK_GE(labels.size(), 0u);
+    // CHECK_EQ(points_C.size(), semantic_labels.size());
+    CHECK_GE(points_C.size(), 0u);
 
     timing::Timer integrate_timer("integrate");
 
@@ -602,12 +771,17 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       updateTsdfVoxel(origin, merged_point_G, global_voxel_idx, merged_color,
                       merged_weight, tsdf_voxel);
 
-      Block<LabelVoxel>::Ptr label_block = nullptr;
-      LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
-          global_voxel_idx, &label_block, &block_idx);
-
-      updateLabelVoxel(merged_point_G, merged_label, label_voxel,
-                       merged_label_confidence);
+      // If voxel carving is enabled, then only allocate the label voxels
+      // within twice the truncation distance from the surface.
+      if (!config_.voxel_carving_enabled ||
+          std::abs(tsdf_voxel->distance) <
+              10 * config_.default_truncation_distance) {
+        Block<LabelVoxel>::Ptr label_block = nullptr;
+        LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
+            global_voxel_idx, &label_block, &block_idx);
+        updateLabelVoxel(merged_point_G, merged_label, label_voxel,
+                         merged_label_confidence);
+      }
     }
   }
 
@@ -720,6 +894,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
+  void clearCurrentFrameInstanceLabels() {
+    current_to_global_instance_map_.clear();
+  }
+
   void resetCurrentFrameUpdatedLabelsAge() {
     for (Label label : updated_labels_) {
       // Set timestamp or integer age of segment.
@@ -733,6 +911,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void getLabelsToPublish(
       std::vector<voxblox::Label>* segment_labels_to_publish) {
     resetCurrentFrameUpdatedLabelsAge();
+    clearCurrentFrameInstanceLabels();
 
     for (LMapIt label_age_pair_it = labels_to_publish_.begin();
          label_age_pair_it != labels_to_publish_.end();
@@ -752,6 +931,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   LMap* getLabelsAgeMapPtr() {
     return &labels_to_publish_;
   }
+
+  LSLMap* getLabelClassCountPtr() { return &label_class_count_; }
+
+  LSLMap* getLabelInstanceCountPtr() { return &label_instance_count_; }
+
+  LMap* getLabelsFrameCountPtr() { return &label_frames_count_; }
 
   void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label,
                                   int count) {
@@ -892,6 +1077,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     return ++(*highest_label_);
   }
 
+  Label getFreshInstance() {
+    CHECK_LT(highest_instance_, std::numeric_limits<unsigned int>::max());
+    return ++highest_instance_;
+  }
+
   // Get the list of all labels
   // for which the voxel count is greater than 0.
   std::vector<Label> getLabelsList() {
@@ -918,6 +1108,14 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Pairwise confidence merging.
   LLMap pairwise_confidence_;
+
+  // Per frame voxel count of semantic label.
+  LSLMap label_class_count_;
+
+  SemanticLabel highest_instance_;
+  std::map<SemanticLabel, SemanticLabel> current_to_global_instance_map_;
+  LSLMap label_instance_count_;
+  LMap label_frames_count_;
 
   // We need to prevent simultaneous access to the voxels in the map. We
   // could
