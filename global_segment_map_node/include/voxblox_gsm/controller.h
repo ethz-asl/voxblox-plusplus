@@ -15,6 +15,7 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <std_srvs/SetBool.h>
 #include <std_srvs/Empty.h>
 #include <tf/transform_listener.h>
 #include <voxblox/io/mesh_ply.h>
@@ -65,12 +66,12 @@ class Controller {
 
   double no_update_timeout_;
 
- private:
-  void segmentPointCloudCallback(
+ protected:
+  virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
-  bool publishSceneCallback(std_srvs::Empty::Request& request,
-                            std_srvs::Empty::Response& response);
+  virtual bool publishSceneCallback(std_srvs::SetBool::Request& request,
+                                    std_srvs::SetBool::Response& response);
 
   bool validateMergedObjectCallback(
       modelify_msgs::ValidateMergedObject::Request& request,
@@ -91,7 +92,7 @@ class Controller {
    * labels. false if \labels is only a subset of all labels contained by the
    * gsm.
    */
-  void extractSegmentLayers(
+  virtual void extractSegmentLayers(
       const std::vector<Label> &labels,
       std::unordered_map<Label, LayerPair> *label_layers_map,
       bool labels_list_is_complete = false);
@@ -103,6 +104,12 @@ class Controller {
   void generateMesh(bool clear_mesh);
 
   void updateMeshEvent(const ros::TimerEvent& e);
+
+  virtual void publishGsmUpdate(const ros::Publisher& publisher,
+                                modelify_msgs::GsmUpdate* gsm_update);
+
+  virtual void getLabelsToPublish(const bool get_all,
+                                  std::vector<Label>* labels);
 
   ros::NodeHandle* node_handle_private_;
 
