@@ -12,7 +12,7 @@ namespace modelify {
 namespace loop_closure {
 class PoseToTfNode {
  public:
-  PoseToTfNode(ros::NodeHandle& node_handle);
+  PoseToTfNode(const ros::NodeHandle& node_handle);
   void newPoseCallback(const geometry_msgs::PoseStamped& pose_msg);
   void PoseStampedToTransformStamped(const geometry_msgs::PoseStamped& pose,
                                      tf::StampedTransform* tf);
@@ -32,11 +32,12 @@ class PoseToTfNode {
   /*
    * Given quaternions and translation returns 4x4 transformation matrix.
    */
-  Eigen::Matrix4f getMatrix(std::vector<double> quaternions,
-                            std::vector<double> translation);
+  Eigen::Matrix4f getMatrix(const std::vector<double>& quaternions,
+                            const std::vector<double>& translation);
 
-  void publishStaticTransform(const Eigen::Matrix4f matrix,
-                              std::string frame_id, std::string child_frame_id);
+  void publishStaticTransform(const Eigen::Matrix4f& matrix,
+                              const std::string& frame_id,
+                              const std::string& child_frame_id);
 
   ros::NodeHandle node_handle_;
   ros::Subscriber markers_sub;
@@ -52,7 +53,7 @@ class PoseToTfNode {
   bool first_run = true;
 };
 
-PoseToTfNode::PoseToTfNode(ros::NodeHandle& node_handle)
+PoseToTfNode::PoseToTfNode(const ros::NodeHandle& node_handle)
     : node_handle_(node_handle) {
   std::string topic = "/maplab_rovio/T_G_I";
   node_handle.param<std::string>("/pose_to_tf/pose_topic", topic, topic);
@@ -75,18 +76,20 @@ void PoseToTfNode::newPoseCallback(const geometry_msgs::PoseStamped& pose_msg) {
 
 void PoseToTfNode::getAndPublishT_W_M() {
   ros::Time latest = ros::Time(0);
-  tf_listener_.waitForTransform(map_frame_, depth_estimated_frame_, latest, ros::Duration(50.0));
+  tf_listener_.waitForTransform(map_frame_, depth_estimated_frame_, latest,
+                                ros::Duration(50.0));
   tf::StampedTransform tf_m_d;
-  tf_listener_.lookupTransform(map_frame_, depth_estimated_frame_, latest, tf_m_d);
+  tf_listener_.lookupTransform(map_frame_, depth_estimated_frame_, latest,
+                               tf_m_d);
 
   tf::StampedTransform tf_w_d;
-  tf_listener_.waitForTransform(world_frame_, "depth", tf_m_d.stamp_, ros::Duration(50.0));
+  tf_listener_.waitForTransform(world_frame_, "depth", tf_m_d.stamp_,
+                                ros::Duration(50.0));
   tf_listener_.lookupTransform(world_frame_, "depth", tf_m_d.stamp_, tf_w_d);
 
   tf::Transform tf_w_m;
   tf_w_m = tf_w_d * tf_m_d.inverse();
   tf_w_m.setRotation(tf_w_m.getRotation().normalize());
-
 
   geometry_msgs::TransformStamped tf_w_m_stamped;
   tf_w_m_stamped.header.stamp = latest;
@@ -104,6 +107,7 @@ void PoseToTfNode::getAndPublishT_W_M() {
 
 void PoseToTfNode::PoseStampedToTransformStamped(
     const geometry_msgs::PoseStamped& pose, tf::StampedTransform* tf) {
+  CHECK_NOTNULL(tf);
   tf->frame_id_ = pose.header.frame_id;
   tf->child_frame_id_ = imu_estimated_frame_;
   tf->stamp_ = pose.header.stamp;
@@ -114,8 +118,9 @@ void PoseToTfNode::PoseStampedToTransformStamped(
                             pose.pose.position.z));
 }
 
-Eigen::Matrix4f PoseToTfNode::getMatrix(std::vector<double> quaternions,
-                                        std::vector<double> translation) {
+Eigen::Matrix4f PoseToTfNode::getMatrix(
+    const std::vector<double>& quaternions,
+    const std::vector<double>& translation) {
   Eigen::Quaternionf quaternion(quaternions[3], quaternions[0], quaternions[1],
                                 quaternions[2]);
   Eigen::Vector3f base;
@@ -147,8 +152,8 @@ void PoseToTfNode::getAndPublishT_I_D() {
   node_handle_.getParam("/rovioli_marker_to_tf/T_R_F/matrix", matrix_as_vector);
 
   Eigen::Matrix4f T_R_F;
-  for (size_t i = 0; i < 4; ++i) {
-    for (size_t j = 0; j < 4; ++j) {
+  for (size_t i = 0u; i < 4u; ++i) {
+    for (size_t j = 0u; j < 4u; ++j) {
       T_R_F(i, j) = matrix_as_vector[4 * i + j];
     }
   }
@@ -158,9 +163,9 @@ void PoseToTfNode::getAndPublishT_I_D() {
   publishStaticTransform(T_R_D, imu_estimated_frame_, depth_estimated_frame_);
 }
 
-void PoseToTfNode::publishStaticTransform(const Eigen::Matrix4f matrix,
-                                          std::string frame_id,
-                                          std::string child_frame_id) {
+void PoseToTfNode::publishStaticTransform(const Eigen::Matrix4f& matrix,
+                                          const std::string& frame_id,
+                                          const std::string& child_frame_id) {
   geometry_msgs::TransformStamped tf;
   Eigen::Quaternionf quat(matrix.block<3, 3>(0, 0));
   tf.transform.rotation.x = quat.x();
@@ -174,8 +179,8 @@ void PoseToTfNode::publishStaticTransform(const Eigen::Matrix4f matrix,
   tf.child_frame_id = child_frame_id;
   tf_static.sendTransform(tf);
 }
-}
-}
+}  // namespace loop_closure
+}  // namespace modelify
 
 int main(int argc, char* argv[]) {
   ros::init(argc, argv, "pose_to_tf");

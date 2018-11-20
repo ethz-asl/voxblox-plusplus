@@ -541,8 +541,8 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
-    CHECK(it != label_to_layers.end()) << "Layers for label " << label
-                                       << "could not be extracted.";
+    CHECK(it != label_to_layers.end())
+        << "Layers for label " << label << "could not be extracted.";
 
     const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
     const Layer<LabelVoxel>& segment_label_layer = it->second.second;
@@ -604,7 +604,7 @@ void Controller::extractSegmentLayers(
       auto it = label_layers_map->find(global_label_voxel.label);
       if (it == label_layers_map->end()) {
         if (labels_list_is_complete) {
-          LOG(ERROR) << "At least one voxel in the GSM is assigned to label "
+          LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
                      << global_label_voxel.label
                      << " which is not in the given "
                         "list of labels to retrieve.";
@@ -667,7 +667,7 @@ bool Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
   std::vector<Label> labels_to_publish;
-  getLabelsToPublish(&labels_to_publish, publish_all);
+  getLabelsToPublish(publish_all, &labels_to_publish);
 
   std::unordered_map<Label, LayerPair> label_to_layers;
   ros::Time start = ros::Time::now();
@@ -678,8 +678,8 @@ bool Controller::publishObjects(const bool publish_all) {
 
   for (const Label& label : labels_to_publish) {
     auto it = label_to_layers.find(label);
-    CHECK(it != label_to_layers.end()) << "Layers for " << label
-                                       << "could not be extracted.";
+    CHECK(it != label_to_layers.end())
+        << "Layers for " << label << "could not be extracted.";
 
     Layer<TsdfVoxel>& tsdf_layer = it->second.first;
     Layer<LabelVoxel>& label_layer = it->second.second;
@@ -703,7 +703,9 @@ bool Controller::publishObjects(const bool publish_all) {
 
     // Extract surfel cloud from layer.
     MeshIntegratorConfig mesh_config;
-    node_handle_private_->param<float>("mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
+    node_handle_private_->param<float>("mesh_config/min_weight",
+                                       mesh_config.min_weight,
+                                       mesh_config.min_weight);
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
     convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
@@ -756,7 +758,7 @@ bool Controller::publishObjects(const bool publish_all) {
       }
       merges_to_publish_.erase(merged_label_it);
     }
-    publishGsmUpdate(*segment_gsm_update_pub_, gsm_update_msg);
+    publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
     // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
 
     if (publish_segment_mesh_) {
@@ -811,7 +813,7 @@ void Controller::publishScene() {
   transform.rotation.z = 0.0;
   gsm_update_msg.object.transforms.clear();
   gsm_update_msg.object.transforms.push_back(transform);
-  publishGsmUpdate(*scene_gsm_update_pub_, gsm_update_msg);
+  publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
 }
 
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
@@ -896,11 +898,13 @@ bool Controller::noNewUpdatesReceived() const {
 }
 
 void Controller::publishGsmUpdate(const ros::Publisher& publisher,
-                                  modelify_msgs::GsmUpdate& gsm_update) {
-  publisher.publish(gsm_update);
+                                  modelify_msgs::GsmUpdate* gsm_update) {
+  publisher.publish(*gsm_update);
 }
 
-void Controller::getLabelsToPublish(std::vector<Label>* labels, bool get_all) {
+void Controller::getLabelsToPublish(const bool get_all,
+                                    std::vector<Label>* labels) {
+  CHECK_NOTNULL(labels);
   if (get_all) {
     *labels = integrator_->getLabelsList();
     ROS_INFO("Publishing all segments");

@@ -732,6 +732,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void getLabelsToPublish(
       std::vector<voxblox::Label>* segment_labels_to_publish) {
+    CHECK_NOTNULL(segment_labels_to_publish);
     resetCurrentFrameUpdatedLabelsAge();
 
     for (LMapIt label_age_pair_it = labels_to_publish_.begin();
