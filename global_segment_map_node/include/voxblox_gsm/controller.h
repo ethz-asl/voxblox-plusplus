@@ -119,9 +119,10 @@ class Controller {
   void updateMeshEvent(const ros::TimerEvent& e);
 
   virtual void publishGsmUpdate(const ros::Publisher& publisher,
-                                modelify_msgs::GsmUpdate& gsm_update);
+                                modelify_msgs::GsmUpdate* gsm_update);
 
-  virtual void getLabelsToPublish(std::vector<Label>* labels, bool get_all);
+  virtual void getLabelsToPublish(const bool get_all,
+                                  std::vector<Label>* labels);
 
   ros::NodeHandle* node_handle_private_;
 

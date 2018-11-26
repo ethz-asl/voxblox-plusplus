@@ -1,7 +1,7 @@
 <launch>
       <arg name="slim" default="false"/>
       <group unless="$(arg slim)">
-            <arg name="tf_frames_param" default="$(find gsm_node)/cfg/tf_frames.yaml"/>
+            <arg name="tf_frames_param" default="$(find gsm_node)/cfg/tango_extrinsics.yaml"/>
             <node name="rovioli_marker_to_tf" pkg="gsm_node" type="gsm_node_util" output="screen">
                   <rosparam command="load" file="$(arg tf_frames_param)" />
             </node>

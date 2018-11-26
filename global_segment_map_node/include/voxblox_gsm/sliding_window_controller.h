@@ -54,7 +54,8 @@ class SlidingWindowController : public Controller {
    * @param radius
    * @param center
    */
-  void removeSegmentsOutsideOfRadius(FloatingPoint radius, Point center);
+  void removeSegmentsOutsideOfRadius(const FloatingPoint radius,
+                                     const Point& center);
 
   /**
    * Publishes position of new sliding window. Useful for debugging or display.
@@ -69,7 +70,7 @@ class SlidingWindowController : public Controller {
    * @param gsm_update
    */
   void publishGsmUpdate(const ros::Publisher& publisher,
-                        modelify_msgs::GsmUpdate& gsm_update) override;
+                        modelify_msgs::GsmUpdate* gsm_update) override;
 
   /**
    * Calls the base method and then removes the elements from the list, which
@@ -77,7 +78,8 @@ class SlidingWindowController : public Controller {
    * @param labels
    * @param get_all
    */
-  void getLabelsToPublish(std::vector<Label>* labels, bool get_all) override;
+  void getLabelsToPublish(const bool get_all,
+                          std::vector<Label>* labels) override;
 
   Transformation current_window_pose_;
   ros::Time current_window_timestamp_;

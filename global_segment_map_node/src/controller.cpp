@@ -272,15 +272,16 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
-  double voxel_size = 0.001f;
-  int voxels_per_side = 8u;
-  node_handle_private_->param<double>("voxel_size", voxel_size, voxel_size);
+  int voxels_per_side = map_config_.voxels_per_side;
+  node_handle_private_->param<FloatingPoint>(
+      "voxel_size", map_config_.voxel_size, map_config_.voxel_size);
   node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
                                    voxels_per_side);
   if (!isPowerOfTwo(voxels_per_side)) {
     ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
     voxels_per_side = map_config_.voxels_per_side;
   }
+  map_config_.voxels_per_side = voxels_per_side;
 
   map_config_.voxel_size = static_cast<FloatingPoint>(voxel_size);
   map_config_.voxels_per_side = voxels_per_side;
@@ -831,7 +832,7 @@ void Controller::extractSegmentLayers(
       auto it = label_layers_map->find(global_label_voxel.label);
       if (it == label_layers_map->end()) {
         if (labels_list_is_complete) {
-          LOG(ERROR) << "At least one voxel in the GSM is assigned to label "
+          LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
                      << global_label_voxel.label
                      << " which is not in the given "
                         "list of labels to retrieve.";
@@ -895,7 +896,7 @@ bool Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
   std::vector<Label> labels_to_publish;
-  getLabelsToPublish(&labels_to_publish, publish_all);
+  getLabelsToPublish(publish_all, &labels_to_publish);
 
   std::unordered_map<Label, LayerPair> label_to_layers;
   ros::Time start = ros::Time::now();
@@ -986,7 +987,7 @@ bool Controller::publishObjects(const bool publish_all) {
       }
       merges_to_publish_.erase(merged_label_it);
     }
-    publishGsmUpdate(*segment_gsm_update_pub_, gsm_update_msg);
+    publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
     // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
 
     if (publish_segment_mesh_) {
@@ -1042,7 +1043,7 @@ void Controller::publishScene() {
   transform.rotation.z = 0.0;
   gsm_update_msg.object.transforms.clear();
   gsm_update_msg.object.transforms.push_back(transform);
-  publishGsmUpdate(*scene_gsm_update_pub_, gsm_update_msg);
+  publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
 }
 
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
@@ -1165,11 +1166,13 @@ bool Controller::noNewUpdatesReceived() const {
 }
 
 void Controller::publishGsmUpdate(const ros::Publisher& publisher,
-                                  modelify_msgs::GsmUpdate& gsm_update) {
-  publisher.publish(gsm_update);
+                                  modelify_msgs::GsmUpdate* gsm_update) {
+  publisher.publish(*gsm_update);
 }
 
-void Controller::getLabelsToPublish(std::vector<Label>* labels, bool get_all) {
+void Controller::getLabelsToPublish(const bool get_all,
+                                    std::vector<Label>* labels) {
+  CHECK_NOTNULL(labels);
   if (get_all) {
     *labels = integrator_->getLabelsList();
     ROS_INFO("Publishing all segments");

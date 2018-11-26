@@ -8,20 +8,20 @@ namespace voxblox {
 namespace voxblox_gsm {
 
 SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
-    : Controller(node_handle) {
+    : Controller(CHECK_NOTNULL(node_handle)) {
   node_handle_private_->param<float>("sliding_window/radius_m", window_radius_,
                                      window_radius_);
   node_handle_private_->param<float>("sliding_window/update_fraction",
                                      update_fraction_, update_fraction_);
   node_handle_private_->param<std::string>("sliding_window/imu_frame",
-                                             imu_frame_, imu_frame_);
+                                           imu_frame_, imu_frame_);
 
   trajectory_publisher_ =
       node_handle_private_->advertise<nav_msgs::Path>("window_trajectory", 200);
 }
 
-void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
-                                                            Point center) {
+void SlidingWindowController::removeSegmentsOutsideOfRadius(
+    const float radius, const Point& center) {
   removed_segments_.clear();
   std::vector<Label> all_labels = integrator_->getLabelsList();
   label_to_layers_.clear();
@@ -41,10 +41,9 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(float radius,
     for (const BlockIndex& block_index : blocks_of_label) {
       Point center_block = getCenterPointFromGridIndex(
           block_index, map_config_.voxel_size * map_config_.voxels_per_side);
-      double distance_x_y = sqrt(pow(center_block(0) - center(0), 2) +
-                                 pow(center_block(1) - center(1), 2) +
-                                 pow(center_block(2) - center(2), 2));
-      if (distance_x_y < radius) {
+
+      const double distance_to_center = (center_block - center).norm();
+      if (distance_to_center < radius) {
         has_block_within_radius = true;
         break;
       }
@@ -64,6 +63,7 @@ void SlidingWindowController::extractSegmentLayers(
     const std::vector<Label>& labels,
     std::unordered_map<Label, LayerPair>* label_layers_map,
     bool labels_list_is_complete) {
+  CHECK_NOTNULL(label_layers_map);
   if (!label_to_layers_.empty()) {
     *label_layers_map = label_to_layers_;
   } else {
@@ -112,7 +112,8 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
 }
 
 void SlidingWindowController::publishGsmUpdate(
-    const ros::Publisher& publisher, modelify_msgs::GsmUpdate& gsm_update) {
+    const ros::Publisher& publisher, modelify_msgs::GsmUpdate* gsm_update) {
+  CHECK_NOTNULL(gsm_update);
   geometry_msgs::PoseStamped pose;
   pose.pose.position.x = current_window_pose_.getPosition()(0);
   pose.pose.position.y = current_window_pose_.getPosition()(1);
@@ -124,7 +125,7 @@ void SlidingWindowController::publishGsmUpdate(
   pose.header.frame_id = "world";
   pose.header.stamp = current_window_timestamp_;
 
-  gsm_update.sliding_window_pose = pose;
+  gsm_update->sliding_window_pose = pose;
   Controller::publishGsmUpdate(publisher, gsm_update);
 }
 
@@ -143,9 +144,10 @@ void SlidingWindowController::publishWindowTrajectory(const Point& position) {
   trajectory_publisher_.publish(msg);
 }
 
-void SlidingWindowController::getLabelsToPublish(std::vector<Label>* labels,
-                                                 bool get_all) {
-  Controller::getLabelsToPublish(labels, get_all);
+void SlidingWindowController::getLabelsToPublish(const bool get_all,
+                                                 std::vector<Label>* labels) {
+  CHECK_NOTNULL(labels);
+  Controller::getLabelsToPublish(get_all, labels);
   for (const Label& label : removed_segments_) {
     labels->erase(std::remove(labels->begin(), labels->end(), label));
   }
