@@ -1,11 +1,11 @@
 <launch>
   <arg name="slam"/>
-    <include if="$(arg slam)" file="$(find gsm_node)/launch/rovioli.launch"/>
+  <include if="$(arg slam)" file="$(find gsm_node)/launch/rovioli.launch"/>
 
-    <include file="$(find gsm_node)/launch/gsm_with_depth_segmentation.launch">
-        <arg name="sliding_window" default="true"/>
-        <arg if="$(arg slam)" name="camera_frame" value="depth"/>
-        <arg if="$(arg slam)" name="imu_frame" value="imu"/>
-    </include>
+  <include file="$(find gsm_node)/launch/gsm_with_depth_segmentation.launch">
+    <arg name="sliding_window" default="true"/>
+    <arg if="$(arg slam)" name="camera_frame" value="depth"/>
+    <arg if="$(arg slam)" name="imu_frame" value="imu"/>
+  </include>
 
 </launch>
