@@ -18,7 +18,6 @@
   <depend>gflags_catkin</depend>
   <depend>glog_catkin</depend>
   <depend>minkindr_conversions</depend>
-  <depend>object_toolbox</depend>
   <depend>modelify_msgs</depend>
   <depend>pcl_catkin</depend>
   <depend>pcl_conversions</depend>

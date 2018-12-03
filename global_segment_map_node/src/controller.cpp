@@ -3,13 +3,14 @@
 #include "voxblox_gsm/controller.h"
 
 #include <cmath>
+#include <memory>
 #include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
-#include <global_segment_map/layer_evaluation.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-#include <modelify/file_utils.h>
-#include <modelify/object_toolbox/object_toolbox.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -132,15 +133,16 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
-  double voxel_size = map_config_.voxel_size;
   int voxels_per_side = map_config_.voxels_per_side;
-  node_handle_private_->param<double>("voxel_size", voxel_size, voxel_size);
+  node_handle_private_->param<FloatingPoint>(
+      "voxel_size", map_config_.voxel_size, map_config_.voxel_size);
   node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
                                    voxels_per_side);
   if (!isPowerOfTwo(voxels_per_side)) {
     ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
     voxels_per_side = map_config_.voxels_per_side;
   }
+  map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
 
@@ -431,7 +433,7 @@ void Controller::segmentPointCloudCallback(
       }
     }
 
-    modelify::PointCloudType point_cloud;
+    pcl::PointCloud<pcl::PointXYZRGB> point_cloud;
     pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
 
     segment->points_C_.reserve(point_cloud.points.size());
@@ -468,10 +470,13 @@ void Controller::segmentPointCloudCallback(
   }
 }
 
-bool Controller::publishSceneCallback(std_srvs::Empty::Request& request,
-                                      std_srvs::Empty::Response& response) {
-  constexpr bool kClearMesh = true;
-  generateMesh(kClearMesh);
+bool Controller::publishSceneCallback(std_srvs::SetBool::Request& request,
+                                      std_srvs::SetBool::Response& response) {
+  bool save_scene_mesh = request.data;
+  if (save_scene_mesh) {
+    constexpr bool kClearMesh = true;
+    generateMesh(kClearMesh);
+  }
   publishScene();
   constexpr bool kPublishAllSegments = true;
   publishObjects(kPublishAllSegments);
@@ -506,7 +511,7 @@ bool Controller::validateMergedObjectCallback(
 
   std::vector<utils::VoxelEvaluationDetails> voxel_evaluation_details_vector;
 
-  evaluateLayerAtPoses<TsdfVoxelType>(
+  evaluateLayerRmseAtPoses<TsdfVoxelType>(
       voxel_evaluation_mode, map_->getTsdfLayer(),
       *(merged_object_layer_O.get()), transforms_W_O,
       &voxel_evaluation_details_vector);
@@ -530,13 +535,19 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   std::vector<Label> labels = integrator_->getLabelsList();
   static constexpr bool kConnectedMesh = false;
 
+  std::unordered_map<Label, LayerPair> label_to_layers;
+  // Extract the TSDF and label layers corresponding to a segment.
+  constexpr bool kLabelsListIsComplete = true;
+  extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
+
   for (Label label : labels) {
-    Layer<TsdfVoxel> segment_tsdf_layer(map_config_.voxel_size,
-                                        map_config_.voxels_per_side);
-    Layer<LabelVoxel> segment_label_layer(map_config_.voxel_size,
-                                          map_config_.voxels_per_side);
-    // Extract the TSDF and label layers corresponding to a segment.
-    extractSegmentLayers(label, &segment_tsdf_layer, &segment_label_layer);
+    auto it = label_to_layers.find(label);
+    CHECK(it != label_to_layers.end())
+        << "Layers for label " << label << "could not be extracted.";
+
+    const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+    const Layer<LabelVoxel>& segment_label_layer = it->second.second;
+
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
@@ -556,12 +567,23 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   return true;
 }
 
-void Controller::extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
-                                      Layer<LabelVoxel>* label_layer) {
-  CHECK_NOTNULL(tsdf_layer);
-  CHECK_NOTNULL(label_layer);
-  // TODO(grinvalm): find a less naive method to
-  // extract all blocks and voxels for a label.
+void Controller::extractSegmentLayers(
+    const std::vector<Label>& labels,
+    std::unordered_map<Label, LayerPair>* label_layers_map,
+    bool labels_list_is_complete) {
+  CHECK(label_layers_map);
+
+  // Build map from labels to tsdf and label layers. Each will contain the
+  // segment of the corresponding layer.
+  Layer<TsdfVoxel> tsdf_layer_empty(map_config_.voxel_size,
+                                    map_config_.voxels_per_side);
+  Layer<LabelVoxel> label_layer_empty(map_config_.voxel_size,
+                                      map_config_.voxels_per_side);
+  for (const Label& label : labels) {
+    label_layers_map->emplace(
+        label, std::make_pair(tsdf_layer_empty, label_layer_empty));
+  }
+
   BlockIndexList all_label_blocks;
   map_->getTsdfLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
 
@@ -570,21 +592,34 @@ void Controller::extractSegmentLayers(Label label, Layer<TsdfVoxel>* tsdf_layer,
         map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
     Block<LabelVoxel>::Ptr global_label_block =
         map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
-    Block<TsdfVoxel>::Ptr tsdf_block;
-    Block<LabelVoxel>::Ptr label_block;
 
-    size_t vps = global_label_block->voxels_per_side();
-    for (int i = 0; i < vps * vps * vps; i++) {
+    const size_t vps = global_label_block->voxels_per_side();
+    for (size_t i = 0; i < vps * vps * vps; ++i) {
       const LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
 
-      if (global_label_voxel.label != label) {
+      if (global_label_voxel.label == 0u) {
         continue;
       }
-      if (!tsdf_block) {
-        tsdf_block = tsdf_layer->allocateBlockPtrByIndex(block_index);
-        label_block = label_layer->allocateBlockPtrByIndex(block_index);
+
+      auto it = label_layers_map->find(global_label_voxel.label);
+      if (it == label_layers_map->end()) {
+        if (labels_list_is_complete) {
+          LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
+                     << global_label_voxel.label
+                     << " which is not in the given "
+                        "list of labels to retrieve.";
+        }
+        continue;
       }
+
+      Layer<TsdfVoxel>& tsdf_layer = it->second.first;
+      Layer<LabelVoxel>& label_layer = it->second.second;
+
+      Block<TsdfVoxel>::Ptr tsdf_block =
+          tsdf_layer.allocateBlockPtrByIndex(block_index);
+      Block<LabelVoxel>::Ptr label_block =
+          label_layer.allocateBlockPtrByIndex(block_index);
       CHECK(tsdf_block);
       CHECK(label_block);
 
@@ -629,28 +664,27 @@ bool Controller::lookupTransform(const std::string& from_frame,
 
 // TODO(ff): Create this somewhere:
 // void serializeGsmAsMsg(const map&, const label&, const parent_labels&, msg*);
-
 bool Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
-  // TODO(ff): Not sure if we want to use this or ros::Time::now();
-  const std::vector<Label>* labels_to_publish_ptr = &segment_labels_to_publish_;
-  std::vector<Label> all_labels;
-  if (publish_all) {
-    all_labels = integrator_->getLabelsList();
-    labels_to_publish_ptr = &all_labels;
-    ROS_INFO("Publishing all segments");
-  }
+  std::vector<Label> labels_to_publish;
+  getLabelsToPublish(publish_all, &labels_to_publish);
 
-  for (const Label& label : *labels_to_publish_ptr) {
-    // Extract the TSDF and label layers corresponding to this label.
-    Layer<TsdfVoxel> tsdf_layer(map_config_.voxel_size,
-                                map_config_.voxels_per_side);
-    Layer<LabelVoxel> label_layer(map_config_.voxel_size,
-                                  map_config_.voxels_per_side);
-    extractSegmentLayers(label, &tsdf_layer, &label_layer);
+  std::unordered_map<Label, LayerPair> label_to_layers;
+  ros::Time start = ros::Time::now();
+  extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
+  ros::Time stop = ros::Time::now();
+  ros::Duration duration = stop - start;
+  LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";
 
-    // Continue if tsdf_layer has little getNumberOfAllocatedBlocks.
+  for (const Label& label : labels_to_publish) {
+    auto it = label_to_layers.find(label);
+    CHECK(it != label_to_layers.end())
+        << "Layers for " << label << "could not be extracted.";
+
+    Layer<TsdfVoxel>& tsdf_layer = it->second.first;
+    Layer<LabelVoxel>& label_layer = it->second.second;
+
     // TODO(ff): Check what a reasonable size is for this.
     constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
     if (tsdf_layer.getNumberOfAllocatedBlocks() <
@@ -669,9 +703,13 @@ bool Controller::publishObjects(const bool publish_all) {
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
 
     // Extract surfel cloud from layer.
+    MeshIntegratorConfig mesh_config;
+    node_handle_private_->param<float>("mesh_config/min_weight",
+                                       mesh_config.min_weight,
+                                       mesh_config.min_weight);
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
-    convertVoxelGridToPointCloud(tsdf_layer, surfel_cloud.get());
+    convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
 
     if (surfel_cloud->empty()) {
       LOG(WARNING) << "Labelled segment does not contain enough data to "
@@ -683,6 +721,7 @@ bool Controller::publishObjects(const bool publish_all) {
     constexpr bool kSerializeOnlyUpdated = false;
     gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
     gsm_update_msg.header.frame_id = world_frame_;
+    gsm_update_msg.is_scene = false;
     serializeLayerAsMsg<TsdfVoxel>(tsdf_layer, kSerializeOnlyUpdated,
                                    &gsm_update_msg.object.tsdf_layer);
     // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
@@ -720,7 +759,7 @@ bool Controller::publishObjects(const bool publish_all) {
       }
       merges_to_publish_.erase(merged_label_it);
     }
-    segment_gsm_update_pub_->publish(gsm_update_msg);
+    publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
     // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
 
     if (publish_segment_mesh_) {
@@ -764,6 +803,7 @@ void Controller::publishScene() {
 
   gsm_update_msg.object.label = 0u;
   gsm_update_msg.old_labels.clear();
+  gsm_update_msg.is_scene = true;
   geometry_msgs::Transform transform;
   transform.translation.x = 0.0;
   transform.translation.y = 0.0;
@@ -774,7 +814,7 @@ void Controller::publishScene() {
   transform.rotation.z = 0.0;
   gsm_update_msg.object.transforms.clear();
   gsm_update_msg.object.transforms.push_back(transform);
-  scene_gsm_update_pub_->publish(gsm_update_msg);
+  publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
 }
 
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
@@ -858,5 +898,20 @@ bool Controller::noNewUpdatesReceived() const {
   return false;
 }
 
+void Controller::publishGsmUpdate(const ros::Publisher& publisher,
+                                  modelify_msgs::GsmUpdate* gsm_update) {
+  publisher.publish(*gsm_update);
+}
+
+void Controller::getLabelsToPublish(const bool get_all,
+                                    std::vector<Label>* labels) {
+  CHECK_NOTNULL(labels);
+  if (get_all) {
+    *labels = integrator_->getLabelsList();
+    ROS_INFO("Publishing all segments");
+  } else {
+    *labels = segment_labels_to_publish_;
+  }
+}
 }  // namespace voxblox_gsm
 }  // namespace voxblox

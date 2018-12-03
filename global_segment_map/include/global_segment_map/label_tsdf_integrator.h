@@ -31,7 +31,8 @@ class Segment {
 class LabelTsdfIntegrator : public MergedTsdfIntegrator {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-  typedef AnyIndexHashMapType<AlignedVector<size_t>>::type VoxelMap;
+  typedef LongIndexHashMapType<AlignedVector<size_t>>::type VoxelMap;
+  typedef VoxelMap::value_type VoxelMapElement;
   typedef std::map<Label, int> LMap;
   typedef std::map<Label, int>::iterator LMapIt;
   typedef std::map<Label, LMap> LLMap;
@@ -402,7 +403,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // during integration. These temporary blocks can be merged into the layer
   // later by calling updateLayerWithStoredBlocks()
   LabelVoxel* allocateStorageAndGetLabelVoxelPtr(
-      const VoxelIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
+      const GlobalIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
       BlockIndex* last_block_idx) {
     DCHECK(last_block != nullptr);
     DCHECK(last_block_idx != nullptr);
@@ -467,8 +468,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
                                LabelVoxel* label_voxel,
                                const LabelConfidence& confidence = 1.0f) {
     // Lookup the mutex that is responsible for this voxel and lock it
-    std::lock_guard<std::mutex> lock(
-        mutexes_.get(getGridIndexFromPoint(point_G, voxel_size_inv_)));
+    std::lock_guard<std::mutex> lock(mutexes_.get(
+        getGridIndexFromPoint<GlobalIndex>(point_G, voxel_size_inv_)));
 
     CHECK_NOTNULL(label_voxel);
 
@@ -533,9 +534,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void integrateVoxel(const Transformation& T_G_C, const Pointcloud& points_C,
                       const Colors& colors, const Labels& labels,
                       const bool enable_anti_grazing, const bool clearing_ray,
-                      const std::pair<AnyIndex, AlignedVector<size_t>>& kv,
+                      const VoxelMapElement& global_voxel_idx_to_point_indices,
                       const VoxelMap& voxel_map) {
-    if (kv.second.empty()) {
+    if (global_voxel_idx_to_point_indices.second.empty()) {
       return;
     }
 
@@ -546,7 +547,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     Label merged_label;
     LabelConfidence merged_label_confidence;
 
-    for (const size_t pt_idx : kv.second) {
+    for (const size_t pt_idx : global_voxel_idx_to_point_indices.second) {
       const Point& point_C = points_C[pt_idx];
       const Color& color = colors[pt_idx];
       const Label& label = labels[pt_idx];
@@ -581,12 +582,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
                          config_.max_ray_length_m, voxel_size_inv_,
                          config_.default_truncation_distance);
 
-    VoxelIndex global_voxel_idx;
+    GlobalIndex global_voxel_idx;
     while (ray_caster.nextRayIndex(&global_voxel_idx)) {
       if (enable_anti_grazing) {
         // Check if this one is already the block hash map for this
         // insertion. Skip this to avoid grazing.
-        if ((clearing_ray || global_voxel_idx != kv.first) &&
+        if ((clearing_ray ||
+             global_voxel_idx != global_voxel_idx_to_point_indices.first) &&
             voxel_map.find(global_voxel_idx) != voxel_map.end()) {
           continue;
         }
@@ -730,6 +732,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void getLabelsToPublish(
       std::vector<voxblox::Label>* segment_labels_to_publish) {
+    CHECK_NOTNULL(segment_labels_to_publish);
     resetCurrentFrameUpdatedLabelsAge();
 
     for (LMapIt label_age_pair_it = labels_to_publish_.begin();
@@ -747,7 +750,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
-  LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
+  LMap* getLabelsAgeMapPtr() {
+    return &labels_to_publish_;
+  }
 
   void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label,
                                   int count) {
@@ -927,7 +932,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // the voxels hash. Assuming a uniform hash distribution, this means the
   // chance of two threads needing the same lock for unrelated voxels is
   // (num_threads / (2^n)). For 8 threads and 12 bits this gives 0.2%.
-  ApproxHashArray<12, std::mutex> mutexes_;
+  ApproxHashArray<12, std::mutex, GlobalIndex, LongIndexHash> mutexes_;
 
   std::mutex updated_labels_mutex_;
   std::set<Label> updated_labels_;
