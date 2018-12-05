@@ -264,7 +264,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_scene_mesh_(false),
       received_first_message_(false) {
   CHECK_NOTNULL(node_handle_private_);
-  // srand(50);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
   node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
@@ -281,9 +280,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
     voxels_per_side = map_config_.voxels_per_side;
   }
-  map_config_.voxels_per_side = voxels_per_side;
-
-  map_config_.voxel_size = static_cast<FloatingPoint>(voxel_size);
   map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
