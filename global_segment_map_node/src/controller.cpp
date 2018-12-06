@@ -362,6 +362,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
       map_->getLabelLayerPtr(), map_->getHighestLabelPtr()));
 
+  label_class_count_ptr_ = integrator_->getLabelClassCountPtr();
+
   mesh_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
@@ -936,6 +938,8 @@ bool Controller::publishObjects(const bool publish_all) {
     convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
 
     if (surfel_cloud->empty()) {
+      LOG(WARNING) << tsdf_layer.getNumberOfAllocatedBlocks()
+                   << " blocks didn't produce a surface.";
       LOG(WARNING) << "Labelled segment does not contain enough data to "
                       "extract a surface -> skipping!";
       continue;
@@ -954,6 +958,8 @@ bool Controller::publishObjects(const bool publish_all) {
                                     &gsm_update_msg.object.label_layer);
 
     gsm_update_msg.object.label = label;
+    gsm_update_msg.object.semantic_label =
+        utils::getSemanticLabel(*label_class_count_ptr_, label);
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
     transform.translation.x = origin_shifted_tsdf_layer_W[0];

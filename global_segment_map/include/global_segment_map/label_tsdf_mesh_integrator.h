@@ -12,6 +12,7 @@
 #include <voxblox/mesh/mesh_integrator.h>
 
 #include "global_segment_map/label_voxel.h"
+#include "global_segment_map/utils/label_utils.h"
 
 namespace voxblox {
 
@@ -200,23 +201,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     }
     label_instance_map_[label] = instance_label;
     return instance_label;
-  }
-
-  SemanticLabel getLabelClass(const Label& label) {
-    SemanticLabel semantic_label = 0;
-    int max_count = 0;
-    auto label_it = label_class_count_ptr_->find(label);
-    if (label_it != label_class_count_ptr_->end()) {
-      for (auto const& class_count : label_it->second) {
-        if (class_count.second > max_count && class_count.first != 0u) {
-          semantic_label = class_count.first;
-          max_count = class_count.second;
-        }
-      }
-    } else {
-      // LOG(ERROR) << "No semantic class for label?";
-    }
-    return semantic_label;
   }
 
   Color getColorFromLabel(const Label& label) {
@@ -479,7 +463,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           SemanticLabel instance_label = getLabelInstance(voxel.label);
           SemanticLabel semantic_label = 0u;
           if (instance_label != 0u) {
-            semantic_label = getLabelClass(voxel.label);
+            semantic_label =
+                utils::getSemanticLabel(*label_class_count_ptr_, voxel.label);
             all_semantic_labels_ptr_->insert(semantic_label);
           }
           // color = getColorFromInstanceLabel(semantic_label);
@@ -517,7 +502,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           SemanticLabel instance_label = getLabelInstance(voxel.label);
           SemanticLabel semantic_label = 0u;
           if (instance_label != 0u) {
-            semantic_label = getLabelClass(voxel.label);
+            semantic_label =
+                utils::getSemanticLabel(*label_class_count_ptr_, voxel.label);
             all_semantic_labels_ptr_->insert(semantic_label);
           }
           // color = getColorFromInstanceLabel(semantic_label);
