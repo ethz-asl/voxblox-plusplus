@@ -15,8 +15,8 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <std_srvs/SetBool.h>
 #include <std_srvs/Empty.h>
+#include <std_srvs/SetBool.h>
 #include <tf/transform_listener.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
@@ -106,8 +106,8 @@ class Controller {
    * gsm.
    */
   virtual void extractSegmentLayers(
-      const std::vector<Label> &labels,
-      std::unordered_map<Label, LayerPair> *label_layers_map,
+      const std::vector<Label>& labels,
+      std::unordered_map<Label, LayerPair>* label_layers_map,
       bool labels_list_is_complete = false);
 
   bool lookupTransform(const std::string& from_frame,
@@ -130,22 +130,13 @@ class Controller {
   ros::Time last_segment_msg_timestamp_;
   size_t integrated_frames_count_;
 
+  std::string world_frame_;
+  std::string camera_frame_;
+
   // Shutdown logic: if no messages are received for X amount of time,
   // shut down node.
   bool received_first_message_;
   ros::Time last_update_received_;
-
-  ros::Publisher* scene_gsm_update_pub_;
-  ros::Publisher* segment_gsm_update_pub_;
-
-  ros::Timer update_mesh_timer_;
-  ros::Publisher* scene_mesh_pub_;
-  ros::Publisher* segment_mesh_pub_;
-  MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
-  std::string mesh_filename_;
-
-  std::string world_frame_;
-  std::string camera_frame_;
 
   LabelTsdfMap::Config map_config_;
 
@@ -153,6 +144,11 @@ class Controller {
   std::shared_ptr<LabelTsdfIntegrator> integrator_;
 
   MeshIntegratorConfig mesh_config_;
+  ros::Timer update_mesh_timer_;
+  ros::Publisher* scene_mesh_pub_;
+  ros::Publisher* segment_mesh_pub_;
+  MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
+  std::string mesh_filename_;
 
   std::shared_ptr<MeshLayer> mesh_layer_;
   std::shared_ptr<MeshLayer> mesh_semantic_layer_;
@@ -163,16 +159,21 @@ class Controller {
   std::shared_ptr<MeshLabelIntegrator> mesh_instance_integrator_;
   std::shared_ptr<MeshLabelIntegrator> mesh_merged_integrator_;
 
+  // Semantic labels.
   std::set<SemanticLabel> all_semantic_labels_;
+  std::map<Label, std::map<SemanticLabel, int>>* label_class_count_ptr_;
 
+  // Current frame label propagation.
   std::vector<Segment*> segments_to_integrate_;
   std::map<Label, std::map<Segment*, size_t>> segment_label_candidates;
   std::map<Segment*, std::vector<Label>> segment_merge_candidates_;
 
-  std::set<Label> all_published_segments_;
+  // GsmUpdate publishing.
+  ros::Publisher* scene_gsm_update_pub_;
+  ros::Publisher* segment_gsm_update_pub_;
   std::vector<Label> segment_labels_to_publish_;
-
   std::map<Label, std::set<Label>> merges_to_publish_;
+  std::set<Label> all_published_segments_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox

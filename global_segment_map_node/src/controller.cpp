@@ -264,7 +264,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_scene_mesh_(false),
       received_first_message_(false) {
   CHECK_NOTNULL(node_handle_private_);
-  // srand(50);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
   node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
@@ -281,9 +280,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
     voxels_per_side = map_config_.voxels_per_side;
   }
-  map_config_.voxels_per_side = voxels_per_side;
-
-  map_config_.voxel_size = static_cast<FloatingPoint>(voxel_size);
   map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
@@ -365,6 +361,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
       map_->getLabelLayerPtr(), map_->getHighestLabelPtr()));
+
+  label_class_count_ptr_ = integrator_->getLabelClassCountPtr();
 
   mesh_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
@@ -940,6 +938,8 @@ bool Controller::publishObjects(const bool publish_all) {
     convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
 
     if (surfel_cloud->empty()) {
+      LOG(WARNING) << tsdf_layer.getNumberOfAllocatedBlocks()
+                   << " blocks didn't produce a surface.";
       LOG(WARNING) << "Labelled segment does not contain enough data to "
                       "extract a surface -> skipping!";
       continue;
@@ -958,6 +958,8 @@ bool Controller::publishObjects(const bool publish_all) {
                                     &gsm_update_msg.object.label_layer);
 
     gsm_update_msg.object.label = label;
+    gsm_update_msg.object.semantic_label =
+        utils::getSemanticLabel(*label_class_count_ptr_, label);
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
     transform.translation.x = origin_shifted_tsdf_layer_W[0];

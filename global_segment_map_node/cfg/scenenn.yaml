@@ -4,6 +4,7 @@ camera_frame_id: "scenenn_camera_frame"
 scene_gsm_update_topic: "scene_update"
 segment_gsm_update_topic: "gsm_update"
 object_flushing_age_threshold: 6
+publish_gsm_updates: true
 validate_merged_object: "validate_merged_object"
 enable_pairwise_confidence_merging: true
 pairwise_confidence_ratio_threshold: 0.15
