@@ -13,7 +13,6 @@
 #include <voxblox/integrator/integrator_utils.h>
 #include <voxblox/integrator/tsdf_integrator.h>
 #include <voxblox/utils/timing.h>
-#include <boost/math/distributions/lognormal.hpp>
 
 #include "global_segment_map/label_tsdf_map.h"
 #include "global_segment_map/label_voxel.h"
@@ -841,13 +840,31 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   }
 
   FloatingPoint computeConfidenceWeight(FloatingPoint distance) {
-    boost::math::lognormal_distribution<> distribution(
-        label_tsdf_config_.lognormal_weight_mean,
-        label_tsdf_config_.lognormal_weight_sigma);
+    const FloatingPoint mu = label_tsdf_config_.lognormal_weight_mean;
+    const FloatingPoint sigma = label_tsdf_config_.lognormal_weight_sigma;
+    FloatingPoint x =
+        std::max(0.0f, distance - label_tsdf_config_.lognormal_weight_offset);
 
-    return pdf(
-        distribution,
-        std::max(0.0f, distance - label_tsdf_config_.lognormal_weight_offset));
+    if (x == 0) {
+      return 0;
+    }
+
+    CHECK(sigma > 0.0 && std::isfinite(sigma))
+        << "Scale parameter is " << sigma << ", but must be > 0 !";
+    CHECK(std::isfinite(mu))
+        << "Location parameter is " << mu << ", but must be finite!";
+    CHECK(x >= 0.0 && std::isfinite(x))
+        << "Random variate is " << x << " but must be >= 0 !";
+
+    FloatingPoint result = 0.0;
+    FloatingPoint exponent = std::log(x) - mu;
+    exponent *= -exponent;
+    exponent /= 2 * sigma * sigma;
+
+    result = std::exp(exponent);
+    result /= sigma * std::sqrt(2 * M_PI) * x;
+
+    return result;
   }
 
   // Not thread safe.
