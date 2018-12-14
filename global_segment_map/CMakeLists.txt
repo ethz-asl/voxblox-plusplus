@@ -4,8 +4,6 @@ project(global_segment_map)
 find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
-find_package(Boost REQUIRED COMPONENTS filesystem)
-
 add_definitions(-std=c++11)
 
 cs_add_library(${PROJECT_NAME}

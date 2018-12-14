@@ -5,6 +5,7 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -20,8 +21,6 @@
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
-
-#include <boost/thread.hpp>
 
 #include "voxblox_gsm/conversions.h"
 
@@ -819,62 +818,65 @@ void Controller::publishScene() {
 
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
   voxblox::timing::Timer generate_mesh_timer("mesh/generate");
-  boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
-  if (clear_mesh) {
-    constexpr bool only_mesh_updated_blocks = false;
-    constexpr bool clear_updated_flag = true;
-    mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
-  } else {
-    constexpr bool only_mesh_updated_blocks = true;
-    constexpr bool clear_updated_flag = true;
-    mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
+  {
+    std::lock_guard<std::mutex> updateMeshLock(updateMeshMutex);
+    if (clear_mesh) {
+      constexpr bool only_mesh_updated_blocks = false;
+      constexpr bool clear_updated_flag = true;
+      mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                     clear_updated_flag);
+    } else {
+      constexpr bool only_mesh_updated_blocks = true;
+      constexpr bool clear_updated_flag = true;
+      mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                     clear_updated_flag);
+    }
+    generate_mesh_timer.Stop();
   }
-  generate_mesh_timer.Stop();
 
   updatedMesh = true;
-  updateMeshLock.unlock();
-
-  if (publish_scene_mesh_) {
-    timing::Timer publish_mesh_timer("mesh/publish");
-    visualization_msgs::MarkerArray marker_array;
-    marker_array.markers.resize(1);
-    fillMarkerWithMesh(mesh_layer_, ColorMode::kColor,
-                       &marker_array.markers[0]);
-    ColorMode color_mode_ = ColorMode::kColor;
-    marker_array.markers[0].header.frame_id = world_frame_;
-    scene_mesh_pub_->publish(marker_array);
-
-    publish_mesh_timer.Stop();
-  }
-
-  if (!mesh_filename_.empty()) {
-    timing::Timer output_mesh_timer("mesh/output");
-    bool success = outputMeshLayerAsPly(mesh_filename_, false, *mesh_layer_);
-    output_mesh_timer.Stop();
-    if (success) {
-      ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
-    } else {
-      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename_.c_str());
-    }
-  }
-
-  ROS_INFO_STREAM("Mesh Timings: " << std::endl
-                                   << voxblox::timing::Timing::Print());
 }
 
+if (publish_scene_mesh_) {
+  timing::Timer publish_mesh_timer("mesh/publish");
+  visualization_msgs::MarkerArray marker_array;
+  marker_array.markers.resize(1);
+  fillMarkerWithMesh(mesh_layer_, ColorMode::kColor, &marker_array.markers[0]);
+  ColorMode color_mode_ = ColorMode::kColor;
+  marker_array.markers[0].header.frame_id = world_frame_;
+  scene_mesh_pub_->publish(marker_array);
+
+  publish_mesh_timer.Stop();
+}
+
+if (!mesh_filename_.empty()) {
+  timing::Timer output_mesh_timer("mesh/output");
+  bool success = outputMeshLayerAsPly(mesh_filename_, false, *mesh_layer_);
+  output_mesh_timer.Stop();
+  if (success) {
+    ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
+  } else {
+    ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename_.c_str());
+  }
+}
+
+ROS_INFO_STREAM("Mesh Timings: " << std::endl
+                                 << voxblox::timing::Timing::Print());
+}  // namespace voxblox_gsm
+
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
-  boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
+  {
+    std::lock_guard<std::mutex> updateMeshLock(updateMeshMutex);
 
-  timing::Timer generate_mesh_timer("mesh/update");
-  constexpr bool only_mesh_updated_blocks = true;
-  constexpr bool clear_updated_flag = true;
-  updatedMesh = mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                               clear_updated_flag);
-  updateMeshLock.unlock();
+    timing::Timer generate_mesh_timer("mesh/update");
+    constexpr bool only_mesh_updated_blocks = true;
+    constexpr bool clear_updated_flag = true;
+    updatedMesh = mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                 clear_updated_flag);
+    updateMeshLock.unlock();
 
-  generate_mesh_timer.Stop();
+    generate_mesh_timer.Stop();
+  }
 
   if (publish_scene_mesh_) {
     // TODO(helenol): also think about how to update markers incrementally?
@@ -913,5 +915,5 @@ void Controller::getLabelsToPublish(const bool get_all,
     *labels = segment_labels_to_publish_;
   }
 }
-}  // namespace voxblox_gsm
+}  // namespace voxblox
 }  // namespace voxblox
