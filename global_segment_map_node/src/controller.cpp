@@ -12,10 +12,10 @@
 #include <vector>
 
 #include <global_segment_map/label_voxel.h>
+#include <global_segment_map/utils/file_utils.h>
 #include <global_segment_map/utils/label_utils.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-#include <modelify/file_utils.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -775,7 +775,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
-      CHECK_EQ(modelify::file_utils::makePath("gsm_segments", 0777), 0);
+      CHECK_EQ(voxblox::file_utils::makePath("gsm_segments", 0777), 0);
 
       std::string mesh_filename = "gsm_segments/gsm_segment_mesh_label_" +
                                   std::to_string(label) + ".ply";
