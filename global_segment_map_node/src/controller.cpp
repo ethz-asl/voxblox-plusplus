@@ -6,14 +6,16 @@
 #include <cmath>
 #include <memory>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <global_segment_map/label_voxel.h>
+#include <global_segment_map/utils/file_utils.h>
+#include <global_segment_map/utils/label_utils.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-#include <modelify/file_utils.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
@@ -23,8 +25,6 @@
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
-
-#include <boost/thread.hpp>
 
 #include "voxblox_gsm/conversions.h"
 
@@ -114,8 +114,8 @@ std::string classes[81] = {"BG",
                            "toothbrush"};
 
 bool updatedMesh;
-boost::mutex updateMeshMutex;
-boost::mutex viewerSpin;
+std::mutex updateMeshMutex;
+std::mutex viewerSpin;
 bool remesh;
 int frame_count;
 
@@ -175,7 +175,7 @@ void visualizeMesh(const MeshLayer& mesh_layer,
       viewer[count]->spinOnce(updateIntervalms);
     }
 
-    boost::mutex::scoped_lock updatedMeshLock(updateMeshMutex);
+    std::lock_guard<std::mutex> updatedMeshLock(updateMeshMutex);
     std::array<voxblox::Mesh, 4> mesh;
     mesh[0] = voxblox::Mesh();
     mesh[1] = voxblox::Mesh();
@@ -244,8 +244,6 @@ void visualizeMesh(const MeshLayer& mesh_layer,
       frame_count++;
 
       updatedMesh = false;
-
-      updatedMeshLock.unlock();
       // viewerSpinLock.unlock();
     }
   }
@@ -405,14 +403,14 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   bool visualize = false;
   node_handle_private_->param<bool>("visualize", visualize, visualize);
   if (visualize) {
-    // boost::thread visualizerThread(visualizeMesh, boost::ref(*mesh_layer_),
+    // std::thread visualizerThread(visualizeMesh, std::ref(*mesh_layer_),
     // "GSM Labels");
-    // boost::thread semanticVisualizerThread(
-    //     visualizeMesh, boost::ref(*mesh_semantic_layer_), "GSM Semantics");
-    boost::thread instanceVisualizerThread(
-        visualizeMesh, boost::ref(*mesh_layer_),
-        boost::ref(*mesh_merged_layer_), boost::ref(*mesh_semantic_layer_),
-        boost::ref(*mesh_instance_layer_), "Map");
+    // std::thread semanticVisualizerThread(
+    //     visualizeMesh, std::ref(*mesh_semantic_layer_), "GSM Semantics");
+    std::thread instanceVisualizerThread(
+        visualizeMesh, std::ref(*mesh_layer_), std::ref(*mesh_merged_layer_),
+        std::ref(*mesh_semantic_layer_), std::ref(*mesh_instance_layer_),
+        "Map");
   }
 
   node_handle_private_->param<bool>(
@@ -589,13 +587,14 @@ void Controller::segmentPointCloudCallback(
 
     start = ros::WallTime::now();
 
-    boost::mutex::scoped_lock updatedMeshLock(updateMeshMutex);
-    for (const auto& segment : segments_to_integrate_) {
-      integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                       segment->colors_, segment->labels_,
-                                       kIsFreespacePointcloud);
+    {
+      std::lock_guard<std::mutex> updatedMeshLock(updateMeshMutex);
+      for (const auto& segment : segments_to_integrate_) {
+        integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                         segment->colors_, segment->labels_,
+                                         kIsFreespacePointcloud);
+      }
     }
-    updatedMeshLock.unlock();
 
     end = ros::WallTime::now();
     ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
@@ -776,7 +775,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
-      CHECK_EQ(modelify::file_utils::makePath("gsm_segments", 0777), 0);
+      CHECK_EQ(voxblox::file_utils::makePath("gsm_segments", 0777), 0);
 
       std::string mesh_filename = "gsm_segments/gsm_segment_mesh_label_" +
                                   std::to_string(label) + ".ply";
@@ -1050,39 +1049,40 @@ void Controller::publishScene() {
 
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
   voxblox::timing::Timer generate_mesh_timer("mesh/generate");
-  boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
-  if (clear_mesh) {
-    constexpr bool only_mesh_updated_blocks = false;
-    constexpr bool clear_updated_flag = true;
-    mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
-    all_semantic_labels_.clear();
-    mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+  {
+    std::lock_guard<std::mutex> updateMeshLock(updateMeshMutex);
+    if (clear_mesh) {
+      constexpr bool only_mesh_updated_blocks = false;
+      constexpr bool clear_updated_flag = true;
+      mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                     clear_updated_flag);
+      all_semantic_labels_.clear();
+      mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                              clear_updated_flag);
+      for (auto sl : all_semantic_labels_) {
+        LOG(ERROR) << classes[(unsigned)sl];
+      }
+      mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                              clear_updated_flag);
+      mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
                                             clear_updated_flag);
-    for (auto sl : all_semantic_labels_) {
-      LOG(ERROR) << classes[(unsigned)sl];
+
+    } else {
+      constexpr bool only_mesh_updated_blocks = true;
+      constexpr bool clear_updated_flag = true;
+      mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                     clear_updated_flag);
+      mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                              clear_updated_flag);
+      mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                              clear_updated_flag);
+      mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+                                            clear_updated_flag);
     }
-    mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                            clear_updated_flag);
-    mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                          clear_updated_flag);
+    generate_mesh_timer.Stop();
 
-  } else {
-    constexpr bool only_mesh_updated_blocks = true;
-    constexpr bool clear_updated_flag = true;
-    mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
-    mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
-                                            clear_updated_flag);
-    mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                            clear_updated_flag);
-    mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                          clear_updated_flag);
+    updatedMesh = true;
   }
-  generate_mesh_timer.Stop();
-
-  updatedMesh = true;
-  updateMeshLock.unlock();
 
   if (publish_scene_mesh_) {
     timing::Timer publish_mesh_timer("mesh/publish");
@@ -1121,29 +1121,28 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 }
 
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
-  boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
+  {
+    std::lock_guard<std::mutex> updateMeshLock(updateMeshMutex);
+    timing::Timer generate_mesh_timer("mesh/update");
+    bool only_mesh_updated_blocks = true;
+    if (remesh) {
+      only_mesh_updated_blocks = false;
+      remesh = false;
+    }
+    bool clear_updated_flag = false;
+    updatedMesh |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+    updatedMesh |= mesh_instance_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
 
-  timing::Timer generate_mesh_timer("mesh/update");
-  bool only_mesh_updated_blocks = true;
-  if (remesh) {
-    only_mesh_updated_blocks = false;
-    remesh = false;
+    updatedMesh |= mesh_merged_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
+
+    clear_updated_flag = true;
+    updatedMesh |= mesh_semantic_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
+    generate_mesh_timer.Stop();
   }
-  bool clear_updated_flag = false;
-  updatedMesh |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                clear_updated_flag);
-  updatedMesh |= mesh_instance_integrator_->generateMesh(
-      only_mesh_updated_blocks, clear_updated_flag);
-
-  updatedMesh |= mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                       clear_updated_flag);
-
-  clear_updated_flag = true;
-  updatedMesh |= mesh_semantic_integrator_->generateMesh(
-      only_mesh_updated_blocks, clear_updated_flag);
-  updateMeshLock.unlock();
-
-  generate_mesh_timer.Stop();
 
   if (publish_scene_mesh_) {
     // TODO(helenol): also think about how to update markers incrementally?
