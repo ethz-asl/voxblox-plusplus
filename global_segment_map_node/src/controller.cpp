@@ -134,7 +134,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
   int voxels_per_side = map_config_.voxels_per_side;
-  node_handle_private_->param<FloatingPoint>("voxel_size", map_config_.voxel_size, map_config_.voxel_size);
+  node_handle_private_->param<FloatingPoint>(
+      "voxel_size", map_config_.voxel_size, map_config_.voxel_size);
   node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
                                    voxels_per_side);
   if (!isPowerOfTwo(voxels_per_side)) {
