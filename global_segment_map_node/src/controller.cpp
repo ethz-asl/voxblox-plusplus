@@ -124,8 +124,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
-  node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
-                                           camera_frame_);
 
   // Determine map parameters.
   map_config_.voxel_size = 0.01f;
@@ -418,7 +416,7 @@ void Controller::segmentPointCloudCallback(
 
   // Look up transform from camera frame to world frame.
   Transformation T_G_C;
-  if (lookupTransform(camera_frame_, world_frame_,
+  if (lookupTransform(segment_point_cloud_msg->header.frame_id, world_frame_,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {
     Segment* segment = new Segment();
     segments_to_integrate_.push_back(segment);
