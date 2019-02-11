@@ -16,10 +16,11 @@ voxels_per_side: 8
 truncation_distance_factor: 5.0
 voxel_carving_enabled: false
 max_ray_length_m: 2.5
+publish_gsm_updates: true
 
 sliding_window:
-  is_on: true
-  radius_m: 2.0
+  is_on: false
+  radius_m: 1.0
   imu_frame_id: imu
 
   # Between 0 and 1. As soon as the distance between sliding window and camera
