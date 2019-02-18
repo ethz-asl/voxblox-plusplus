@@ -201,6 +201,14 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config.object_flushing_age_threshold,
       label_tsdf_integrator_config.object_flushing_age_threshold);
 
+  node_handle_private_->param<bool>("enable_icp",
+                                    label_tsdf_integrator_config.enable_icp,
+                                    label_tsdf_integrator_config.enable_icp);
+  node_handle_private_->param<bool>(
+      "keep_track_of_icp_correction",
+      label_tsdf_integrator_config.keep_track_of_icp_correction,
+      label_tsdf_integrator_config.keep_track_of_icp_correction);
+
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
       map_->getLabelLayerPtr(), map_->getHighestLabelPtr()));
