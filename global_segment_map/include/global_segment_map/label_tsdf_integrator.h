@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <glog/logging.h>
+#include <voxblox/alignment/icp.h>
 #include <voxblox/core/layer.h>
 #include <voxblox/core/voxel.h>
 #include <voxblox/integrator/integrator_utils.h>
@@ -67,6 +68,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     float lognormal_weight_mean = 0.0f;
     float lognormal_weight_sigma = 1.8f;
     float lognormal_weight_offset = 0.7f;
+
+    // ICP params.
+    bool enable_icp = true;
+    bool keep_track_of_icp_correction = true;
   };
 
   LabelTsdfIntegrator(const Config& tsdf_config,

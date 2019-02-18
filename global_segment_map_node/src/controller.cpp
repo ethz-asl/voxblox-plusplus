@@ -223,6 +223,14 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config_.max_segment_age,
       label_tsdf_integrator_config_.max_segment_age);
 
+  node_handle_private_->param<bool>("enable_icp",
+                                    label_tsdf_integrator_config.enable_icp,
+                                    label_tsdf_integrator_config.enable_icp);
+  node_handle_private_->param<bool>(
+      "keep_track_of_icp_correction",
+      label_tsdf_integrator_config.keep_track_of_icp_correction,
+      label_tsdf_integrator_config.keep_track_of_icp_correction);
+
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_,
       map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
