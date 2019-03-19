@@ -113,7 +113,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       // Increased time limit for lookup in the past of tf messages
       // to give some slack to the pipeline and not lose any messages.
       integrated_frames_count_(0u),
-      tf_listener_(ros::Duration(100)),
+      tf_listener_(ros::Duration(500)),
       world_frame_("world"),
       camera_frame_(""),
       no_update_timeout_(0.0),
@@ -128,7 +128,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
                                            camera_frame_);
 
   // Determine map parameters.
-  map_config_.voxel_size = 0.01f;
+  map_config_.voxel_size = 0.02f;
   map_config_.voxels_per_side = 8u;
 
   // Workaround for OS X on mac mini not having specializations for float
@@ -151,7 +151,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_config.voxel_carving_enabled = false;
   integrator_config.allow_clear = true;
   FloatingPoint truncation_distance_factor = 5.0f;
-  integrator_config.max_ray_length_m = 2.5f;
+  // integrator_config.max_ray_length_m = 2.5f;
+  integrator_config.max_ray_length_m = 4.0f;
 
   node_handle_private_->param<bool>("voxel_carving_enabled",
                                     integrator_config.voxel_carving_enabled,
