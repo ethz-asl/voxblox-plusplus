@@ -9,6 +9,14 @@
 
 namespace voxblox {
 
+typedef uint16_t Label;
+typedef uint16_t LabelConfidence;
+typedef uint8_t SemanticLabel;
+
+// Pointcloud types for external interface.
+typedef AlignedVector<Label> Labels;
+typedef AlignedVector<SemanticLabel> SemanticLabels;
+
 struct LabelCount {
   Label label = 0u;
   LabelConfidence label_confidence = 0.0f;
