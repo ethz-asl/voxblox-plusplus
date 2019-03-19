@@ -11,6 +11,7 @@ add_definitions(-std=c++11)
 cs_add_library(${PROJECT_NAME}
   src/label_block_serialization.cc
   src/label_merge_integrator.cc
+  src/icp_utils.cc
 )
 
 cs_install()

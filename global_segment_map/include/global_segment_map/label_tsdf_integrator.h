@@ -2,12 +2,17 @@
 #define GLOBAL_SEGMENT_MAP_LABEL_TSDF_INTEGRATOR_H_
 
 #include <algorithm>
+#include <limits>
 #include <list>
 #include <map>
+#include <memory>
+#include <set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include <glog/logging.h>
+#include <voxblox/alignment/icp.h>
 #include <voxblox/core/layer.h>
 #include <voxblox/core/voxel.h>
 #include <voxblox/integrator/integrator_utils.h>
@@ -15,6 +20,7 @@
 #include <voxblox/utils/timing.h>
 #include <boost/math/distributions/lognormal.hpp>
 
+#include "global_segment_map/icp_utils.h"
 #include "global_segment_map/label_tsdf_map.h"
 #include "global_segment_map/label_voxel.h"
 
@@ -64,6 +70,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     float lognormal_weight_mean = 0.0f;
     float lognormal_weight_sigma = 1.8f;
     float lognormal_weight_offset = 0.7f;
+
+    // ICP params.
+    bool enable_icp = true;
+    bool keep_track_of_icp_correction = true;
   };
 
   LabelTsdfIntegrator(const Config& config,
@@ -73,8 +83,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       : MergedTsdfIntegrator(config, CHECK_NOTNULL(tsdf_layer)),
         label_tsdf_config_(label_tsdf_config),
         label_layer_(CHECK_NOTNULL(label_layer)),
-        highest_label_(CHECK_NOTNULL(highest_label)) {
+        highest_label_(CHECK_NOTNULL(highest_label)),
+        icp_(new ICP(getICPConfigFromGflags())) {
     CHECK(label_layer_);
+    T_Gicp_G_.setIdentity();
   }
 
   inline void checkForSegmentLabelMergeCandidate(
@@ -504,6 +516,38 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     CHECK_EQ(points_C.size(), labels.size());
     CHECK_GE(labels.size(), 0u);
 
+    // Init refined transform to initial guess from outside voxblox.
+    Transformation T_Gicp_C = T_G_C;
+    if (label_tsdf_config_.enable_icp) {
+      timing::Timer icp_timer("icp");
+      if (!label_tsdf_config_.keep_track_of_icp_correction) {
+        T_Gicp_G_.setIdentity();
+      }
+      const size_t num_icp_updates =
+          icp_->runICP(*layer_, points_C, T_Gicp_G_ * T_G_C, &T_Gicp_C);
+      LOG(INFO) << "ICP refinement performed " << num_icp_updates
+                << " successful update steps.";
+      T_Gicp_G_ = T_Gicp_C * T_G_C.inverse();
+
+      if (!label_tsdf_config_.keep_track_of_icp_correction) {
+        VLOG(3) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
+      } else {
+        VLOG(3) << "ICP refinement for this pointcloud: T_Gicp_G: "
+                << T_Gicp_G_;
+      }
+
+      if (!icp_->refiningRollPitch()) {
+        // its already removed internally but small floating point errors can
+        // build up if accumulating transforms
+        Transformation::Vector6 vec_T_Gicp_G = T_Gicp_G_.log();
+        vec_T_Gicp_G[3] = 0.0;
+        vec_T_Gicp_G[4] = 0.0;
+        T_Gicp_G_ = Transformation::exp(vec_T_Gicp_G);
+      }
+
+      icp_timer.Stop();
+    }
+
     timing::Timer integrate_timer("integrate");
 
     // Pre-compute a list of unique voxels to end on.
@@ -515,16 +559,16 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
     ThreadSafeIndex index_getter(points_C.size());
 
-    bundleRays(T_G_C, points_C, freespace_points, &index_getter, &voxel_map,
+    bundleRays(T_Gicp_C, points_C, freespace_points, &index_getter, &voxel_map,
                &clear_map);
 
-    integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
-                  false, voxel_map, clear_map);
+    integrateRays(T_Gicp_C, points_C, colors, labels,
+                  config_.enable_anti_grazing, false, voxel_map, clear_map);
 
     timing::Timer clear_timer("integrate/clear");
 
-    integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
-                  true, voxel_map, clear_map);
+    integrateRays(T_Gicp_C, points_C, colors, labels,
+                  config_.enable_anti_grazing, true, voxel_map, clear_map);
 
     clear_timer.Stop();
 
@@ -919,6 +963,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Pairwise confidence merging.
   LLMap pairwise_confidence_;
+
+  // ICP variables.
+  std::shared_ptr<ICP> icp_;
+  Transformation T_Gicp_G_;
 
   // We need to prevent simultaneous access to the voxels in the map. We
   // could
