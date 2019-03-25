@@ -15,6 +15,7 @@
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
@@ -384,7 +385,26 @@ void Controller::segmentPointCloudCallback(
 
     start = ros::WallTime::now();
 
+    Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+    Pointcloud point_cloud_all_segments_t;
     for (const auto& segment : segments_to_integrate_) {
+      // Concatenate point clouds. (NOTE(ff): We should probably just use the
+      // original cloud here instead.)
+      Pointcloud::iterator it = point_cloud_all_segments_t.end();
+      point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
+                                        segment->points_C_.end());
+    }
+
+    Transformation T_Gicp_C = T_G_C;
+    LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_config =
+        integrator_->getLabelTsdfConfig();
+    if (label_tsdf_config.enable_icp) {
+      T_Gicp_C =
+          integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
+    }
+
+    for (const auto& segment : segments_to_integrate_) {
+      segment->T_G_C_ = T_Gicp_C;
       integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                        segment->colors_, segment->labels_,
                                        kIsFreespacePointcloud);

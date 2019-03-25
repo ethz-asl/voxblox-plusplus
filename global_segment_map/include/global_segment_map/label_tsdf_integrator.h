@@ -509,44 +509,55 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
+  Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
+                                     const Pointcloud& point_cloud) {
+    // TODO(ff): We should actually check here how many blocks are in the
+    // camera frustum.
+    if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
+      return T_G_C_init;
+    }
+    Transformation T_Gicp_C;
+    timing::Timer icp_timer("icp");
+    if (!label_tsdf_config_.keep_track_of_icp_correction) {
+      T_Gicp_G_.setIdentity();
+    }
+
+    const size_t num_icp_updates =
+        icp_->runICP(*layer_, point_cloud, T_Gicp_G_ * T_G_C_init, &T_Gicp_C);
+    if (num_icp_updates == 0u || num_icp_updates > 15u) {
+      LOG(ERROR) << "num_icp_updates is too high or 0: " << num_icp_updates
+                 << ", using T_G_C_init.";
+      return T_G_C_init;
+    }
+    LOG(INFO) << "ICP refinement performed " << num_icp_updates
+              << " successful update steps.";
+    T_Gicp_G_ = T_Gicp_C * T_G_C_init.inverse();
+
+    if (!label_tsdf_config_.keep_track_of_icp_correction) {
+      VLOG(3) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
+    } else {
+      VLOG(3) << "ICP refinement for this pointcloud: T_Gicp_G: " << T_Gicp_G_;
+    }
+
+    if (!icp_->refiningRollPitch()) {
+      // its already removed internally but small floating point errors can
+      // build up if accumulating transforms
+      Transformation::Vector6 vec_T_Gicp_G = T_Gicp_G_.log();
+      vec_T_Gicp_G[3] = 0.0;
+      vec_T_Gicp_G[4] = 0.0;
+      T_Gicp_G_ = Transformation::exp(vec_T_Gicp_G);
+    }
+
+    icp_timer.Stop();
+    return T_Gicp_C;
+  }
+
   void integratePointCloud(const Transformation& T_G_C,
                            const Pointcloud& points_C, const Colors& colors,
                            const Labels& labels, const bool freespace_points) {
     CHECK_EQ(points_C.size(), colors.size());
     CHECK_EQ(points_C.size(), labels.size());
     CHECK_GE(labels.size(), 0u);
-
-    // Init refined transform to initial guess from outside voxblox.
-    Transformation T_Gicp_C = T_G_C;
-    if (label_tsdf_config_.enable_icp) {
-      timing::Timer icp_timer("icp");
-      if (!label_tsdf_config_.keep_track_of_icp_correction) {
-        T_Gicp_G_.setIdentity();
-      }
-      const size_t num_icp_updates =
-          icp_->runICP(*layer_, points_C, T_Gicp_G_ * T_G_C, &T_Gicp_C);
-      LOG(INFO) << "ICP refinement performed " << num_icp_updates
-                << " successful update steps.";
-      T_Gicp_G_ = T_Gicp_C * T_G_C.inverse();
-
-      if (!label_tsdf_config_.keep_track_of_icp_correction) {
-        VLOG(3) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
-      } else {
-        VLOG(3) << "ICP refinement for this pointcloud: T_Gicp_G: "
-                << T_Gicp_G_;
-      }
-
-      if (!icp_->refiningRollPitch()) {
-        // its already removed internally but small floating point errors can
-        // build up if accumulating transforms
-        Transformation::Vector6 vec_T_Gicp_G = T_Gicp_G_.log();
-        vec_T_Gicp_G[3] = 0.0;
-        vec_T_Gicp_G[4] = 0.0;
-        T_Gicp_G_ = Transformation::exp(vec_T_Gicp_G);
-      }
-
-      icp_timer.Stop();
-    }
 
     timing::Timer integrate_timer("integrate");
 
@@ -559,16 +570,16 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
     ThreadSafeIndex index_getter(points_C.size());
 
-    bundleRays(T_Gicp_C, points_C, freespace_points, &index_getter, &voxel_map,
+    bundleRays(T_G_C, points_C, freespace_points, &index_getter, &voxel_map,
                &clear_map);
 
-    integrateRays(T_Gicp_C, points_C, colors, labels,
-                  config_.enable_anti_grazing, false, voxel_map, clear_map);
+    integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
+                  false, voxel_map, clear_map);
 
     timing::Timer clear_timer("integrate/clear");
 
-    integrateRays(T_Gicp_C, points_C, colors, labels,
-                  config_.enable_anti_grazing, true, voxel_map, clear_map);
+    integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
+                  true, voxel_map, clear_map);
 
     clear_timer.Stop();
 
@@ -794,9 +805,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
-  LMap* getLabelsAgeMapPtr() {
-    return &labels_to_publish_;
-  }
+  LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
 
   void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label,
                                   int count) {
@@ -948,6 +957,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
     return labels;
   }
+  LabelTsdfConfig getLabelTsdfConfig() const { return label_tsdf_config_; }
 
  protected:
   LabelTsdfConfig label_tsdf_config_;
