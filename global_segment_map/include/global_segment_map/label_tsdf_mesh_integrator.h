@@ -274,11 +274,11 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   }
 
   Color getColorFromSemanticLabel(const SemanticLabel& semantic_label) {
-    // std::vector<std::array<float, 3>> nyu_color_code{
-    //     {200, 200, 200}, {20, 20, 20},    {0, 128, 128},   {250, 50, 50},
-    //     {102, 0, 204},   {50, 50, 250},   {220, 220, 220}, {255, 69, 20},
-    //     {255, 20, 127},  {50, 50, 150},   {222, 180, 140}, {50, 250, 50},
-    //     {255, 215, 0},   {150, 150, 150}, {0, 255, 255}};
+    std::vector<std::array<float, 3>> nyu_color_code{
+        {200, 200, 200}, {20, 20, 20},    {0, 128, 128},   {250, 50, 50},
+        {102, 0, 204},   {50, 50, 250},   {220, 220, 220}, {255, 69, 20},
+        {255, 20, 127},  {50, 50, 150},   {222, 180, 140}, {50, 250, 50},
+        {255, 215, 0},   {150, 150, 150}, {0, 255, 255}};
 
     std::vector<std::array<float, 3>> coco_color_code{
         {200, 200, 200}, {128, 0, 0},    {0, 128, 0},    {128, 128, 0},
@@ -363,6 +363,10 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     color.r = coco_color_code.at(semantic_label)[0];
     color.g = coco_color_code.at(semantic_label)[1];
     color.b = coco_color_code.at(semantic_label)[2];
+
+    // color.r = nyu_color_code.at(semantic_label)[0];
+    // color.g = nyu_color_code.at(semantic_label)[1];
+    // color.b = nyu_color_code.at(semantic_label)[2];
 
     // if (semantic_label == 0) [
     //   color.a = 0.5;

@@ -131,7 +131,6 @@ class Controller {
   size_t integrated_frames_count_;
 
   std::string world_frame_;
-  std::string camera_frame_;
 
   // Shutdown logic: if no messages are received for X amount of time,
   // shut down node.
@@ -174,6 +173,8 @@ class Controller {
   std::vector<Label> segment_labels_to_publish_;
   std::map<Label, std::set<Label>> merges_to_publish_;
   std::set<Label> all_published_segments_;
+
+  std::thread viz_thread_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox

@@ -72,9 +72,9 @@ int main(int argc, char** argv) {
   //   ros::spinOnce();
   // }
 
-  controller->publishScene();
-  constexpr bool kPublishAllSegments = true;
-  controller->publishObjects(kPublishAllSegments);
+  // controller->publishScene();
+  // constexpr bool kPublishAllSegments = true;
+  // controller->publishObjects(kPublishAllSegments);
 
   LOG(INFO) << "Shutting down.";
   return 0;

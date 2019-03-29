@@ -118,6 +118,9 @@ std::mutex updateMeshMutex;
 std::mutex viewerSpin;
 bool remesh;
 int frame_count;
+// std::thread viz_thread;
+
+void thread_function() { std::cout << "thread function\n"; }
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
@@ -126,7 +129,7 @@ void visualizeMesh(const MeshLayer& mesh_layer,
                    const MeshLayer& mesh_semantic_layer,
                    const MeshLayer& mesh_instance_layer, std::string name) {
   frame_count = 0;
-  std::array<std::shared_ptr<pcl::visualization::PCLVisualizer>, 4> viewer;
+  std::array<std::shared_ptr<pcl::visualization::PCLVisualizer>, 2> viewer;
   for (int count = 0; count < viewer.size(); count++) {
     viewer[count] = std::make_shared<pcl::visualization::PCLVisualizer>();
     std::string name = name + std::to_string(count + 1);
@@ -135,16 +138,23 @@ void visualizeMesh(const MeshLayer& mesh_layer,
     viewer[count]->initCameraParameters();
     // TODO(grinvalm): find some general default parameters.
     // // 066 position
-    // viewer->setCameraPosition(-0.258698, 2.4965, 2.50443, -0.40446, 0.988025,
+    // viewer->setCameraPosition(-0.258698, 2.4965, 2.50443, -0.40446,
+    // 0.988025,
     //                           0.279138, -0.0487525, 0.828238, -0.558252);
     // viewer->setCameraClipDistances(1.35139, 6.41007);
     // scenenn231
-    viewer[count]->setCameraPosition(-1.41162, 6.28602, -0.300336, -1.49346,
-                                     0.117437, 0.0843885, 0.0165199, -0.0624571,
-                                     -0.997911);
-    viewer[count]->setCameraClipDistances(1.79126, 8.86051);
+    // viewer[count]->setCameraPosition(-1.41162, 6.28602, -0.300336, -1.49346,
+    //                                  0.117437, 0.0843885, 0.0165199,
+    //                                  -0.0624571, -0.997911);
+    // viewer[count]->setCameraClipDistances(1.79126, 8.86051);
+    viewer[count]->setCameraPosition(-9.26672, -7.73843, 22.3946, -12.9445,
+                                     -8.20767, -5.76437, -0.395892, 0.917575,
+                                     0.0364161);
+    viewer[count]->setCameraClipDistances(16.4938, 31.2009);
+
     // ycb
-    // viewer[count]->setCameraPosition(0.202015, 0.0747601, 0.353257, -0.01501,
+    // viewer[count]->setCameraPosition(0.202015, 0.0747601, 0.353257,
+    // -0.01501,
     //                                  0.00435276, -0.0620349, -0.833126,
     //                                  -0.272117, 0.481512);
     // viewer[count]->setCameraClipDistances(0.00135658, 1.35658);
@@ -161,35 +171,39 @@ void visualizeMesh(const MeshLayer& mesh_layer,
   // //                           0.279138, -0.0487525, 0.828238, -0.558252);
   // // viewer->setCameraClipDistances(1.35139, 6.41007);
   // // Tango1 position
-  // viewer->setCameraPosition(1.77882, 2.88621, -0.791648, -1.19562, 0.365496,
+  // viewer->setCameraPosition(1.77882, 2.88621, -0.791648, -1.19562,
+  // 0.365496,
   //                           -1.37201, -0.611348, 0.766607, -0.196386);
   // viewer->setCameraClipDistances(1.62481, 6.95296);
 
   // pcl::PointCloud<pcl::PointXYZRGBA> cloud;
-  std::array<pcl::PointCloud<pcl::PointXYZRGBA>, 4> cloud;
+  std::array<pcl::PointCloud<pcl::PointXYZRGBA>, 2> cloud;
   while (1) {
+    ROS_INFO("HERE");
     for (int count = 0; count < viewer.size(); count++) {
       // if (viewer->wasStopped()) {
-
+      ROS_INFO("AND HERE");
       constexpr int updateIntervalms = 1000;
       viewer[count]->spinOnce(updateIntervalms);
     }
 
     std::lock_guard<std::mutex> updatedMeshLock(updateMeshMutex);
-    std::array<voxblox::Mesh, 4> mesh;
+
+    std::array<voxblox::Mesh, 2> mesh;
     mesh[0] = voxblox::Mesh();
     mesh[1] = voxblox::Mesh();
-    mesh[2] = voxblox::Mesh();
-    mesh[3] = voxblox::Mesh();
+    // mesh[2] = voxblox::Mesh();
+    // mesh[3] = voxblox::Mesh();
     if (updatedMesh) {
+      ROS_INFO("START updating");
       for (int count = 0; count < viewer.size(); count++) {
         cloud[count].points.clear();
       }
 
-      mesh_layer.getMesh(&mesh[0]);
-      mesh_merged_layer.getMesh(&mesh[1]);
-      mesh_semantic_layer.getMesh(&mesh[2]);
-      mesh_instance_layer.getMesh(&mesh[3]);
+      // mesh_layer.getMesh(&mesh[0]);
+      mesh_merged_layer.getMesh(&mesh[0]);
+      mesh_semantic_layer.getMesh(&mesh[1]);
+      // mesh_instance_layer.getMesh(&mesh[3]);
 
       // if (mesh[0].vertices.size() != mesh[1].vertices.size() ||
       //     mesh[0].vertices.size() != mesh[2].vertices.size()) {
@@ -198,7 +212,7 @@ void visualizeMesh(const MeshLayer& mesh_layer,
 
       pcl::PCLPointCloud2 pcl_pc;
       std::vector<pcl::Vertices> polygons;
-      std::array<pcl::PolygonMesh, 4> polygon_mesh;
+      std::array<pcl::PolygonMesh, 2> polygon_mesh;
 
       for (int count = 0; count < viewer.size(); count++) {
         size_t vert_idx = 0;
@@ -241,6 +255,7 @@ void visualizeMesh(const MeshLayer& mesh_layer,
         viewer[count]->saveScreenshot(std::to_string(count) + "/frame_" +
                                       std::to_string(frame_count) + ".png");
       }
+      ROS_INFO("Finish updating");
       frame_count++;
 
       updatedMesh = false;
@@ -256,7 +271,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrated_frames_count_(0u),
       tf_listener_(ros::Duration(1000)),
       world_frame_("world"),
-      camera_frame_(""),
       no_update_timeout_(0.0),
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
@@ -264,8 +278,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
-  node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
-                                           camera_frame_);
 
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
@@ -407,10 +419,15 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     // "GSM Labels");
     // std::thread semanticVisualizerThread(
     //     visualizeMesh, std::ref(*mesh_semantic_layer_), "GSM Semantics");
-    std::thread instanceVisualizerThread(
-        visualizeMesh, std::ref(*mesh_layer_), std::ref(*mesh_merged_layer_),
-        std::ref(*mesh_semantic_layer_), std::ref(*mesh_instance_layer_),
-        "Map");
+    viz_thread_ = std::thread(visualizeMesh, std::ref(*mesh_layer_),
+                              std::ref(*mesh_merged_layer_),
+                              std::ref(*mesh_semantic_layer_),
+                              std::ref(*mesh_instance_layer_), "Map");
+
+    // std::thread instanceVisualizerThread(
+    //     visualizeMesh, std::ref(*mesh_layer_), std::ref(*mesh_merged_layer_),
+    //     std::ref(*mesh_semantic_layer_), std::ref(*mesh_instance_layer_),
+    //     "Map");
   }
 
   node_handle_private_->param<bool>(
@@ -442,7 +459,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   // ros::spinOnce();
 }
 
-Controller::~Controller() {}
+Controller::~Controller() { viz_thread_.join(); }
 
 void Controller::subscribeSegmentPointCloudTopic(
     ros::Subscriber* segment_point_cloud_sub) {
@@ -568,8 +585,12 @@ void Controller::segmentPointCloudCallback(
   // the start of a new frame is detected when the message timestamp changes.
   // TODO(grinvalm): need additional check for the last frame to be
   // integrated.
+  ROS_INFO("GOT SEGMENT");
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
+    ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
+    timing::Timer ptcloud_timer("label_propagation");
+
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
              segment_point_cloud_msg->header.stamp.toSec());
@@ -578,6 +599,7 @@ void Controller::segmentPointCloudCallback(
     integrator_->decideLabelPointClouds(&segments_to_integrate_,
                                         &segment_label_candidates,
                                         &segment_merge_candidates_);
+    ptcloud_timer.Stop();
 
     ros::WallTime end = ros::WallTime::now();
     ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
@@ -588,21 +610,28 @@ void Controller::segmentPointCloudCallback(
     start = ros::WallTime::now();
 
     {
+      timing::Timer integrate_timer("integrate_frame_pointclouds");
       std::lock_guard<std::mutex> updatedMeshLock(updateMeshMutex);
       for (const auto& segment : segments_to_integrate_) {
         integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                          segment->colors_, segment->labels_,
                                          kIsFreespacePointcloud);
       }
+      integrate_timer.Stop();
     }
 
     end = ros::WallTime::now();
-    ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
-             segments_to_integrate_.size(), (end - start).toSec());
+    ROS_INFO(
+        "Finished integrating %lu pointclouds in %f seconds, have %lu tsdf "
+        "blocks, %lu label blocks.",
+        segments_to_integrate_.size(), (end - start).toSec(),
+        map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks(),
+        map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks());
 
     start = ros::WallTime::now();
 
     integrator_->mergeLabels(&merges_to_publish_);
+
     integrator_->getLabelsToPublish(&segment_labels_to_publish_);
 
     end = ros::WallTime::now();
@@ -623,9 +652,9 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Cleared candidates and memory in %f seconds.",
              (end - start).toSec());
 
-    if (publish_gsm_updates_ && publishObjects()) {
-      publishScene();
-    }
+    // if (publish_gsm_updates_ && publishObjects()) {
+    //   publishScene();
+    // }
   }
   received_first_message_ = true;
   last_update_received_ = ros::Time::now();
@@ -633,7 +662,9 @@ void Controller::segmentPointCloudCallback(
 
   // Look up transform from camera frame to world frame.
   Transformation T_G_C;
-  if (lookupTransform(camera_frame_, world_frame_,
+  // if (lookupTransform(segment_point_cloud_msg->header.frame_id, world_frame_,
+  //                     segment_point_cloud_msg->header.stamp, &T_G_C)) {
+  if (lookupTransform("scenenn_camera_frame", world_frame_,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {
     Segment* segment = new Segment();
     segments_to_integrate_.push_back(segment);
@@ -647,6 +678,8 @@ void Controller::segmentPointCloudCallback(
             sensor_msgs::PointField::FLOAT32;
       }
     }
+
+    timing::Timer ptcloud_timer("ptcloud_preprocess");
 
     pcl::PointCloud<voxblox::PointType> point_cloud;
     pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
@@ -673,17 +706,23 @@ void Controller::segmentPointCloudCallback(
     segment->instance_ = point_cloud.points[0].instance;
     segment->T_G_C_ = T_G_C;
 
-    ros::WallTime start = ros::WallTime::now();
+    ptcloud_timer.Stop();
+
+    // ros::WallTime start = ros::WallTime::now();
+
+    timing::Timer label_candidates_timer("compute_label_candidates");
+
     integrator_->computeSegmentLabelCandidates(
         segment, &segment_label_candidates, &segment_merge_candidates_);
 
-    ros::WallTime end = ros::WallTime::now();
-    ROS_INFO(
-        "Computed label candidates for a pointcloud of size %lu in %f "
-        "seconds.",
-        segment->points_C_.size(), (end - start).toSec());
-
-    ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
+    label_candidates_timer.Stop();
+    ROS_INFO("FINISHED INTEGRATING");
+    //     "Comput
+    // ros::WallTime end = ros::WallTime::now();
+    // ROS_INFO(
+    //     "Computed label candidates for a pointcloud of size %lu in %f "
+    //     "seconds.",
+    //     segment->points_C_.size(), (end - start).toSec());
   }
 }
 
@@ -872,6 +911,7 @@ bool Controller::lookupTransform(const std::string& from_frame,
   if (!tf_listener_.canTransform(to_frame, from_frame, time_to_lookup)) {
     time_to_lookup = ros::Time(0);
     LOG(ERROR) << "Using latest TF transform instead of timestamp match.";
+    return false;
   }
 
   try {
@@ -887,7 +927,8 @@ bool Controller::lookupTransform(const std::string& from_frame,
 }
 
 // TODO(ff): Create this somewhere:
-// void serializeGsmAsMsg(const map&, const label&, const parent_labels&, msg*);
+// void serializeGsmAsMsg(const map&, const label&, const parent_labels&,
+// msg*);
 
 bool Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
@@ -1130,10 +1171,11 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       remesh = false;
     }
     bool clear_updated_flag = false;
-    updatedMesh |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                  clear_updated_flag);
-    updatedMesh |= mesh_instance_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
+    // updatedMesh |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+    //                                               clear_updated_flag);
+    // updatedMesh |= mesh_instance_integrator_->generateMesh(
+    //     only_mesh_updated_blocks, clear_updated_flag);
+    ROS_INFO("Start updating meshes.");
 
     updatedMesh |= mesh_merged_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
@@ -1142,6 +1184,7 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     updatedMesh |= mesh_semantic_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
     generate_mesh_timer.Stop();
+    ROS_INFO("FINISHED updating meshes.");
   }
 
   if (publish_scene_mesh_) {

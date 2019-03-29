@@ -162,7 +162,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     if (label_it != assigned_labels.end()) {
       // The voxel label has been assigned already, so find
       // the next unassigned label with highest confidence for this voxel.
-      LabelConfidence max_confidence = 0.0f;
+      LabelConfidence max_confidence = 0u;
       // TODO(grinvalm) in case of two or more labels
       // having the same confidence choose according to some logic,
       // not randomly.
@@ -189,7 +189,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void updateVoxelLabelAndConfidence(LabelVoxel* label_voxel,
                                      const Label& preferred_label = 0u) {
     Label max_label = 0u;
-    LabelConfidence max_confidence = 0.0f;
+    LabelConfidence max_confidence = 0u;
     for (const LabelCount& label_count : label_voxel->label_count) {
       if (label_count.label_confidence > max_confidence ||
           (label_count.label == preferred_label && preferred_label != 0u &&
@@ -626,7 +626,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // Updates label_voxel. Thread safe.
   inline void updateLabelVoxel(const Point& point_G, const Label& label,
                                LabelVoxel* label_voxel,
-                               const LabelConfidence& confidence = 1.0f) {
+                               const LabelConfidence& confidence = 1u) {
     // Lookup the mutex that is responsible for this voxel and lock it.
     std::lock_guard<std::mutex> lock(mutexes_.get(
         getGridIndexFromPoint<GlobalIndex>(point_G, voxel_size_inv_)));
@@ -672,8 +672,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // CHECK_EQ(points_C.size(), semantic_labels.size());
     CHECK_GE(points_C.size(), 0u);
 
-    timing::Timer integrate_timer("integrate");
-
     // Pre-compute a list of unique voxels to end on.
     // Create a hashmap: VOXEL INDEX -> index in original cloud.
     VoxelMap voxel_map;
@@ -689,14 +687,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
                   false, voxel_map, clear_map);
 
-    timing::Timer clear_timer("integrate/clear");
-
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
                   true, voxel_map, clear_map);
-
-    clear_timer.Stop();
-
-    integrate_timer.Stop();
   }
 
   void integrateVoxel(const Transformation& T_G_C, const Pointcloud& points_C,
@@ -734,7 +726,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         const FloatingPoint ray_distance = point_C.norm();
         merged_label_confidence = computeConfidenceWeight(ray_distance);
       } else {
-        merged_label_confidence = 1.0f;
+        merged_label_confidence = 1u;
       }
 
       // only take first point when clearing
@@ -774,7 +766,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       // within twice the truncation distance from the surface.
       if (!config_.voxel_carving_enabled ||
           std::abs(tsdf_voxel->distance) <
-              10 * config_.default_truncation_distance) {
+              3 * config_.default_truncation_distance) {
         Block<LabelVoxel>::Ptr label_block = nullptr;
         LabelVoxel* label_voxel = allocateStorageAndGetLabelVoxelPtr(
             global_voxel_idx, &label_block, &block_idx);
@@ -880,16 +872,16 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         LabelVoxel& voxel = block->getVoxelByLinearIndex(i);
         Label previous_label = voxel.label;
 
-        LabelConfidence old_label_confidence = 0.0f;
+        LabelConfidence old_label_confidence = 0u;
         for (LabelCount& label_count : voxel.label_count) {
           if (label_count.label == old_label) {
             // Store confidence for old_label and remove that entry.
             old_label_confidence = label_count.label_confidence;
             label_count.label = 0u;
-            label_count.label_confidence = 0.0f;
+            label_count.label_confidence = 0u;
           }
         }
-        if (old_label_confidence > 0.0f) {
+        if (old_label_confidence > 0u) {
           // Add old_label confidence, if any, to new_label confidence.
           addVoxelLabelConfidence(new_label, old_label_confidence, &voxel);
         }
@@ -946,9 +938,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
-  LMap* getLabelsAgeMapPtr() {
-    return &labels_to_publish_;
-  }
+  LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
 
   LSLMap* getLabelClassCountPtr() { return &label_class_count_; }
 
@@ -1061,6 +1051,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       Label new_label;
       Label old_label;
       while (getNextMerge(&new_label, &old_label)) {
+        timing::Timer merge_timer("merge_segments");
         LOG(ERROR) << "Merging labels " << new_label << " and " << old_label;
         swapLabels(old_label, new_label);
 
@@ -1086,6 +1077,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
           merges_to_publish->emplace(new_label, incorporated_labels);
         }
         adjustPairwiseConfidenceAfterMerging(new_label, old_label);
+        merge_timer.Stop();
       }
     }
   }
