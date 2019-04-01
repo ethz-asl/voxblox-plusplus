@@ -28,7 +28,7 @@ namespace voxblox {
 namespace voxblox_gsm {
 
 bool updatedMesh;
-boost::mutex updateMeshMutex;
+std::mutex updateMeshMutex;
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
@@ -56,7 +56,7 @@ void visualizeMesh(const MeshLayer& mesh_layer) {
     constexpr int updateIntervalms = 1000;
     viewer->spinOnce(updateIntervalms);
 
-    boost::mutex::scoped_lock updatedMeshLock(updateMeshMutex);
+    std::lock_guard<std::mutex> updatedMeshLock(updateMeshMutex);
 
     if (updatedMesh) {
       cloud.points.clear();
@@ -103,7 +103,6 @@ void visualizeMesh(const MeshLayer& mesh_layer) {
 
       updatedMesh = false;
     }
-    updatedMeshLock.unlock();
   }
 }
 
@@ -831,38 +830,39 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
       mesh_integrator_->generateMesh(only_mesh_updated_blocks,
                                      clear_updated_flag);
     }
+
     generate_mesh_timer.Stop();
+
+    updatedMesh = true;
   }
 
-  updatedMesh = true;
-}
+  if (publish_scene_mesh_) {
+    timing::Timer publish_mesh_timer("mesh/publish");
+    visualization_msgs::MarkerArray marker_array;
+    marker_array.markers.resize(1);
+    fillMarkerWithMesh(mesh_layer_, ColorMode::kColor,
+                       &marker_array.markers[0]);
+    ColorMode color_mode_ = ColorMode::kColor;
+    marker_array.markers[0].header.frame_id = world_frame_;
+    scene_mesh_pub_->publish(marker_array);
 
-if (publish_scene_mesh_) {
-  timing::Timer publish_mesh_timer("mesh/publish");
-  visualization_msgs::MarkerArray marker_array;
-  marker_array.markers.resize(1);
-  fillMarkerWithMesh(mesh_layer_, ColorMode::kColor, &marker_array.markers[0]);
-  ColorMode color_mode_ = ColorMode::kColor;
-  marker_array.markers[0].header.frame_id = world_frame_;
-  scene_mesh_pub_->publish(marker_array);
-
-  publish_mesh_timer.Stop();
-}
-
-if (!mesh_filename_.empty()) {
-  timing::Timer output_mesh_timer("mesh/output");
-  bool success = outputMeshLayerAsPly(mesh_filename_, false, *mesh_layer_);
-  output_mesh_timer.Stop();
-  if (success) {
-    ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
-  } else {
-    ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename_.c_str());
+    publish_mesh_timer.Stop();
   }
-}
 
-ROS_INFO_STREAM("Mesh Timings: " << std::endl
-                                 << voxblox::timing::Timing::Print());
-}  // namespace voxblox_gsm
+  if (!mesh_filename_.empty()) {
+    timing::Timer output_mesh_timer("mesh/output");
+    bool success = outputMeshLayerAsPly(mesh_filename_, false, *mesh_layer_);
+    output_mesh_timer.Stop();
+    if (success) {
+      ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
+    } else {
+      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename_.c_str());
+    }
+  }
+
+  ROS_INFO_STREAM("Mesh Timings: " << std::endl
+                                   << voxblox::timing::Timing::Print());
+}
 
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   {
@@ -873,7 +873,6 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     constexpr bool clear_updated_flag = true;
     updatedMesh = mesh_integrator_->generateMesh(only_mesh_updated_blocks,
                                                  clear_updated_flag);
-    updateMeshLock.unlock();
 
     generate_mesh_timer.Stop();
   }
@@ -915,5 +914,5 @@ void Controller::getLabelsToPublish(const bool get_all,
     *labels = segment_labels_to_publish_;
   }
 }
-}  // namespace voxblox
+}  // namespace voxblox_gsm
 }  // namespace voxblox
