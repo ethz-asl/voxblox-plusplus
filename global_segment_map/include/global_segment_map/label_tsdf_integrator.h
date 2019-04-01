@@ -65,6 +65,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // objects are published.
     int object_flushing_age_threshold = 3;
 
+    // Mode of the ThreadSafeIndex, determines the integration order of the
+    // rays. Options: "mixed", "sorted"
+    std::string integration_order_mode = "mixed";
+
     // Distance-based log-normal distribution of label confidence weights.
     bool enable_confidence_weight_dropoff = false;
     float lognormal_weight_mean = 0.0f;
@@ -568,9 +572,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // cleared.
     VoxelMap clear_map;
 
-    ThreadSafeIndex index_getter(points_C.size());
+    std::unique_ptr<ThreadSafeIndex> index_getter(
+      ThreadSafeIndexFactory::get(config_.integration_order_mode, points_C));
 
-    bundleRays(T_G_C, points_C, freespace_points, &index_getter, &voxel_map,
+    bundleRays(T_G_C, points_C, freespace_points, index_getter.get(), &voxel_map,
                &clear_map);
 
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
