@@ -361,19 +361,19 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
              segment_point_cloud_msg->header.stamp.toSec());
-    ros::WallTime start = ros::WallTime::now();
-
-    integrator_->decideLabelPointClouds(&segments_to_integrate_,
-                                        &segment_label_candidates,
-                                        &segment_merge_candidates_);
-
-    ros::WallTime end = ros::WallTime::now();
-    ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
-             segments_to_integrate_.size(), (end - start).toSec());
+    // ros::WallTime start = ros::WallTime::now();
+    //
+    // integrator_->decideLabelPointClouds(&segments_to_integrate_,
+    //                                     &segment_label_candidates,
+    //                                     &segment_merge_candidates_);
+    //
+    // ros::WallTime end = ros::WallTime::now();
+    // ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
+    //          segments_to_integrate_.size(), (end - start).toSec());
 
     constexpr bool kIsFreespacePointcloud = false;
 
-    start = ros::WallTime::now();
+    ros::WallTime start = ros::WallTime::now();
 
     for (const auto& segment : segments_to_integrate_) {
       integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
@@ -381,7 +381,7 @@ void Controller::segmentPointCloudCallback(
                                        kIsFreespacePointcloud);
     }
 
-    end = ros::WallTime::now();
+    ros::WallTime end = ros::WallTime::now();
     ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
              segments_to_integrate_.size(), (end - start).toSec());
 
@@ -433,7 +433,7 @@ void Controller::segmentPointCloudCallback(
       }
     }
 
-    pcl::PointCloud<pcl::PointXYZRGB> point_cloud;
+    pcl::PointCloud<voxblox::PointType> point_cloud;
     pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
 
     segment->points_C_.reserve(point_cloud.points.size());
@@ -453,18 +453,19 @@ void Controller::segmentPointCloudCallback(
       segment->colors_.push_back(
           Color(point_cloud.points[i].r, point_cloud.points[i].g,
                 point_cloud.points[i].b, point_cloud.points[i].a));
+      segment->labels_.push_back(point_cloud.points[i].label);
     }
-
+    LOG(ERROR) << point_cloud.points[0].label;
     segment->T_G_C_ = T_G_C;
 
-    ros::WallTime start = ros::WallTime::now();
-    integrator_->computeSegmentLabelCandidates(
-        segment, &segment_label_candidates, &segment_merge_candidates_);
-
-    ros::WallTime end = ros::WallTime::now();
-    ROS_INFO(
-        "Computed label candidates for a pointcloud of size %lu in %f seconds.",
-        segment->points_C_.size(), (end - start).toSec());
+    // ros::WallTime start = ros::WallTime::now();
+    // integrator_->computeSegmentLabelCandidates(
+    //     segment, &segment_label_candidates, &segment_merge_candidates_);
+    //
+    // ros::WallTime end = ros::WallTime::now();
+    // ROS_INFO(
+    //     "Computed label candidates for a pointcloud of size %lu in %f
+    //     seconds.", segment->points_C_.size(), (end - start).toSec());
 
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
   }
