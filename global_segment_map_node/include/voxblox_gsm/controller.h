@@ -45,8 +45,6 @@ class Controller {
 
   void advertiseBboxTopic(ros::Publisher* bbox_pub);
 
-  void advertiseBboxPointsTopic(ros::Publisher* bbox_points_pub);
-
   void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
   void validateMergedObjectService(
@@ -119,8 +117,7 @@ class Controller {
   void computeAlignedBoundingBox(
       const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
       Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
-      Eigen::Vector3f* bbox_size, Eigen::Vector3f* min_point,
-      Eigen::Vector3f* max_point);
+      Eigen::Vector3f* bbox_size);
 
   ros::NodeHandle* node_handle_private_;
 
@@ -140,7 +137,6 @@ class Controller {
   ros::Publisher* scene_mesh_pub_;
   ros::Publisher* segment_mesh_pub_;
   ros::Publisher* bbox_pub_;
-  ros::Publisher* bbox_points_pub_;
   std::string mesh_filename_;
 
   std::string world_frame_;

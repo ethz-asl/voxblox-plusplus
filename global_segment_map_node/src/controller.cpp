@@ -328,15 +328,6 @@ void Controller::advertiseBboxTopic(ros::Publisher* bbox_pub) {
   bbox_pub_ = bbox_pub;
 }
 
-void Controller::advertiseBboxPointsTopic(ros::Publisher* bbox_points_pub) {
-  CHECK_NOTNULL(bbox_points_pub);
-  *bbox_points_pub =
-      node_handle_private_->advertise<visualization_msgs::MarkerArray>(
-          "bbox_points", 1, true);
-
-  bbox_points_pub_ = bbox_points_pub;
-}
-
 void Controller::advertisePublishSceneService(
     ros::ServiceServer* publish_scene_srv) {
   CHECK_NOTNULL(publish_scene_srv);
@@ -792,11 +783,9 @@ bool Controller::publishObjects(const bool publish_all) {
       Eigen::Vector3f bbox_translation;
       Eigen::Quaternionf bbox_quaternion;
       Eigen::Vector3f bbox_size;
-      Eigen::Vector3f min_point;
-      Eigen::Vector3f max_point;
       computeAlignedBoundingBox(surfel_cloud, &bbox_translation,
-                                &bbox_quaternion, &bbox_size, &min_point,
-                                &max_point);
+                                &bbox_quaternion, &bbox_size);
+
       gsm_update_msg.object.bbox.pose.position.x =
           origin_shifted_tsdf_layer_W[0] + bbox_translation(0);
       gsm_update_msg.object.bbox.pose.position.y =
@@ -831,63 +820,10 @@ bool Controller::publishObjects(const bool publish_all) {
       marker.color.b = 0.0;
       marker.lifetime = ros::Duration();
 
-      visualization_msgs::MarkerArray marker_points;
-      // marker_points.markers.resize(2);
-
-      visualization_msgs::Marker marker_min;
-      marker_min.header.frame_id = world_frame_;
-      marker_min.header.stamp = ros::Time();
-      marker_min.id = 0;
-      marker_min.ns = "gsm_markers";
-      marker_min.type = visualization_msgs::Marker::SPHERE;
-      marker_min.action = visualization_msgs::Marker::ADD;
-      marker_min.pose.position.x =
-          origin_shifted_tsdf_layer_W[0] + min_point(0);
-      marker_min.pose.position.y =
-          origin_shifted_tsdf_layer_W[1] + min_point(1);
-      marker_min.pose.position.z =
-          origin_shifted_tsdf_layer_W[2] + min_point(2);
-      marker_min.pose.orientation = gsm_update_msg.object.bbox.pose.orientation;
-      marker_min.scale.x = 0.01;
-      marker_min.scale.y = 0.01;
-      marker_min.scale.z = 0.01;
-      marker_min.color.a = 1.0;
-      marker_min.color.r = 1.0;
-      marker_min.color.g = 0.0;
-      marker_min.color.b = 0.0;
-      marker_min.lifetime = ros::Duration();
-      marker_points.markers.push_back(marker_min);
-
-      visualization_msgs::Marker marker_max;
-      marker_max.header.frame_id = world_frame_;
-      marker_max.header.stamp = ros::Time();
-      marker_max.id = 1;
-      marker_max.ns = "gsm_markers";
-      marker_max.type = visualization_msgs::Marker::SPHERE;
-      marker_max.action = visualization_msgs::Marker::ADD;
-      marker_max.pose.position.x =
-          origin_shifted_tsdf_layer_W[0] + max_point(0);
-      marker_max.pose.position.y =
-          origin_shifted_tsdf_layer_W[1] + max_point(1);
-      marker_max.pose.position.z =
-          origin_shifted_tsdf_layer_W[2] + max_point(2);
-      marker_max.pose.orientation = gsm_update_msg.object.bbox.pose.orientation;
-      marker_max.scale.x = 0.01;
-      marker_max.scale.y = 0.01;
-      marker_max.scale.z = 0.01;
-      marker_max.color.a = 1.0;
-      marker_max.color.r = 1.0;
-      marker_max.color.g = 0.0;
-      marker_max.color.b = 0.0;
-      marker_max.lifetime = ros::Duration();
-      marker_points.markers.push_back(marker_max);
-
       bbox_pub_->publish(marker);
-      bbox_points_pub_->publish(marker_points);
     }
 
     publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
-    // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
 
     if (publish_segment_mesh_) {
       // Generate mesh for visualization purposes.
@@ -1044,8 +980,7 @@ void Controller::getLabelsToPublish(const bool get_all,
 void Controller::computeAlignedBoundingBox(
     const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
     Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
-    Eigen::Vector3f* bbox_size, Eigen::Vector3f* min_point,
-    Eigen::Vector3f* max_point) {
+    Eigen::Vector3f* bbox_size) {
   CHECK(surfel_cloud);
   CHECK_NOTNULL(bbox_translation);
   CHECK_NOTNULL(bbox_quaternion);
@@ -1076,17 +1011,9 @@ void Controller::computeAlignedBoundingBox(
 
     ApproxMVBB::Vector3 min_in_I = oobb.m_q_KI * oobb.m_minPoint;
     ApproxMVBB::Vector3 max_in_I = oobb.m_q_KI * oobb.m_maxPoint;
-    // ApproxMVBB::Vector3 min_in_I = oobb.A_IK * oobb.m_minPoint;
-    // ApproxMVBB::Vector3 max_in_I = oobb.A_IK * oobb.m_maxPoint;
-
-    *min_point = min_in_I.cast<float>();
-    *max_point = max_in_I.cast<float>();
-    // *min_point = oobb.m_minPoint.cast<float>();
-    // *max_point = oobb.m_maxPoint.cast<float>();
 
     *bbox_quaternion = oobb.m_q_KI.cast<float>();
     *bbox_translation = ((min_in_I + max_in_I) / 2).cast<float>();
-    // *bbox_translation = Eigen::Vector3f(0, 0, 0);
     *bbox_size = ((oobb.m_maxPoint - oobb.m_minPoint).cwiseAbs()).cast<float>();
   } else {
     Eigen::Vector4f pca_centroid;
@@ -1110,15 +1037,15 @@ void Controller::computeAlignedBoundingBox(
     pcl::transformPointCloud(*surfel_cloud, *transformed_surfel_cloud,
                              projection_transform);
 
-    // constexpr size_t kMeanK = 50u;
-    // constexpr double kStdMulThreshold = 1.0;
-    // pcl::StatisticalOutlierRemoval<pcl::PointSurfel>
-    // statistical_outlier_removal;
-    // statistical_outlier_removal.setInputCloud(transformed_surfel_cloud);
-    // statistical_outlier_removal.setMeanK(kMeanK);
-    // statistical_outlier_removal.setStddevMulThresh(kStdMulThreshold);
-    // statistical_outlier_removal.filter(*transformed_surfel_cloud);
-    //
+    constexpr size_t kMeanK = 50u;
+    constexpr double kStdMulThreshold = 1.0;
+    pcl::StatisticalOutlierRemoval<pcl::PointSurfel>
+        statistical_outlier_removal;
+    statistical_outlier_removal.setInputCloud(transformed_surfel_cloud);
+    statistical_outlier_removal.setMeanK(kMeanK);
+    statistical_outlier_removal.setStddevMulThresh(kStdMulThreshold);
+    statistical_outlier_removal.filter(*transformed_surfel_cloud);
+
     constexpr double kClusterToleranceM = 0.005;
     constexpr double kMinClusterSize = 200;
     constexpr double kMaxClusterSize = 500000;
