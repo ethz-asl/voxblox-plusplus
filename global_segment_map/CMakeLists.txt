@@ -4,8 +4,6 @@ project(global_segment_map)
 find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
-add_definitions(-std=c++14)
-
 cs_add_library(${PROJECT_NAME}
   src/label_block_serialization.cc
   src/label_merge_integrator.cc

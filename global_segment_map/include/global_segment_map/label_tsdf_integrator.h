@@ -26,7 +26,7 @@ class Segment {
   voxblox::Colors colors_;
   voxblox::Labels labels_;
   voxblox::SemanticLabel semantic_label_;
-  voxblox::SemanticLabel instance_label_;
+  voxblox::InstanceLabel instance_label_;
 };
 
 class LabelTsdfIntegrator : public MergedTsdfIntegrator {
