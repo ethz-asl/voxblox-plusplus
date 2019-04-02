@@ -67,6 +67,8 @@ class Controller {
   bool publish_segment_mesh_;
   bool compute_and_publish_bbox_;
 
+  bool use_label_propagation_;
+
   double no_update_timeout_;
 
  protected:

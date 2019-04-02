@@ -126,7 +126,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       no_update_timeout_(0.0),
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
-      received_first_message_(false) {
+      received_first_message_(false),
+      compute_and_publish_bbox_(false),
+      use_label_propagation_(true) {
   CHECK_NOTNULL(node_handle_private_);
 
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
@@ -231,6 +233,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("compute_and_publish_bbox",
                                     compute_and_publish_bbox_,
                                     compute_and_publish_bbox_);
+  node_handle_private_->param<bool>(
+      "use_label_propagation", use_label_propagation_, use_label_propagation_);
 
   // If set, use a timer to progressively update the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -379,15 +383,18 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
              segment_point_cloud_msg->header.stamp.toSec());
-    // ros::WallTime start = ros::WallTime::now();
-    //
-    // integrator_->decideLabelPointClouds(&segments_to_integrate_,
-    //                                     &segment_label_candidates,
-    //                                     &segment_merge_candidates_);
-    //
-    // ros::WallTime end = ros::WallTime::now();
-    // ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
-    //          segments_to_integrate_.size(), (end - start).toSec());
+
+    if (use_label_propagation_) {
+      ros::WallTime start = ros::WallTime::now();
+
+      integrator_->decideLabelPointClouds(&segments_to_integrate_,
+                                          &segment_label_candidates,
+                                          &segment_merge_candidates_);
+
+      ros::WallTime end = ros::WallTime::now();
+      ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
+               segments_to_integrate_.size(), (end - start).toSec());
+    }
 
     constexpr bool kIsFreespacePointcloud = false;
 
@@ -471,19 +478,25 @@ void Controller::segmentPointCloudCallback(
       segment->colors_.push_back(
           Color(point_cloud.points[i].r, point_cloud.points[i].g,
                 point_cloud.points[i].b, point_cloud.points[i].a));
-      segment->labels_.push_back(point_cloud.points[i].label);
+
+      if (!use_label_propagation_) {
+        segment->labels_.push_back(point_cloud.points[i].label);
+      }
     }
     LOG(ERROR) << point_cloud.points[0].label;
     segment->T_G_C_ = T_G_C;
 
-    // ros::WallTime start = ros::WallTime::now();
-    // integrator_->computeSegmentLabelCandidates(
-    //     segment, &segment_label_candidates, &segment_merge_candidates_);
-    //
-    // ros::WallTime end = ros::WallTime::now();
-    // ROS_INFO(
-    //     "Computed label candidates for a pointcloud of size %lu in %f
-    //     seconds.", segment->points_C_.size(), (end - start).toSec());
+    if (use_label_propagation_) {
+      ros::WallTime start = ros::WallTime::now();
+      integrator_->computeSegmentLabelCandidates(
+          segment, &segment_label_candidates, &segment_merge_candidates_);
+
+      ros::WallTime end = ros::WallTime::now();
+      ROS_INFO(
+          "Computed label candidates for a pointcloud of size %lu in %f "
+          "seconds.",
+          segment->points_C_.size(), (end - start).toSec());
+    }
 
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
   }
@@ -1006,9 +1019,6 @@ void Controller::computeAlignedBoundingBox(
     }
 
     oobb.expandToMinExtentRelative(0.05);
-
-    LOG(WARNING) << "min point\n" << oobb.m_minPoint.transpose();
-    LOG(WARNING) << "max point\n" << oobb.m_maxPoint.transpose();
 
     ApproxMVBB::Vector3 min_in_I = oobb.m_q_KI * oobb.m_minPoint;
     ApproxMVBB::Vector3 max_in_I = oobb.m_q_KI * oobb.m_maxPoint;
