@@ -366,11 +366,10 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config.object_flushing_age_threshold,
       label_tsdf_integrator_config.object_flushing_age_threshold);
 
-  // integrator_config.integrator_threads = 1u;
-
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
-      map_->getLabelLayerPtr(), map_->getHighestLabelPtr()));
+      map_->getLabelLayerPtr(), map_->getHighestLabelPtr(),
+      map_->getHighestInstancePtr()));
 
   label_class_count_ptr_ = integrator_->getLabelClassCountPtr();
 
@@ -702,8 +701,8 @@ void Controller::segmentPointCloudCallback(
           Color(point_cloud.points[i].r, point_cloud.points[i].g,
                 point_cloud.points[i].b, point_cloud.points[i].a));
     }
-    segment->semantic_label_ = point_cloud.points[0].label;
-    segment->instance_ = point_cloud.points[0].instance;
+    segment->semantic_label_ = point_cloud.points[0].semantic_label;
+    segment->instance_label_ = point_cloud.points[0].instance_label;
     segment->T_G_C_ = T_G_C;
 
     ptcloud_timer.Stop();
@@ -716,7 +715,6 @@ void Controller::segmentPointCloudCallback(
         segment, &segment_label_candidates, &segment_merge_candidates_);
 
     label_candidates_timer.Stop();
-    ROS_INFO("FINISHED INTEGRATING");
     //     "Comput
     // ros::WallTime end = ros::WallTime::now();
     // ROS_INFO(
@@ -812,7 +810,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     const Layer<LabelVoxel>& segment_label_layer = it->second.second;
 
     voxblox::Mesh segment_mesh;
-    if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
+    if (convertLabelTsdfLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
       CHECK_EQ(voxblox::file_utils::makePath("gsm_segments", 0777), 0);
 

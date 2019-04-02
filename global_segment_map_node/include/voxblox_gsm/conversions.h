@@ -94,7 +94,7 @@ inline void convertVoxelGridToPointCloud(
   surfel_cloud->height = 1u;
 }
 
-bool convertTsdfLabelLayersToMesh(
+bool convertLabelTsdfLayersToMesh(
     const Layer<TsdfVoxel>& tsdf_layer, const Layer<LabelVoxel>& label_layer,
     voxblox::Mesh* mesh, const bool connected_mesh = true,
     const FloatingPoint vertex_proximity_threshold = 1e-10) {

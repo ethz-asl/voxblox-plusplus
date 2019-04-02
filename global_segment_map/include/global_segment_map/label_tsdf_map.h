@@ -27,7 +27,8 @@ class LabelTsdfMap {
             new Layer<TsdfVoxel>(config.voxel_size, config.voxels_per_side)),
         label_layer_(
             new Layer<LabelVoxel>(config.voxel_size, config.voxels_per_side)),
-        highest_label_(0u) {}
+        highest_label_(0u),
+        highest_instance_(0u) {}
 
   virtual ~LabelTsdfMap() {}
 
@@ -41,10 +42,13 @@ class LabelTsdfMap {
 
   Label* getHighestLabelPtr() { return &highest_label_; }
 
+  InstanceLabel* getHighestInstancePtr() { return &highest_instance_; }
+
   FloatingPoint block_size() const { return tsdf_layer_->block_size(); }
 
  protected:
   Label highest_label_;
+  InstanceLabel highest_instance_;
 
   // The layers.
   Layer<TsdfVoxel>::Ptr tsdf_layer_;

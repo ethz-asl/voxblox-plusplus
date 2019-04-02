@@ -22,6 +22,7 @@ int main(int argc, char** argv) {
                                   sliding_window);
 
   voxblox::voxblox_gsm::Controller* controller;
+
   if (sliding_window) {
     LOG(INFO) << "Starting sliding window GSM";
     controller =
@@ -34,11 +35,13 @@ int main(int argc, char** argv) {
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
-  ros::Publisher segment_gsm_update_publisher;
-  controller->advertiseSegmentGsmUpdateTopic(&segment_gsm_update_publisher);
+  if (controller->publish_gsm_updates_) {
+    ros::Publisher segment_gsm_update_publisher;
+    controller->advertiseSegmentGsmUpdateTopic(&segment_gsm_update_publisher);
 
-  ros::Publisher scene_gsm_update_publisher;
-  controller->advertiseSceneGsmUpdateTopic(&scene_gsm_update_publisher);
+    ros::Publisher scene_gsm_update_publisher;
+    controller->advertiseSceneGsmUpdateTopic(&scene_gsm_update_publisher);
+  }
 
   ros::Publisher segment_mesh_publisher;
   if (controller->publish_segment_mesh_) {
@@ -67,14 +70,11 @@ int main(int argc, char** argv) {
   spinner.start();
   ros::waitForShutdown();
 
-  // NOTE: single thread spinner
-  // while (ros::ok() && !controller->noNewUpdatesReceived()) {
-  //   ros::spinOnce();
-  // }
-
-  // controller->publishScene();
-  // constexpr bool kPublishAllSegments = true;
-  // controller->publishObjects(kPublishAllSegments);
+  if (controller->publish_scene_mesh_) {
+    controller->publishScene();
+    constexpr bool kPublishAllSegments = true;
+    controller->publishObjects(kPublishAllSegments);
+  }
 
   LOG(INFO) << "Shutting down.";
   return 0;

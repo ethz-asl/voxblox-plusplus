@@ -132,6 +132,7 @@ class Controller {
 
   std::string world_frame_;
 
+  // TODO(margaritaG): make this optional.
   // Shutdown logic: if no messages are received for X amount of time,
   // shut down node.
   bool received_first_message_;

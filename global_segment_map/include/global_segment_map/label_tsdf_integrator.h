@@ -26,7 +26,7 @@ class Segment {
   voxblox::Colors colors_;
   voxblox::Labels labels_;
   voxblox::SemanticLabel semantic_label_;
-  voxblox::SemanticLabel instance_;
+  voxblox::SemanticLabel instance_label_;
 };
 
 class LabelTsdfIntegrator : public MergedTsdfIntegrator {
@@ -72,12 +72,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   LabelTsdfIntegrator(const Config& config,
                       const LabelTsdfConfig& label_tsdf_config,
                       Layer<TsdfVoxel>* tsdf_layer,
-                      Layer<LabelVoxel>* label_layer, Label* highest_label)
+                      Layer<LabelVoxel>* label_layer, Label* highest_label,
+                      InstanceLabel* highest_instance)
       : MergedTsdfIntegrator(config, CHECK_NOTNULL(tsdf_layer)),
         label_tsdf_config_(label_tsdf_config),
         label_layer_(CHECK_NOTNULL(label_layer)),
         highest_label_(CHECK_NOTNULL(highest_label)),
-        highest_instance_(0u) {
+        highest_instance_(CHECK_NOTNULL(highest_instance)) {
     CHECK(label_layer_);
   }
 
@@ -352,7 +353,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     std::set<Label> assigned_labels;
     std::set<Segment*> labelled_segments;
     std::pair<Segment*, Label> pair;
-    std::set<SemanticLabel> assigned_instances;
+    std::set<InstanceLabel> assigned_instances;
 
     while (getNextSegmentLabelPair(labelled_segments, &assigned_labels,
                                    candidates, segment_merge_candidates,
@@ -394,10 +395,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
 
       // Loop through all the segments.
-      if ((*segment_it)->instance_ != 0u) {
+      if ((*segment_it)->instance_label_ != 0u) {
         // It's a segment with a current frame instance.
-        auto global_instance_it =
-            current_to_global_instance_map_.find((*segment_it)->instance_);
+        auto global_instance_it = current_to_global_instance_map_.find(
+            (*segment_it)->instance_label_);
         if (global_instance_it != current_to_global_instance_map_.end()) {
           // If current frame instance maps to a global instance, use it.
           increaseLabelInstanceCount(label, global_instance_it->second);
@@ -408,15 +409,15 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
               getLabelInstance(label, assigned_instances);
 
           if (instance_label != 0u) {
-            current_to_global_instance_map_.emplace((*segment_it)->instance_,
-                                                    instance_label);
+            current_to_global_instance_map_.emplace(
+                (*segment_it)->instance_label_, instance_label);
             increaseLabelInstanceCount(label, instance_label);
             assigned_instances.emplace(instance_label);
           } else {
             // Create new global instance.
             SemanticLabel fresh_instance = getFreshInstance();
-            current_to_global_instance_map_.emplace((*segment_it)->instance_,
-                                                    fresh_instance);
+            current_to_global_instance_map_.emplace(
+                (*segment_it)->instance_label_, fresh_instance);
             increaseLabelInstanceCount(label, fresh_instance);
           }
         }
@@ -664,9 +665,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void integratePointCloud(const Transformation& T_G_C,
                            const Pointcloud& points_C, const Colors& colors,
-                           const Labels& labels,
-
-                           const bool freespace_points) {
+                           const Labels& labels, const bool freespace_points) {
     CHECK_EQ(points_C.size(), colors.size());
     CHECK_EQ(points_C.size(), labels.size());
     // CHECK_EQ(points_C.size(), semantic_labels.size());
@@ -1083,13 +1082,13 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   }
 
   Label getFreshLabel() {
-    CHECK_LT(*highest_label_, std::numeric_limits<unsigned int>::max());
+    CHECK_LT(*highest_label_, std::numeric_limits<unsigned short>::max());
     return ++(*highest_label_);
   }
 
-  Label getFreshInstance() {
-    CHECK_LT(highest_instance_, std::numeric_limits<unsigned int>::max());
-    return ++highest_instance_;
+  InstanceLabel getFreshInstance() {
+    CHECK_LT(*highest_instance_, std::numeric_limits<unsigned char>::max());
+    return ++(*highest_instance_);
   }
 
   // Get the list of all labels
@@ -1122,7 +1121,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // Per frame voxel count of semantic label.
   LSLMap label_class_count_;
 
-  SemanticLabel highest_instance_;
+  InstanceLabel* highest_instance_;
   std::map<SemanticLabel, SemanticLabel> current_to_global_instance_map_;
   LSLMap label_instance_count_;
   LMap label_frames_count_;
