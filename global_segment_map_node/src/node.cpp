@@ -50,6 +50,13 @@ int main(int argc, char** argv) {
     controller->advertiseSceneMeshTopic(&scene_mesh_publisher);
   }
 
+  ros::Publisher bbox_pub;
+  ros::Publisher bbox_points_pub;
+  if (controller->compute_and_publish_bbox_) {
+    controller->advertiseBboxTopic(&bbox_pub);
+    controller->advertiseBboxPointsTopic(&bbox_points_pub);
+  }
+
   ros::ServiceServer publish_scene_srv;
   controller->advertisePublishSceneService(&publish_scene_srv);
 

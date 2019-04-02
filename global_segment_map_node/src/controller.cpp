@@ -11,15 +11,22 @@
 
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
+#include <pcl/common/centroid.h>
+#include <pcl/common/transforms.h>
+#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/io/vtk_lib_io.h>
+#include <pcl/kdtree/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
+#include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/core/common.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
+#include <ApproxMVBB/ComputeApproxMVBB.hpp>
 
 #include <boost/thread.hpp>
 
@@ -221,6 +228,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       "publish_segment_mesh", publish_segment_mesh_, publish_segment_mesh_);
   node_handle_private_->param<bool>("publish_scene_mesh", publish_scene_mesh_,
                                     publish_scene_mesh_);
+  node_handle_private_->param<bool>("compute_and_publish_bbox",
+                                    compute_and_publish_bbox_,
+                                    compute_and_publish_bbox_);
 
   // If set, use a timer to progressively update the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -308,6 +318,23 @@ void Controller::advertiseSceneMeshTopic(ros::Publisher* scene_mesh_pub) {
       node_handle_private_->advertise<voxblox_msgs::Mesh>("mesh", 1, true);
 
   scene_mesh_pub_ = scene_mesh_pub;
+}
+
+void Controller::advertiseBboxTopic(ros::Publisher* bbox_pub) {
+  CHECK_NOTNULL(bbox_pub);
+  *bbox_pub = node_handle_private_->advertise<visualization_msgs::Marker>(
+      "bbox", 1, true);
+
+  bbox_pub_ = bbox_pub;
+}
+
+void Controller::advertiseBboxPointsTopic(ros::Publisher* bbox_points_pub) {
+  CHECK_NOTNULL(bbox_points_pub);
+  *bbox_points_pub =
+      node_handle_private_->advertise<visualization_msgs::MarkerArray>(
+          "bbox_points", 1, true);
+
+  bbox_points_pub_ = bbox_points_pub;
 }
 
 void Controller::advertisePublishSceneService(
@@ -741,6 +768,7 @@ bool Controller::publishObjects(const bool publish_all) {
     transform.rotation.z = 0.;
     gsm_update_msg.object.transforms.clear();
     gsm_update_msg.object.transforms.push_back(transform);
+    gsm_update_msg.object.surfel_cloud.header.frame_id = world_frame_;
     pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
@@ -759,6 +787,105 @@ bool Controller::publishObjects(const bool publish_all) {
       }
       merges_to_publish_.erase(merged_label_it);
     }
+
+    if (compute_and_publish_bbox_) {
+      Eigen::Vector3f bbox_translation;
+      Eigen::Quaternionf bbox_quaternion;
+      Eigen::Vector3f bbox_size;
+      Eigen::Vector3f min_point;
+      Eigen::Vector3f max_point;
+      computeAlignedBoundingBox(surfel_cloud, &bbox_translation,
+                                &bbox_quaternion, &bbox_size, &min_point,
+                                &max_point);
+      gsm_update_msg.object.bbox.pose.position.x =
+          origin_shifted_tsdf_layer_W[0] + bbox_translation(0);
+      gsm_update_msg.object.bbox.pose.position.y =
+          origin_shifted_tsdf_layer_W[1] + bbox_translation(1);
+      gsm_update_msg.object.bbox.pose.position.z =
+          origin_shifted_tsdf_layer_W[2] + bbox_translation(2);
+      gsm_update_msg.object.bbox.pose.orientation.x = bbox_quaternion.x();
+      gsm_update_msg.object.bbox.pose.orientation.y = bbox_quaternion.y();
+      gsm_update_msg.object.bbox.pose.orientation.z = bbox_quaternion.z();
+      gsm_update_msg.object.bbox.pose.orientation.w = bbox_quaternion.w();
+      gsm_update_msg.object.bbox.dimensions.x = bbox_size(0);
+      gsm_update_msg.object.bbox.dimensions.y = bbox_size(1);
+      gsm_update_msg.object.bbox.dimensions.z = bbox_size(2);
+
+      visualization_msgs::Marker marker;
+      marker.header.frame_id = world_frame_;
+      marker.header.stamp = ros::Time();
+      marker.id = gsm_update_msg.object.label;
+      marker.type = visualization_msgs::Marker::CUBE;
+      marker.action = visualization_msgs::Marker::ADD;
+      marker.pose.position.x =
+          origin_shifted_tsdf_layer_W[0] + bbox_translation(0);
+      marker.pose.position.y =
+          origin_shifted_tsdf_layer_W[1] + bbox_translation(1);
+      marker.pose.position.z =
+          origin_shifted_tsdf_layer_W[2] + bbox_translation(2);
+      marker.pose.orientation = gsm_update_msg.object.bbox.pose.orientation;
+      marker.scale = gsm_update_msg.object.bbox.dimensions;
+      marker.color.a = 0.3;
+      marker.color.r = 0.0;
+      marker.color.g = 1.0;
+      marker.color.b = 0.0;
+      marker.lifetime = ros::Duration();
+
+      visualization_msgs::MarkerArray marker_points;
+      // marker_points.markers.resize(2);
+
+      visualization_msgs::Marker marker_min;
+      marker_min.header.frame_id = world_frame_;
+      marker_min.header.stamp = ros::Time();
+      marker_min.id = 0;
+      marker_min.ns = "gsm_markers";
+      marker_min.type = visualization_msgs::Marker::SPHERE;
+      marker_min.action = visualization_msgs::Marker::ADD;
+      marker_min.pose.position.x =
+          origin_shifted_tsdf_layer_W[0] + min_point(0);
+      marker_min.pose.position.y =
+          origin_shifted_tsdf_layer_W[1] + min_point(1);
+      marker_min.pose.position.z =
+          origin_shifted_tsdf_layer_W[2] + min_point(2);
+      marker_min.pose.orientation = gsm_update_msg.object.bbox.pose.orientation;
+      marker_min.scale.x = 0.01;
+      marker_min.scale.y = 0.01;
+      marker_min.scale.z = 0.01;
+      marker_min.color.a = 1.0;
+      marker_min.color.r = 1.0;
+      marker_min.color.g = 0.0;
+      marker_min.color.b = 0.0;
+      marker_min.lifetime = ros::Duration();
+      marker_points.markers.push_back(marker_min);
+
+      visualization_msgs::Marker marker_max;
+      marker_max.header.frame_id = world_frame_;
+      marker_max.header.stamp = ros::Time();
+      marker_max.id = 1;
+      marker_max.ns = "gsm_markers";
+      marker_max.type = visualization_msgs::Marker::SPHERE;
+      marker_max.action = visualization_msgs::Marker::ADD;
+      marker_max.pose.position.x =
+          origin_shifted_tsdf_layer_W[0] + max_point(0);
+      marker_max.pose.position.y =
+          origin_shifted_tsdf_layer_W[1] + max_point(1);
+      marker_max.pose.position.z =
+          origin_shifted_tsdf_layer_W[2] + max_point(2);
+      marker_max.pose.orientation = gsm_update_msg.object.bbox.pose.orientation;
+      marker_max.scale.x = 0.01;
+      marker_max.scale.y = 0.01;
+      marker_max.scale.z = 0.01;
+      marker_max.color.a = 1.0;
+      marker_max.color.r = 1.0;
+      marker_max.color.g = 0.0;
+      marker_max.color.b = 0.0;
+      marker_max.lifetime = ros::Duration();
+      marker_points.markers.push_back(marker_max);
+
+      bbox_pub_->publish(marker);
+      bbox_points_pub_->publish(marker_points);
+    }
+
     publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
     // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
 
@@ -911,6 +1038,126 @@ void Controller::getLabelsToPublish(const bool get_all,
     ROS_INFO("Publishing all segments");
   } else {
     *labels = segment_labels_to_publish_;
+  }
+}
+
+void Controller::computeAlignedBoundingBox(
+    const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
+    Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
+    Eigen::Vector3f* bbox_size, Eigen::Vector3f* min_point,
+    Eigen::Vector3f* max_point) {
+  CHECK(surfel_cloud);
+  CHECK_NOTNULL(bbox_translation);
+  CHECK_NOTNULL(bbox_quaternion);
+  CHECK_NOTNULL(bbox_size);
+
+  if (true) {
+    ApproxMVBB::Matrix3Dyn points(3, surfel_cloud->points.size());
+
+    for (size_t i = 0u; i < surfel_cloud->points.size(); ++i) {
+      points(0, i) = double(surfel_cloud->points.at(i).x);
+      points(1, i) = double(surfel_cloud->points.at(i).y);
+      points(2, i) = double(surfel_cloud->points.at(i).z);
+    }
+
+    ApproxMVBB::OOBB oobb =
+        ApproxMVBB::approximateMVBB(points, 0.02, 200, 5, 0, 5);
+
+    ApproxMVBB::Matrix33 A_KI = oobb.m_q_KI.matrix().transpose();
+    const int size = points.cols();
+    for (unsigned int i = 0; i < size; ++i) {
+      oobb.unite(A_KI * points.col(i));
+    }
+
+    oobb.expandToMinExtentRelative(0.05);
+
+    LOG(WARNING) << "min point\n" << oobb.m_minPoint.transpose();
+    LOG(WARNING) << "max point\n" << oobb.m_maxPoint.transpose();
+
+    ApproxMVBB::Vector3 min_in_I = oobb.m_q_KI * oobb.m_minPoint;
+    ApproxMVBB::Vector3 max_in_I = oobb.m_q_KI * oobb.m_maxPoint;
+    // ApproxMVBB::Vector3 min_in_I = oobb.A_IK * oobb.m_minPoint;
+    // ApproxMVBB::Vector3 max_in_I = oobb.A_IK * oobb.m_maxPoint;
+
+    *min_point = min_in_I.cast<float>();
+    *max_point = max_in_I.cast<float>();
+    // *min_point = oobb.m_minPoint.cast<float>();
+    // *max_point = oobb.m_maxPoint.cast<float>();
+
+    *bbox_quaternion = oobb.m_q_KI.cast<float>();
+    *bbox_translation = ((min_in_I + max_in_I) / 2).cast<float>();
+    // *bbox_translation = Eigen::Vector3f(0, 0, 0);
+    *bbox_size = ((oobb.m_maxPoint - oobb.m_minPoint).cwiseAbs()).cast<float>();
+  } else {
+    Eigen::Vector4f pca_centroid;
+    pcl::compute3DCentroid(*surfel_cloud, pca_centroid);
+    Eigen::Matrix3f covariance;
+    pcl::computeCovarianceMatrixNormalized(*surfel_cloud, pca_centroid,
+                                           covariance);
+    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(
+        covariance, Eigen::ComputeEigenvectors);
+    Eigen::Matrix3f eigen_vectors_pca = eigen_solver.eigenvectors();
+    eigen_vectors_pca.col(2) =
+        eigen_vectors_pca.col(0).cross(eigen_vectors_pca.col(1));
+
+    Eigen::Matrix4f projection_transform(Eigen::Matrix4f::Identity());
+    projection_transform.block<3, 3>(0, 0) = eigen_vectors_pca.transpose();
+    projection_transform.block<3, 1>(0, 3) =
+        -1.0 *
+        (projection_transform.block<3, 3>(0, 0) * pca_centroid.head<3>());
+    pcl::PointCloud<pcl::PointSurfel>::Ptr transformed_surfel_cloud(
+        new pcl::PointCloud<pcl::PointSurfel>);
+    pcl::transformPointCloud(*surfel_cloud, *transformed_surfel_cloud,
+                             projection_transform);
+
+    // constexpr size_t kMeanK = 50u;
+    // constexpr double kStdMulThreshold = 1.0;
+    // pcl::StatisticalOutlierRemoval<pcl::PointSurfel>
+    // statistical_outlier_removal;
+    // statistical_outlier_removal.setInputCloud(transformed_surfel_cloud);
+    // statistical_outlier_removal.setMeanK(kMeanK);
+    // statistical_outlier_removal.setStddevMulThresh(kStdMulThreshold);
+    // statistical_outlier_removal.filter(*transformed_surfel_cloud);
+    //
+    constexpr double kClusterToleranceM = 0.005;
+    constexpr double kMinClusterSize = 200;
+    constexpr double kMaxClusterSize = 500000;
+    pcl::search::KdTree<pcl::PointSurfel>::Ptr tree(
+        new pcl::search::KdTree<pcl::PointSurfel>);
+    tree->setInputCloud(transformed_surfel_cloud);
+    std::vector<pcl::PointIndices> cluster_indices;
+    pcl::EuclideanClusterExtraction<pcl::PointSurfel> euclidean_clustering;
+    euclidean_clustering.setClusterTolerance(kClusterToleranceM);  // 2cm
+    euclidean_clustering.setMinClusterSize(kMinClusterSize);
+    euclidean_clustering.setMaxClusterSize(kMaxClusterSize);
+    euclidean_clustering.setSearchMethod(tree);
+    euclidean_clustering.setInputCloud(transformed_surfel_cloud);
+    euclidean_clustering.extract(cluster_indices);
+    pcl::PointCloud<pcl::PointSurfel>::Ptr clustered_surfel_cloud(
+        new pcl::PointCloud<pcl::PointSurfel>);
+    for (std::vector<int>::const_iterator point_iterator =
+             cluster_indices.at(0).indices.begin();
+         point_iterator != cluster_indices.at(0).indices.end();
+         ++point_iterator) {
+      clustered_surfel_cloud->points.push_back(
+          transformed_surfel_cloud->points[*point_iterator]);
+    }
+    clustered_surfel_cloud->width = clustered_surfel_cloud->points.size();
+    clustered_surfel_cloud->height = 1;
+    clustered_surfel_cloud->is_dense = true;
+
+    pcl::PointSurfel min_point;
+    pcl::PointSurfel max_point;
+    pcl::getMinMax3D(*clustered_surfel_cloud, min_point, max_point);
+    const Eigen::Vector3f mean_diagonal =
+        0.5f * (max_point.getVector3fMap() + min_point.getVector3fMap());
+
+    *bbox_translation =
+        eigen_vectors_pca * mean_diagonal + pca_centroid.head<3>();
+    *bbox_quaternion = Eigen::Quaternionf(eigen_vectors_pca);
+    *bbox_size =
+        Eigen::Vector3f(max_point.x - min_point.x, max_point.y - min_point.y,
+                        max_point.z - min_point.z);
   }
 }
 }  // namespace voxblox_gsm
