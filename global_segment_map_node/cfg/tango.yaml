@@ -3,7 +3,7 @@ world_frame_id: "world"
 camera_frame_id: "depth"
 scene_gsm_update_topic: "scene_update"
 segment_gsm_update_topic: "gsm_update"
-object_flushing_age_threshold: 6
+segment_flushing_age_threshold: 6
 validate_merged_object: "validate_merged_object"
 enable_pairwise_confidence_merging: false
 pairwise_confidence_ratio_threshold: 0.2
@@ -18,4 +18,3 @@ voxel_carving_enabled: false
 max_ray_length_m: 2.5
 mesh_config:
   min_weight: 0.0001
-

@@ -60,7 +60,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
     // Number of frames after which the updated
     // objects are published.
-    int object_flushing_age_threshold = 3;
+    int segment_flushing_age_threshold = 3;
 
     // Distance-based log-normal distribution of label confidence weights.
     bool enable_confidence_weight_dropoff = false;
@@ -929,7 +929,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       // Increase age of a label to publish;
       ++(label_age_pair_it)->second;
       if (label_age_pair_it->second >
-          label_tsdf_config_.object_flushing_age_threshold) {
+          label_tsdf_config_.segment_flushing_age_threshold) {
         segment_labels_to_publish->push_back(label_age_pair_it->first);
         labels_to_publish_.erase(label_age_pair_it++);
       } else {

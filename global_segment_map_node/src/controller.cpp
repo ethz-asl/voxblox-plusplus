@@ -347,7 +347,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   // Determine label integrator parameters.
   LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
-  label_tsdf_integrator_config.object_flushing_age_threshold = 30;
+  label_tsdf_integrator_config.segment_flushing_age_threshold = 30;
 
   node_handle_private_->param<bool>(
       "enable_pairwise_confidence_merging",
@@ -362,9 +362,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config.pairwise_confidence_count_threshold,
       label_tsdf_integrator_config.pairwise_confidence_count_threshold);
   node_handle_private_->param<int>(
-      "object_flushing_age_threshold",
-      label_tsdf_integrator_config.object_flushing_age_threshold,
-      label_tsdf_integrator_config.object_flushing_age_threshold);
+      "segment_flushing_age_threshold",
+      label_tsdf_integrator_config.segment_flushing_age_threshold,
+      label_tsdf_integrator_config.segment_flushing_age_threshold);
 
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
