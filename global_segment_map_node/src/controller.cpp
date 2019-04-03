@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include <geometry_msgs/TransformStamped.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <pcl/common/centroid.h>
@@ -458,7 +459,10 @@ void Controller::segmentPointCloudCallback(
       }
     }
 
+    // TODO(ntonci): Generalize this! Currently it will not work for Surfel
+    // type.
     pcl::PointCloud<voxblox::PointType> point_cloud;
+
     pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
 
     segment->points_C_.reserve(point_cloud.points.size());
@@ -835,6 +839,16 @@ bool Controller::publishObjects(const bool publish_all) {
       marker.lifetime = ros::Duration();
 
       bbox_pub_->publish(marker);
+
+      geometry_msgs::TransformStamped bbox_tf;
+      bbox_tf.header = gsm_update_msg.header;
+      bbox_tf.child_frame_id = std::to_string(gsm_update_msg.object.label);
+      bbox_tf.transform.translation.x = marker.pose.position.x;
+      bbox_tf.transform.translation.y = marker.pose.position.y;
+      bbox_tf.transform.translation.z = marker.pose.position.z;
+      bbox_tf.transform.rotation = marker.pose.orientation;
+
+      tf_broadcaster_.sendTransform(bbox_tf);
     }
 
     publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
@@ -1000,7 +1014,8 @@ void Controller::computeAlignedBoundingBox(
   CHECK_NOTNULL(bbox_quaternion);
   CHECK_NOTNULL(bbox_size);
 
-  if (true) {
+  constexpr bool kUseApproxMVBB = true;
+  if (kUseApproxMVBB) {
     ApproxMVBB::Matrix3Dyn points(3, surfel_cloud->points.size());
 
     for (size_t i = 0u; i < surfel_cloud->points.size(); ++i) {
@@ -1009,6 +1024,7 @@ void Controller::computeAlignedBoundingBox(
       points(2, i) = double(surfel_cloud->points.at(i).z);
     }
 
+    // TODO(ntonci): Make params.
     ApproxMVBB::OOBB oobb =
         ApproxMVBB::approximateMVBB(points, 0.02, 200, 5, 0, 5);
 
@@ -1018,7 +1034,8 @@ void Controller::computeAlignedBoundingBox(
       oobb.unite(A_KI * points.col(i));
     }
 
-    oobb.expandToMinExtentRelative(0.05);
+    constexpr double kExpansionPercentage = 0.05;
+    oobb.expandToMinExtentRelative(kExpansionPercentage);
 
     ApproxMVBB::Vector3 min_in_I = oobb.m_q_KI * oobb.m_minPoint;
     ApproxMVBB::Vector3 max_in_I = oobb.m_q_KI * oobb.m_maxPoint;

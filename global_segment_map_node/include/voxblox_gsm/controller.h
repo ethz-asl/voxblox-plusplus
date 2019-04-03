@@ -18,6 +18,7 @@
 #include <std_srvs/Empty.h>
 #include <std_srvs/SetBool.h>
 #include <tf/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
 
@@ -124,6 +125,7 @@ class Controller {
   ros::NodeHandle* node_handle_private_;
 
   tf::TransformListener tf_listener_;
+  tf2_ros::TransformBroadcaster tf_broadcaster_;
   ros::Time last_segment_msg_timestamp_;
   size_t integrated_frames_count_;
 
@@ -139,6 +141,7 @@ class Controller {
   ros::Publisher* scene_mesh_pub_;
   ros::Publisher* segment_mesh_pub_;
   ros::Publisher* bbox_pub_;
+  ros::Publisher* scene_pointcloud_pub_;
   std::string mesh_filename_;
 
   std::string world_frame_;
