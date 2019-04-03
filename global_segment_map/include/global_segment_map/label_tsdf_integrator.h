@@ -229,6 +229,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       }
     }
     if (updated == false) {
+      // TODO(margaritaG): handle this nicely or remove.
       // LOG(FATAL) << "Out-of-memory for storing labels and confidences for
       // this " "voxel. Please increse size of array.";
     }
@@ -364,8 +365,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
         segment->labels_.push_back(label);
       }
 
-      labelled_segments.insert(pair.first);
-      candidates->erase(pair.second);
+      labelled_segments.insert(segment);
+      candidates->erase(label);
     }
 
     for (auto merge_candidates : *segment_merge_candidates) {
