@@ -22,6 +22,7 @@
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
+#include <voxblox_ros/ptcloud_vis.h>
 
 #include "voxblox_gsm/conversions.h"
 
@@ -119,7 +120,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrated_frames_count_(0u),
       tf_listener_(ros::Duration(1000)),
       world_frame_("world"),
-      camera_frame_(""),
+      slice_level_x_(0.5),
+      slice_level_y_(0.5),
+      slice_level_z_(0.5),
       no_update_timeout_(0.0),
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
@@ -303,14 +306,25 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<std::string>("meshing/mesh_filename",
                                            mesh_filename_, mesh_filename_);
 
+  node_handle_private_->param<bool>("visualization/publish_tsdf_slice",
+                                    publish_tsdf_slice_, publish_tsdf_slice_);
+
   node_handle_private_->param<bool>("object_database/publish_gsm_updates",
                                     publish_gsm_updates_, publish_gsm_updates_);
 
   node_handle_private_->param<double>("object_database/no_update_timeout",
                                       no_update_timeout_, no_update_timeout_);
+  // ros::spinOnce();
 }
 
 Controller::~Controller() { viz_thread_.join(); }
+
+void Controller::dynamicReconfigureCallback(
+    gsm_node::InteractiveSliderConfig& config, uint32_t level) {
+  slice_level_x_ = config.x;
+  slice_level_y_ = config.y;
+  slice_level_z_ = config.z;
+}
 
 void Controller::subscribeSegmentPointCloudTopic(
     ros::Subscriber* segment_point_cloud_sub) {
@@ -382,6 +396,14 @@ void Controller::advertisePublishSceneService(
   *publish_scene_srv = node_handle_private_->advertiseService(
       kAdvertisePublishSceneServiceName, &Controller::publishSceneCallback,
       this);
+}
+
+void Controller::advertiseTsdfSliceTopic(ros::Publisher* tsdf_slice_pub) {
+  *tsdf_slice_pub =
+      node_handle_private_->advertise<pcl::PointCloud<pcl::PointXYZI>>(
+          "tsdf_slice", 1, true);
+
+  tsdf_slice_pub_ = tsdf_slice_pub;
 }
 
 void Controller::validateMergedObjectService(
@@ -535,6 +557,7 @@ void Controller::segmentPointCloudCallback(
     integrator_->computeSegmentLabelCandidates(
         segment, &segment_label_candidates, &segment_merge_candidates_);
     label_candidates_timer.Stop();
+
     //     "Comput
     // ros::WallTime end = ros::WallTime::now();
     // ROS_INFO(
@@ -742,6 +765,34 @@ bool Controller::lookupTransform(const std::string& from_frame,
 
   tf::transformTFToKindr(tf_transform, transform);
   return true;
+}
+
+void Controller::publishTsdfSlice() {
+  // Create a pointcloud with distance = intensity.
+  pcl::PointCloud<pcl::PointXYZI> pointcloud;
+
+  createDistancePointcloudFromTsdfLayer(map_->getTsdfLayer(), &pointcloud);
+
+  pointcloud.header.frame_id = world_frame_;
+  tsdf_slice_pub_->publish(pointcloud);
+
+  // pcl::PointCloud<pcl::PointXYZI> pointcloud_x;
+  // pcl::PointCloud<pcl::PointXYZI> pointcloud_y;
+  // pcl::PointCloud<pcl::PointXYZI> pointcloud_z;
+  //
+  // createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 0,
+  //                                            slice_level_x_, &pointcloud_x);
+  // createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 1,
+  //                                            slice_level_y_, &pointcloud_y);
+  // createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 2,
+  //                                            slice_level_z_, &pointcloud_z);
+  //
+  // pointcloud_x.header.frame_id = world_frame_;
+  // pointcloud_y.header.frame_id = world_frame_;
+  // pointcloud_z.header.frame_id = world_frame_;
+  // tsdf_slice_pub_->publish(pointcloud_x);
+  // tsdf_slice_pub_->publish(pointcloud_y);
+  // tsdf_slice_pub_->publish(pointcloud_z);
 }
 
 // TODO(ff): Create this somewhere:
@@ -1007,7 +1058,7 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       publish_mesh_timer.Stop();
     }
   }
-}
+}  // namespace voxblox_gsm
 
 bool Controller::noNewUpdatesReceived() const {
   if (received_first_message_ && no_update_timeout_ != 0.0) {

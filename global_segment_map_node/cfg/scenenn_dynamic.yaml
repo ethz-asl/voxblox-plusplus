@@ -1,7 +1,7 @@
 voxel_size: 0.01
 voxels_per_side: 8
 truncation_distance_factor: 5.0
-voxel_carving_enabled: true
+voxel_carving_enabled: false
 max_ray_length_m: 3
 segment_point_cloud_topic: "/scenenn_node/object_segment"
 world_frame_id: "world"
@@ -18,10 +18,11 @@ object_database:
   segment_gsm_update_topic: "gsm_update"
   validate_merged_object: "validate_merged_object"
 
-meshing:
-  visualize: true
+visualization:
+  mesh_visualizer: true
   update_mesh_every_n_sec: 1.0
   mesh_color_scheme: "geometric_instance_label"
   publish_segment_mesh: false
-  publish_scene_mesh: false
+  publish_scene_mesh: true
   mesh_filename: "gsm_scenenn_mesh.ply"
+  publish_tsdf_slice: true

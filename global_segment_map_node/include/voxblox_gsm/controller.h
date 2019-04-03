@@ -22,6 +22,8 @@
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
 
+#include "gsm_node/InteractiveSliderConfig.h"
+
 namespace voxblox {
 namespace voxblox_gsm {
 
@@ -51,6 +53,8 @@ class Controller {
 
   void advertiseSceneMeshTopic(ros::Publisher* scene_mesh_pub);
 
+  void advertiseTsdfSliceTopic(ros::Publisher* tsdf_slice_pub);
+
   void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
   void validateMergedObjectService(
@@ -67,6 +71,11 @@ class Controller {
   void advertiseExtractSegmentsService(
       ros::ServiceServer* extract_segments_srv);
 
+  void dynamicReconfigureCallback(gsm_node::InteractiveSliderConfig& config,
+                                  uint32_t level);
+
+  void publishTsdfSlice();
+
   bool publishObjects(const bool publish_all = false);
 
   void publishScene();
@@ -77,6 +86,7 @@ class Controller {
 
   bool publish_scene_mesh_;
   bool publish_segment_mesh_;
+  bool publish_tsdf_slice_;
 
   double no_update_timeout_;
 
@@ -96,7 +106,6 @@ class Controller {
 
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
-
   /**
    * Extracts separate tsdf and label layers from the gsm, for every given
    * label.
@@ -153,6 +162,11 @@ class Controller {
   ros::Publisher* segment_mesh_pub_;
   MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
   std::string mesh_filename_;
+  ros::Publisher* tsdf_slice_pub_;
+  /// Pointcloud visualization settings.
+  double slice_level_x_;
+  double slice_level_y_;
+  double slice_level_z_;
 
   std::shared_ptr<MeshLayer> mesh_label_layer_;
   std::shared_ptr<MeshLayer> mesh_semantic_layer_;

@@ -1,9 +1,11 @@
 // Copyright 2017 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
+#include <dynamic_reconfigure/server.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <ros/ros.h>
 
+#include "gsm_node/InteractiveSliderConfig.h"
 #include "voxblox_gsm/controller.h"
 #include "voxblox_gsm/sliding_window_controller.h"
 
@@ -53,6 +55,11 @@ int main(int argc, char** argv) {
     controller->advertiseSceneMeshTopic(&scene_mesh_publisher);
   }
 
+  ros::Publisher tsdf_slice_publisher;
+  if (controller->publish_tsdf_slice_) {
+    controller->advertiseTsdfSliceTopic(&tsdf_slice_publisher);
+  }
+
   ros::ServiceServer publish_scene_srv;
   controller->advertisePublishSceneService(&publish_scene_srv);
 
@@ -65,12 +72,22 @@ int main(int argc, char** argv) {
   ros::ServiceServer extract_segments_srv;
   controller->advertiseExtractSegmentsService(&extract_segments_srv);
 
+  dynamic_reconfigure::Server<gsm_node::InteractiveSliderConfig>
+      reconfigure_server;
+  dynamic_reconfigure::Server<gsm_node::InteractiveSliderConfig>::CallbackType
+      dynamic_reconfigure_function;
+
+  dynamic_reconfigure_function =
+      std::bind(&voxblox::voxblox_gsm::Controller::dynamicReconfigureCallback,
+                controller, std::placeholders::_1, std::placeholders::_2);
+  reconfigure_server.setCallback(dynamic_reconfigure_function);
+
   // Spinner that uses a number of threads equal to the number of cores.
   ros::AsyncSpinner spinner(0);
   spinner.start();
   ros::waitForShutdown();
 
-  if (controller->publish_scene_mesh_) {
+  if (controller->publish_gsm_updates_) {
     controller->publishScene();
     constexpr bool kPublishAllSegments = true;
     controller->publishObjects(kPublishAllSegments);
