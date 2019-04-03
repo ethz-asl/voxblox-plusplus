@@ -1,0 +1,27 @@
+voxel_size: 0.01
+voxels_per_side: 8
+truncation_distance_factor: 5.0
+voxel_carving_enabled: true
+max_ray_length_m: 3
+segment_point_cloud_topic: "/scenenn_node/object_segment"
+world_frame_id: "world"
+
+pairwise_confidence_merging:
+  enable_pairwise_confidence_merging: false
+  pairwise_confidence_ratio_threshold: 0.05
+  pairwise_confidence_count_threshold: 9
+
+object_database:
+  publish_gsm_updates: false
+  segment_flushing_age_threshold: 6
+  scene_gsm_update_topic: "scene_update"
+  segment_gsm_update_topic: "gsm_update"
+  validate_merged_object: "validate_merged_object"
+
+meshing:
+  visualize: true
+  update_mesh_every_n_sec: 1.0
+  mesh_color_scheme: "geometric_instance_label"
+  publish_segment_mesh: false
+  publish_scene_mesh: false
+  mesh_filename: "gsm_scenenn_mesh.ply"
