@@ -179,10 +179,8 @@ void visualizeMesh(const MeshLayer& mesh_layer,
   // pcl::PointCloud<pcl::PointXYZRGBA> cloud;
   std::array<pcl::PointCloud<pcl::PointXYZRGBA>, 2> cloud;
   while (1) {
-    ROS_INFO("HERE");
     for (int count = 0; count < viewer.size(); count++) {
       // if (viewer->wasStopped()) {
-      ROS_INFO("AND HERE");
       constexpr int updateIntervalms = 1000;
       viewer[count]->spinOnce(updateIntervalms);
     }
@@ -195,7 +193,6 @@ void visualizeMesh(const MeshLayer& mesh_layer,
     // mesh[2] = voxblox::Mesh();
     // mesh[3] = voxblox::Mesh();
     if (updatedMesh) {
-      ROS_INFO("START updating");
       for (int count = 0; count < viewer.size(); count++) {
         cloud[count].points.clear();
       }
@@ -255,7 +252,6 @@ void visualizeMesh(const MeshLayer& mesh_layer,
         viewer[count]->saveScreenshot(std::to_string(count) + "/frame_" +
                                       std::to_string(frame_count) + ".png");
       }
-      ROS_INFO("Finish updating");
       frame_count++;
 
       updatedMesh = false;
@@ -283,8 +279,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   // for some reason.
   int voxels_per_side = map_config_.voxels_per_side;
   node_handle_private_->param<FloatingPoint>(
-      "voxel_size", map_config_.voxel_size, map_config_.voxel_size);
-  node_handle_private_->param<int>("voxels_per_side", voxels_per_side,
+      "voxblox/voxel_size", map_config_.voxel_size, map_config_.voxel_size);
+  node_handle_private_->param<int>("voxblox/voxels_per_side", voxels_per_side,
                                    voxels_per_side);
   if (!isPowerOfTwo(voxels_per_side)) {
     ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
@@ -301,17 +297,20 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   FloatingPoint truncation_distance_factor = 5.0f;
   integrator_config.max_ray_length_m = 2.5f;
 
-  node_handle_private_->param<bool>("voxel_carving_enabled",
+  node_handle_private_->param<bool>("voxblox/voxel_carving_enabled",
                                     integrator_config.voxel_carving_enabled,
                                     integrator_config.voxel_carving_enabled);
-  node_handle_private_->param<bool>("allow_clear",
+  node_handle_private_->param<bool>("voxblox/allow_clear",
                                     integrator_config.allow_clear,
                                     integrator_config.allow_clear);
-  node_handle_private_->param<FloatingPoint>("truncation_distance_factor",
-                                             truncation_distance_factor,
-                                             truncation_distance_factor);
   node_handle_private_->param<FloatingPoint>(
-      "max_ray_length_m", integrator_config.max_ray_length_m,
+      "voxblox/truncation_distance_factor", truncation_distance_factor,
+      truncation_distance_factor);
+  node_handle_private_->param<FloatingPoint>(
+      "voxblox/min_ray_length_m", integrator_config.min_ray_length_m,
+      integrator_config.min_ray_length_m);
+  node_handle_private_->param<FloatingPoint>(
+      "voxblox/max_ray_length_m", integrator_config.max_ray_length_m,
       integrator_config.max_ray_length_m);
 
   integrator_config.default_truncation_distance =
@@ -329,7 +328,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   std::string mesh_color_scheme("label");
   node_handle_private_->param<std::string>(
-      "mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
+      "meshing/mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
   if (mesh_color_scheme.compare("label") == 0) {
     mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
   } else if (mesh_color_scheme.compare("semantic_label") == 0) {
@@ -350,19 +349,19 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   label_tsdf_integrator_config.segment_flushing_age_threshold = 30;
 
   node_handle_private_->param<bool>(
-      "enable_pairwise_confidence_merging",
+      "pairwise_confidence_merging/enable_pairwise_confidence_merging",
       label_tsdf_integrator_config.enable_pairwise_confidence_merging,
       label_tsdf_integrator_config.enable_pairwise_confidence_merging);
   node_handle_private_->param<FloatingPoint>(
-      "pairwise_confidence_ratio_threshold",
+      "pairwise_confidence_merging/pairwise_confidence_ratio_threshold",
       label_tsdf_integrator_config.pairwise_confidence_ratio_threshold,
       label_tsdf_integrator_config.pairwise_confidence_ratio_threshold);
   node_handle_private_->param<int>(
-      "pairwise_confidence_count_threshold",
+      "pairwise_confidence_merging/pairwise_confidence_count_threshold",
       label_tsdf_integrator_config.pairwise_confidence_count_threshold,
       label_tsdf_integrator_config.pairwise_confidence_count_threshold);
   node_handle_private_->param<int>(
-      "segment_flushing_age_threshold",
+      "object_database/segment_flushing_age_threshold",
       label_tsdf_integrator_config.segment_flushing_age_threshold,
       label_tsdf_integrator_config.segment_flushing_age_threshold);
 
@@ -454,8 +453,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   node_handle_private_->param<double>("no_update_timeout", no_update_timeout_,
                                       no_update_timeout_);
-
-  // ros::spinOnce();
 }
 
 Controller::~Controller() { viz_thread_.join(); }
@@ -584,7 +581,6 @@ void Controller::segmentPointCloudCallback(
   // the start of a new frame is detected when the message timestamp changes.
   // TODO(grinvalm): need additional check for the last frame to be
   // integrated.
-  ROS_INFO("GOT SEGMENT");
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
@@ -701,8 +697,11 @@ void Controller::segmentPointCloudCallback(
           Color(point_cloud.points[i].r, point_cloud.points[i].g,
                 point_cloud.points[i].b, point_cloud.points[i].a));
     }
-    segment->semantic_label_ = point_cloud.points[0].semantic_label;
-    segment->instance_label_ = point_cloud.points[0].instance_label;
+    // TODO(margaritaG): fix
+    // segment->semantic_label_ = point_cloud.points[0].semantic_label;
+    // segment->instance_label_ = point_cloud.points[0].instance_label;
+    segment->semantic_label_ = point_cloud.points[0].label;
+    segment->instance_label_ = point_cloud.points[0].instance;
     segment->T_G_C_ = T_G_C;
 
     ptcloud_timer.Stop();
@@ -1173,7 +1172,6 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     //                                               clear_updated_flag);
     // updatedMesh |= mesh_instance_integrator_->generateMesh(
     //     only_mesh_updated_blocks, clear_updated_flag);
-    ROS_INFO("Start updating meshes.");
 
     updatedMesh |= mesh_merged_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
@@ -1182,7 +1180,6 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     updatedMesh |= mesh_semantic_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
     generate_mesh_timer.Stop();
-    ROS_INFO("FINISHED updating meshes.");
   }
 
   if (publish_scene_mesh_) {

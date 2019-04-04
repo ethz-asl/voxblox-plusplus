@@ -10,6 +10,7 @@ catkin_simple(ALL_DEPS_REQUIRED)
 cs_add_library(${PROJECT_NAME}
   src/label_block_serialization.cc
   src/label_merge_integrator.cc
+  src/label_tsdf_integrator.cc
 )
 
 cs_install()
