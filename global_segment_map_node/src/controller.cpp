@@ -804,7 +804,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
     CHECK(it != label_to_layers.end())
-        << "Layers for label " << label << "could not be extracted.";
+        << "Layers for label " << label << " could not be extracted.";
 
     const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
     const Layer<LabelVoxel>& segment_label_layer = it->second.second;
@@ -944,7 +944,7 @@ bool Controller::publishObjects(const bool publish_all) {
   for (const Label& label : labels_to_publish) {
     auto it = label_to_layers.find(label);
     CHECK(it != label_to_layers.end())
-        << "Layers for " << label << "could not be extracted.";
+        << "Layers for " << label << " could not be extracted.";
 
     Layer<TsdfVoxel>& tsdf_layer = it->second.first;
     Layer<LabelVoxel>& label_layer = it->second.second;
