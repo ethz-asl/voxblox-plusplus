@@ -15,12 +15,12 @@ gsm:
 
 pairwise_confidence_merging:
   enable_pairwise_confidence_merging: true
-  pairwise_confidence_ratio_threshold: 0.05
-  pairwise_confidence_count_threshold: 9
+  merging_min_overlap_ratio: 0.05
+  merging_min_frame_count: 9
 
 object_database:
   publish_gsm_updates: false
-  segment_flushing_age_threshold: 6
+  max_segment_age: 6
   scene_gsm_update_topic: "scene_update"
   segment_gsm_update_topic: "gsm_update"
   validate_merged_object: "validate_merged_object"

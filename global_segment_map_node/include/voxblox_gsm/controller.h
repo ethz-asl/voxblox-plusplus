@@ -168,7 +168,7 @@ class Controller {
   std::map<Label, std::map<Segment*, size_t>> segment_label_candidates;
   std::map<Segment*, std::vector<Label>> segment_merge_candidates_;
 
-  // GsmUpdate publishing.
+  // Object Database..
   ros::Publisher* scene_gsm_update_pub_;
   ros::Publisher* segment_gsm_update_pub_;
   std::vector<Label> segment_labels_to_publish_;

@@ -13,6 +13,17 @@ typedef uint16_t LabelConfidence;
 typedef uint8_t SemanticLabel;
 typedef uint8_t InstanceLabel;
 
+typedef std::map<Label, int> LMap;
+typedef std::map<Label, int>::iterator LMapIt;
+typedef std::map<Label, LMap> LLMap;
+typedef std::map<Label, LMap>::iterator LLMapIt;
+typedef std::set<Label> LSet;
+typedef std::set<Label>::iterator LSetIt;
+typedef std::map<Label, LSet> LLSet;
+typedef std::map<Label, LSet>::iterator LLSetIt;
+typedef std::map<SemanticLabel, int> SLMap;
+typedef std::map<Label, SLMap> LSLMap;
+
 struct LabelCount {
   Label label = 0u;
   LabelConfidence label_confidence = 0u;

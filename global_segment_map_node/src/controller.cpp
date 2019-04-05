@@ -291,39 +291,40 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   map_.reset(new LabelTsdfMap(map_config_));
 
   // Determine TSDF integrator parameters.
-  LabelTsdfIntegrator::Config integrator_config;
-  integrator_config.voxel_carving_enabled = false;
-  integrator_config.allow_clear = true;
+  LabelTsdfIntegrator::Config tsdf_integrator_config;
+  tsdf_integrator_config.voxel_carving_enabled = false;
+  tsdf_integrator_config.allow_clear = true;
   FloatingPoint truncation_distance_factor = 5.0f;
-  integrator_config.max_ray_length_m = 2.5f;
+  tsdf_integrator_config.max_ray_length_m = 2.5f;
 
-  node_handle_private_->param<bool>("voxblox/voxel_carving_enabled",
-                                    integrator_config.voxel_carving_enabled,
-                                    integrator_config.voxel_carving_enabled);
+  node_handle_private_->param<bool>(
+      "voxblox/voxel_carving_enabled",
+      tsdf_integrator_config.voxel_carving_enabled,
+      tsdf_integrator_config.voxel_carving_enabled);
   node_handle_private_->param<bool>("voxblox/allow_clear",
-                                    integrator_config.allow_clear,
-                                    integrator_config.allow_clear);
+                                    tsdf_integrator_config.allow_clear,
+                                    tsdf_integrator_config.allow_clear);
   node_handle_private_->param<FloatingPoint>(
       "voxblox/truncation_distance_factor", truncation_distance_factor,
       truncation_distance_factor);
   node_handle_private_->param<FloatingPoint>(
-      "voxblox/min_ray_length_m", integrator_config.min_ray_length_m,
-      integrator_config.min_ray_length_m);
+      "voxblox/min_ray_length_m", tsdf_integrator_config.min_ray_length_m,
+      tsdf_integrator_config.min_ray_length_m);
   node_handle_private_->param<FloatingPoint>(
-      "voxblox/max_ray_length_m", integrator_config.max_ray_length_m,
-      integrator_config.max_ray_length_m);
+      "voxblox/max_ray_length_m", tsdf_integrator_config.max_ray_length_m,
+      tsdf_integrator_config.max_ray_length_m);
 
-  integrator_config.default_truncation_distance =
+  tsdf_integrator_config.default_truncation_distance =
       map_config_.voxel_size * truncation_distance_factor;
 
   std::string method("merged");
   node_handle_private_->param<std::string>("method", method, method);
   if (method.compare("merged") == 0) {
-    integrator_config.enable_anti_grazing = false;
+    tsdf_integrator_config.enable_anti_grazing = false;
   } else if (method.compare("merged_discard") == 0) {
-    integrator_config.enable_anti_grazing = true;
+    tsdf_integrator_config.enable_anti_grazing = true;
   } else {
-    integrator_config.enable_anti_grazing = false;
+    tsdf_integrator_config.enable_anti_grazing = false;
   }
 
   std::string mesh_color_scheme("label");
@@ -346,31 +347,29 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   // Determine label integrator parameters.
   LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
   label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
-  label_tsdf_integrator_config.segment_flushing_age_threshold = 30;
+  label_tsdf_integrator_config.max_segment_age = 30;
 
   node_handle_private_->param<bool>(
       "pairwise_confidence_merging/enable_pairwise_confidence_merging",
       label_tsdf_integrator_config.enable_pairwise_confidence_merging,
       label_tsdf_integrator_config.enable_pairwise_confidence_merging);
   node_handle_private_->param<FloatingPoint>(
-      "pairwise_confidence_merging/pairwise_confidence_ratio_threshold",
-      label_tsdf_integrator_config.pairwise_confidence_ratio_threshold,
-      label_tsdf_integrator_config.pairwise_confidence_ratio_threshold);
+      "pairwise_confidence_merging/merging_min_overlap_ratio",
+      label_tsdf_integrator_config.merging_min_overlap_ratio,
+      label_tsdf_integrator_config.merging_min_overlap_ratio);
   node_handle_private_->param<int>(
-      "pairwise_confidence_merging/pairwise_confidence_count_threshold",
-      label_tsdf_integrator_config.pairwise_confidence_count_threshold,
-      label_tsdf_integrator_config.pairwise_confidence_count_threshold);
+      "pairwise_confidence_merging/merging_min_frame_count",
+      label_tsdf_integrator_config.merging_min_frame_count,
+      label_tsdf_integrator_config.merging_min_frame_count);
   node_handle_private_->param<int>(
-      "object_database/segment_flushing_age_threshold",
-      label_tsdf_integrator_config.segment_flushing_age_threshold,
-      label_tsdf_integrator_config.segment_flushing_age_threshold);
+      "object_database/max_segment_age",
+      label_tsdf_integrator_config.max_segment_age,
+      label_tsdf_integrator_config.max_segment_age);
 
   integrator_.reset(new LabelTsdfIntegrator(
-      integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
-      map_->getLabelLayerPtr(), map_->getHighestLabelPtr(),
-      map_->getHighestInstancePtr()));
-
-  label_class_count_ptr_ = integrator_->getLabelClassCountPtr();
+      tsdf_integrator_config, label_tsdf_integrator_config,
+      map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
+      map_->getHighestLabelPtr(), map_->getHighestInstancePtr()));
 
   mesh_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
@@ -379,39 +378,35 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   mesh_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_layer_.get(), all_semantic_labels_,
-      *integrator_->getLabelClassCountPtr(),
-      *integrator_->getLabelInstanceCountPtr(),
-      *integrator_->getLabelsFrameCountPtr(),
+      integrator_->getInstanceLabelFusionPtr(),
+      integrator_->getSemanticLabelFusionPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::LabelColor,
       &remesh));
   mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_semantic_layer_.get(), all_semantic_labels_,
-      *integrator_->getLabelClassCountPtr(),
-      *integrator_->getLabelInstanceCountPtr(),
-      *integrator_->getLabelsFrameCountPtr(),
+      integrator_->getInstanceLabelFusionPtr(),
+      integrator_->getSemanticLabelFusionPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::SemanticColor,
       &remesh));
   mesh_instance_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_instance_layer_.get(), all_semantic_labels_,
-      *integrator_->getLabelClassCountPtr(),
-      *integrator_->getLabelInstanceCountPtr(),
-      *integrator_->getLabelsFrameCountPtr(),
+      integrator_->getInstanceLabelFusionPtr(),
+      integrator_->getSemanticLabelFusionPtr(),
       *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::InstanceColor,
       &remesh));
   mesh_merged_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_merged_layer_.get(), all_semantic_labels_,
-      *integrator_->getLabelClassCountPtr(),
-      *integrator_->getLabelInstanceCountPtr(),
-      *integrator_->getLabelsFrameCountPtr(),
+      integrator_->getInstanceLabelFusionPtr(),
+      integrator_->getSemanticLabelFusionPtr(),
       *integrator_->getLabelsAgeMapPtr(),
       MeshLabelIntegrator::GeometricInstanceColor, &remesh));
 
   // Visualization settings.
   bool visualize = false;
-  node_handle_private_->param<bool>("visualize", visualize, visualize);
+  node_handle_private_->param<bool>("meshing/visualize", visualize, visualize);
   if (visualize) {
     // std::thread visualizerThread(visualizeMesh, std::ref(*mesh_layer_),
     // "GSM Labels");
@@ -603,13 +598,12 @@ void Controller::segmentPointCloudCallback(
     constexpr bool kIsFreespacePointcloud = false;
 
     start = ros::WallTime::now();
-
     {
       timing::Timer integrate_timer("integrate_frame_pointclouds");
       std::lock_guard<std::mutex> updatedMeshLock(updateMeshMutex);
       for (const auto& segment : segments_to_integrate_) {
         integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                         segment->colors_, segment->labels_,
+                                         segment->colors_, segment->label_,
                                          kIsFreespacePointcloud);
       }
       integrate_timer.Stop();
@@ -712,7 +706,6 @@ void Controller::segmentPointCloudCallback(
 
     integrator_->computeSegmentLabelCandidates(
         segment, &segment_label_candidates, &segment_merge_candidates_);
-
     label_candidates_timer.Stop();
     //     "Comput
     // ros::WallTime end = ros::WallTime::now();
@@ -996,7 +989,7 @@ bool Controller::publishObjects(const bool publish_all) {
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.object.semantic_label =
-        utils::getSemanticLabel(*label_class_count_ptr_, label);
+        integrator_->getSemanticLabelFusionPtr()->getSemanticLabel(label);
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
     transform.translation.x = origin_shifted_tsdf_layer_W[0];

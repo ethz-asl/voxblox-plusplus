@@ -3,11 +3,11 @@ world_frame_id: "world"
 camera_frame_id: "depth"
 scene_gsm_update_topic: "scene_update"
 segment_gsm_update_topic: "gsm_update"
-segment_flushing_age_threshold: 6
+max_segment_age: 6
 validate_merged_object: "validate_merged_object"
 enable_pairwise_confidence_merging: false
-pairwise_confidence_ratio_threshold: 0.2
-pairwise_confidence_count_threshold: 30
+merging_min_overlap_ratio: 0.2
+merging_min_frame_count: 30
 mesh_filename: "gsm_tango_mesh.ply"
 publish_segment_mesh: false
 publish_scene_mesh: false

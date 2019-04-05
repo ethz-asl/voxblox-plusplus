@@ -1,10 +1,7 @@
 #ifndef GLOBAL_SEGMENT_MAP_LABEL_TSDF_INTEGRATOR_H_
 #define GLOBAL_SEGMENT_MAP_LABEL_TSDF_INTEGRATOR_H_
 
-#include <algorithm>
-#include <list>
 #include <map>
-#include <utility>
 #include <vector>
 
 #include <glog/logging.h>
@@ -15,16 +12,16 @@
 #include <voxblox/utils/timing.h>
 
 #include "global_segment_map/label_tsdf_map.h"
-#include "global_segment_map/label_voxel.h"
+#include "global_segment_map/utils/label_utils.h"
 
 namespace voxblox {
 
 class Segment {
  public:
-  voxblox::Pointcloud points_C_;
   voxblox::Transformation T_G_C_;
+  voxblox::Pointcloud points_C_;
   voxblox::Colors colors_;
-  voxblox::Labels labels_;
+  voxblox::Label label_;
   voxblox::SemanticLabel semantic_label_;
   voxblox::InstanceLabel instance_label_;
 };
@@ -34,35 +31,26 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   typedef LongIndexHashMapType<AlignedVector<size_t>>::type VoxelMap;
   typedef VoxelMap::value_type VoxelMapElement;
-  typedef std::map<Label, int> LMap;
-  typedef std::map<Label, int>::iterator LMapIt;
-  typedef std::map<SemanticLabel, int> SLMap;
-  typedef std::map<Label, LMap> LLMap;
-  typedef std::map<Label, LMap>::iterator LLMapIt;
-  typedef std::map<Label, SLMap> LSLMap;
-  typedef std::set<Label> LSet;
-  typedef std::set<Label>::iterator LSetIt;
-  typedef std::map<Label, LSet> LLSet;
-  typedef std::map<Label, LSet>::iterator LLSetIt;
 
   struct LabelTsdfConfig {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+    // Label propagation parameters.
     // TODO(margaritaG): maybe use a relative measure, not absolue voxel count.
     // Minimum number of label voxels count for label propagation.
     size_t min_label_voxel_count = 20;
-    // Factor determining the label propagation truncation distance.
+    // Truncation distance factor for label propagation.
     float label_propagation_td_factor = 1.0;
 
     // Pairwise confidence-based segment merging logic.
     bool enable_pairwise_confidence_merging = true;
-    float pairwise_confidence_ratio_threshold = 0.2f;
-    int pairwise_confidence_count_threshold = 30;
+    float merging_min_overlap_ratio = 0.2f;
+    int merging_min_frame_count = 30;
 
     // Object database logic.
     // Number of frames after which the updated
     // objects are published.
-    int segment_flushing_age_threshold = 3;
+    int max_segment_age = 3;
 
     // Distance-based log-normal distribution of label confidence weights.
     bool enable_confidence_weight_dropoff = false;
@@ -71,12 +59,53 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     float lognormal_weight_offset = 0.7f;
   };
 
-  LabelTsdfIntegrator(const Config& config,
+  LabelTsdfIntegrator(const Config& tsdf_config,
                       const LabelTsdfConfig& label_tsdf_config,
                       Layer<TsdfVoxel>* tsdf_layer,
                       Layer<LabelVoxel>* label_layer, Label* highest_label,
                       InstanceLabel* highest_instance);
 
+  // Label propagation.
+  void computeSegmentLabelCandidates(
+      Segment* segment, std::map<Label, std::map<Segment*, size_t>>* candidates,
+      std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
+      const std::set<Label>& assigned_labels = std::set<Label>());
+
+  void decideLabelPointClouds(
+      std::vector<voxblox::Segment*>* segments_to_integrate,
+      std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
+      std::map<Segment*, std::vector<Label>>* segment_merge_candidates);
+
+  // Segment integration.
+  void integratePointCloud(const Transformation& T_G_C,
+                           const Pointcloud& points_C, const Colors& colors,
+                           const Label& label, const bool freespace_points);
+
+  // Segment merging.
+  // Not thread safe.
+  void mergeLabels(LLSet* merges_to_publish);
+
+  // Get the list of all labels
+  // for which the voxel count is greater than 0.
+  std::vector<Label> getLabelsList();
+
+  inline utils::InstanceLabelFusion* getInstanceLabelFusionPtr() {
+    return &instance_label_fusion_;
+  }
+
+  inline utils::SemanticLabelFusion* getSemanticLabelFusionPtr() {
+    return &semantic_label_fusion_;
+  }
+
+  // Object database.
+  void getLabelsToPublish(
+      std::vector<voxblox::Label>* segment_labels_to_publish);
+
+  // TODO(grinvalm): not used, either fix or remove.
+  inline LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
+
+ protected:
+  // Label propagation.
   void checkForSegmentLabelMergeCandidate(
       Label label, int label_points_count, int segment_points_count,
       std::unordered_set<Label>* merge_candidate_labels);
@@ -98,11 +127,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
                                const LabelConfidence& confidence,
                                LabelVoxel* label_voxel);
 
-  void computeSegmentLabelCandidates(
-      Segment* segment, std::map<Label, std::map<Segment*, size_t>>* candidates,
-      std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
-      const std::set<Label>& assigned_labels = std::set<Label>());
-
   // Fetch the next segment label pair which has overall
   // the highest voxel count.
   bool getNextSegmentLabelPair(
@@ -111,19 +135,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
       std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
       std::pair<Segment*, Label>* segment_label_pair);
-
-  void decideLabelPointClouds(
-      std::vector<voxblox::Segment*>* segments_to_integrate,
-      std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
-      std::map<Segment*, std::vector<Label>>* segment_merge_candidates);
-
-  inline SemanticLabel getLabelInstance(const Label& label) {
-    std::set<SemanticLabel> assigned_instances;
-    return getLabelInstance(label, assigned_instances);
-  }
-
-  SemanticLabel getLabelInstance(const Label& label,
-                                 std::set<SemanticLabel>& assigned_instances);
 
   void increaseLabelFramesCount(const Label& label);
 
@@ -146,40 +157,35 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // NOT thread safe
   void updateLabelLayerWithStoredBlocks();
 
-  void increaseLabelInstanceCount(const Label& label,
-                                  const SemanticLabel& instance_label);
-
   void decreaseLabelInstanceCount(const Label& label,
                                   const SemanticLabel& instance_label);
-
-  void increaseLabelClassCount(const Label& label,
-                               const SemanticLabel& semantic_label);
 
   // Updates label_voxel. Thread safe.
   void updateLabelVoxel(const Point& point_G, const Label& label,
                         LabelVoxel* label_voxel,
                         const LabelConfidence& confidence = 1u);
 
-  void integratePointCloud(const Transformation& T_G_C,
-                           const Pointcloud& points_C, const Colors& colors,
-                           const Labels& labels, const bool freespace_points);
+  void integrateVoxel(
+      const Transformation& T_G_C, const Pointcloud& points_C,
+      const Colors& colors, const Label& label, const bool enable_anti_grazing,
+      const bool clearing_ray,
+      const VoxelMapElement& global_voxel_idx_to_point_indices,
+      const LongIndexHashMapType<AlignedVector<size_t>>::type& voxel_map);
 
-  void integrateVoxel(const Transformation& T_G_C, const Pointcloud& points_C,
-                      const Colors& colors, const Labels& labels,
-                      const bool enable_anti_grazing, const bool clearing_ray,
-                      const VoxelMapElement& global_voxel_idx_to_point_indices,
-                      const VoxelMap& voxel_map);
+  void integrateVoxels(
+      const Transformation& T_G_C, const Pointcloud& points_C,
+      const Colors& colors, const Label& label, const bool enable_anti_grazing,
+      const bool clearing_ray,
+      const LongIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
+      const LongIndexHashMapType<AlignedVector<size_t>>::type& clear_map,
+      const size_t thread_idx);
 
-  void integrateVoxels(const Transformation& T_G_C, const Pointcloud& points_C,
-                       const Colors& colors, const Labels& labels,
-                       const bool enable_anti_grazing, const bool clearing_ray,
-                       const VoxelMap& voxel_map, const VoxelMap& clear_map,
-                       const size_t thread_idx);
-
-  void integrateRays(const Transformation& T_G_C, const Pointcloud& points_C,
-                     const Colors& colors, const Labels& labels,
-                     const bool enable_anti_grazing, const bool clearing_ray,
-                     const VoxelMap& voxel_map, const VoxelMap& clear_map);
+  void integrateRays(
+      const Transformation& T_G_C, const Pointcloud& points_C,
+      const Colors& colors, const Label& label, const bool enable_anti_grazing,
+      const bool clearing_ray,
+      const LongIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
+      const LongIndexHashMapType<AlignedVector<size_t>>::type& clear_map);
 
   FloatingPoint computeConfidenceWeight(FloatingPoint distance);
 
@@ -192,26 +198,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void resetCurrentFrameUpdatedLabelsAge();
 
-  void getLabelsToPublish(
-      std::vector<voxblox::Label>* segment_labels_to_publish);
-
-  inline LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
-
-  inline LSLMap* getLabelClassCountPtr() { return &label_class_count_; }
-
-  inline LSLMap* getLabelInstanceCountPtr() { return &label_instance_count_; }
-
-  inline LMap* getLabelsFrameCountPtr() { return &label_frames_count_; }
-
   void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label, int count);
 
   void adjustPairwiseConfidenceAfterMerging(const Label& new_label,
                                             const Label& old_label);
 
   bool getNextMerge(Label* new_label, Label* old_label);
-
-  // Not thread safe.
-  void mergeLabels(LLSet* merges_to_publish);
 
   Label getFreshLabel() {
     CHECK_LT(*highest_label_, std::numeric_limits<unsigned short>::max());
@@ -223,11 +215,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     return ++(*highest_instance_);
   }
 
-  // Get the list of all labels
-  // for which the voxel count is greater than 0.
-  std::vector<Label> getLabelsList();
-
- protected:
   LabelTsdfConfig label_tsdf_config_;
   Layer<LabelVoxel>* label_layer_;
 
@@ -242,13 +229,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // Pairwise confidence merging.
   LLMap pairwise_confidence_;
 
-  // Per frame voxel count of semantic label.
-  LSLMap label_class_count_;
+  utils::SemanticLabelFusion semantic_label_fusion_;
+  utils::InstanceLabelFusion instance_label_fusion_;
 
   InstanceLabel* highest_instance_;
   std::map<SemanticLabel, SemanticLabel> current_to_global_instance_map_;
-  LSLMap label_instance_count_;
-  LMap label_frames_count_;
 
   // We need to prevent simultaneous access to the voxels in the map. We
   // could
@@ -268,7 +253,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   std::set<Label> updated_labels_;
 
   LMap labels_to_publish_;
-};  // namespace voxblox
+};
 
 }  // namespace voxblox
 
