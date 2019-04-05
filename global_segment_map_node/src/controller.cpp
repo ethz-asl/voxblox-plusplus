@@ -267,13 +267,16 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrated_frames_count_(0u),
       tf_listener_(ros::Duration(1000)),
       world_frame_("world"),
+      camera_frame_(""),
       no_update_timeout_(0.0),
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
       received_first_message_(false) {
   CHECK_NOTNULL(node_handle_private_);
-  node_handle_private_->param<std::string>("world_frame_id", world_frame_,
+  node_handle_private_->param<std::string>("world_frame_id", camera_frame_,
                                            world_frame_);
+  node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
+                                           camera_frame_);
 
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
@@ -651,10 +654,14 @@ void Controller::segmentPointCloudCallback(
 
   // Look up transform from camera frame to world frame.
   Transformation T_G_C;
-  // if (lookupTransform(segment_point_cloud_msg->header.frame_id, world_frame_,
-  //                     segment_point_cloud_msg->header.stamp, &T_G_C)) {
-  if (lookupTransform("scenenn_camera_frame", world_frame_,
+  std::string from_frame = camera_frame_;
+  if (camera_frame_.empty()) {
+    from_frame = segment_point_cloud_msg->header.frame_id;
+  }
+  if (lookupTransform(from_frame, world_frame_,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {
+    // if (lookupTransform("scenenn_camera_frame", world_frame_,
+    //                     segment_point_cloud_msg->header.stamp, &T_G_C)) {
     Segment* segment = new Segment();
     segments_to_integrate_.push_back(segment);
 

@@ -106,6 +106,18 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
  protected:
   // Label propagation.
+  // Fetch the next segment label pair which has overall
+  // the highest voxel count.
+  bool getNextSegmentLabelPair(
+      const std::set<Segment*>& labelled_segments,
+      std::set<Label>* assigned_labels,
+      std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
+      std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
+      std::pair<Segment*, Label>* segment_label_pair);
+
+  Label getNextUnassignedLabel(const LabelVoxel& voxel,
+                               const std::set<Label>& assigned_labels);
+
   void checkForSegmentLabelMergeCandidate(
       Label label, int label_points_count, int segment_points_count,
       std::unordered_set<Label>* merge_candidate_labels);
@@ -117,24 +129,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void increasePairwiseConfidenceCount(std::vector<Label> merge_candidates);
 
-  Label getNextUnassignedLabel(const LabelVoxel& voxel,
-                               const std::set<Label>& assigned_labels);
-
   void updateVoxelLabelAndConfidence(LabelVoxel* label_voxel,
                                      const Label& preferred_label = 0u);
 
   void addVoxelLabelConfidence(const Label& label,
                                const LabelConfidence& confidence,
                                LabelVoxel* label_voxel);
-
-  // Fetch the next segment label pair which has overall
-  // the highest voxel count.
-  bool getNextSegmentLabelPair(
-      const std::set<Segment*>& labelled_segments,
-      std::set<Label>* assigned_labels,
-      std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
-      std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
-      std::pair<Segment*, Label>* segment_label_pair);
 
   void increaseLabelFramesCount(const Label& label);
 
@@ -156,9 +156,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // NOT thread safe
   void updateLabelLayerWithStoredBlocks();
-
-  void decreaseLabelInstanceCount(const Label& label,
-                                  const SemanticLabel& instance_label);
 
   // Updates label_voxel. Thread safe.
   void updateLabelVoxel(const Point& point_G, const Label& label,

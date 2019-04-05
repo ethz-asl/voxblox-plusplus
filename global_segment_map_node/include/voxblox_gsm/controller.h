@@ -131,6 +131,7 @@ class Controller {
   size_t integrated_frames_count_;
 
   std::string world_frame_;
+  std::string camera_frame_;
 
   // TODO(margaritaG): make this optional.
   // Shutdown logic: if no messages are received for X amount of time,
