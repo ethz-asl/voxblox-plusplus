@@ -436,6 +436,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         // }
       }
     }
+
+    mesh->updated = true;
   }
 
   void updateMeshColor(const Block<LabelVoxel>& label_block, Mesh* mesh) {
