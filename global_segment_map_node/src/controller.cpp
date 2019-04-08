@@ -1165,10 +1165,10 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       remesh = false;
     }
     bool clear_updated_flag = false;
-    // updatedMesh |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-    //                                               clear_updated_flag);
-    // updatedMesh |= mesh_instance_integrator_->generateMesh(
-    //     only_mesh_updated_blocks, clear_updated_flag);
+    updatedMesh |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+    updatedMesh |= mesh_instance_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
 
     updatedMesh |= mesh_merged_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);

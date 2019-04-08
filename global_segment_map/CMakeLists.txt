@@ -12,7 +12,7 @@ cs_add_library(${PROJECT_NAME}
   src/label_fusion.cc
   src/label_merge_integrator.cc
   src/label_tsdf_integrator.cc
-  src/utils/color_map.cc
+  src/utils/semantic_color_map.cc
   src/utils/label_utils.cc
 )
 
