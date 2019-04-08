@@ -101,9 +101,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void getLabelsToPublish(
       std::vector<voxblox::Label>* segment_labels_to_publish);
 
-  // TODO(grinvalm): not used, either fix or remove.
-  inline LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
-
  protected:
   // Label propagation.
   // Fetch the next segment label pair which has overall

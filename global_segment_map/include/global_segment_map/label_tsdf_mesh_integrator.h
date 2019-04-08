@@ -32,7 +32,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       std::set<SemanticLabel>& all_semantic_labels,
       const utils::InstanceLabelFusion* instance_label_fusion = nullptr,
       const utils::SemanticLabelFusion* semantic_label_fusion = nullptr,
-      const std::map<Label, int>& label_age_map = {},
       ColorScheme color_scheme = LabelColor, bool* remesh = nullptr,
       SemanticColorMap::SemanticColor semantic_color_mode =
           SemanticColorMap::kCoco)
@@ -42,7 +41,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         instance_label_fusion_ptr_(instance_label_fusion),
         semantic_label_fusion_ptr_(semantic_label_fusion),
         all_semantic_labels_ptr_(&all_semantic_labels),
-        label_age_map_ptr_(&label_age_map),
         color_scheme_(color_scheme),
         color_map_(SemanticColorMap::create(semantic_color_mode)),
         remesh_ptr_(remesh) {
@@ -57,7 +55,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       std::set<SemanticLabel>& all_semantic_labels,
       const utils::InstanceLabelFusion* instance_label_fusion = nullptr,
       const utils::SemanticLabelFusion* semantic_label_fusion = nullptr,
-      const std::map<Label, int>& label_age_map = {},
       ColorScheme color_scheme = LabelColor, bool* remesh = nullptr,
       SemanticColorMap::SemanticColor semantic_color_mode =
           SemanticColorMap::kCoco)
@@ -67,7 +64,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         instance_label_fusion_ptr_(instance_label_fusion),
         semantic_label_fusion_ptr_(semantic_label_fusion),
         all_semantic_labels_ptr_(&all_semantic_labels),
-        label_age_map_ptr_(&label_age_map),
         color_scheme_(color_scheme),
         color_map_(SemanticColorMap::create(semantic_color_mode)),
         remesh_ptr_(remesh) {
@@ -116,24 +112,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     for (std::thread& thread : integration_threads) {
       thread.join();
     }
-
-    // // Allocate all the mesh memory
-    // for (const BlockIndex& block_index : all_label_blocks) {
-    //   mesh_layer_->allocateMeshPtrByIndex(block_index);
-    // }
-    //
-    // ThreadSafeIndex index_getter_labels(all_label_blocks.size());
-    //
-    // std::list<std::thread> integration_threads_labels;
-    // for (size_t i = 0; i < config_.integrator_threads; ++i) {
-    //   integration_threads_labels.emplace_back(
-    //       &MeshLabelIntegrator::generateMeshBlocksFunction, this,
-    //       all_label_blocks, clear_updated_flag, &index_getter_labels);
-    // }
-    //
-    // for (std::thread& thread : integration_threads_labels) {
-    //   thread.join();
-    // }
     return true;
   }
 
@@ -215,41 +193,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
       label_color_map_.insert(std::pair<Label, Color>(label, color));
     }
-
-    // TODO(grinvalm): fix or remove the flushing color visualization below.
-    // if (!label_age_map_ptr_->empty()) {
-    //   std::map<Label, int>::const_iterator label_age_pair_it;
-    //   label_age_pair_it = label_age_map_ptr_->find(label);
-    //   if (label_age_pair_it != label_age_map_ptr_->end()) {
-    //     // color.r = color.r - label_age_pair_it->second * 10;
-    //     // color.g = color.g - label_age_pair_it->second * 10;
-    //     // color.b = color.b - label_age_pair_it->second * 10;
-    //     if (label_age_pair_it->second < 4) {
-    //       color.g = 0;
-    //       // color.a = 255;
-    //     } else if (label_age_pair_it->second > 3) {
-    //       color.r = 0;
-    //       color.g = 255;
-    //       color.b = 0;
-    //     } else {
-    //       // int shade_of_gray = (color.r + color.g + color.b) % 256;
-    //       int shade_of_gray = (color.r + color.g + color.b) % 256;
-    //       color.r = shade_of_gray;
-    //       color.g = shade_of_gray;
-    //       color.b = shade_of_gray;
-    //     }
-    //   } else {
-    //     int shade_of_gray = (color.r + color.g + color.b) % 256;
-    //     color.r = shade_of_gray;
-    //     color.g = shade_of_gray;
-    //     color.b = shade_of_gray;
-    //   }
-    // } else {
-    //   int shade_of_gray = (color.r + color.g + color.b) % 256;
-    //   color.r = shade_of_gray;
-    //   color.g = shade_of_gray;
-    //   color.b = shade_of_gray;
-    // }
     return color;
   }
 
@@ -430,7 +373,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
   std::map<Label, Color> label_color_map_;
   std::map<SemanticLabel, Color> instance_color_map_;
-  const std::map<Label, int>* label_age_map_ptr_;
 
   const utils::InstanceLabelFusion* instance_label_fusion_ptr_;
   const utils::SemanticLabelFusion* semantic_label_fusion_ptr_;

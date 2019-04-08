@@ -19,7 +19,6 @@
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
-#include <visualization_msgs/MarkerArray.h>
 #include <voxblox/core/common.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
@@ -382,29 +381,25 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
-      integrator_->getSemanticLabelFusionPtr(),
-      *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::LabelColor,
+      integrator_->getSemanticLabelFusionPtr(), MeshLabelIntegrator::LabelColor,
       &remesh));
   mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_semantic_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(),
-      *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::SemanticColor,
-      &remesh));
+      MeshLabelIntegrator::SemanticColor, &remesh));
   mesh_instance_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_instance_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(),
-      *integrator_->getLabelsAgeMapPtr(), MeshLabelIntegrator::InstanceColor,
-      &remesh));
+      MeshLabelIntegrator::InstanceColor, &remesh));
   mesh_merged_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_merged_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(),
-      *integrator_->getLabelsAgeMapPtr(),
       MeshLabelIntegrator::GeometricInstanceColor, &remesh));
 
   // Visualization settings.
@@ -464,7 +459,8 @@ void Controller::subscribeSegmentPointCloudTopic(
   node_handle_private_->param<std::string>("segment_point_cloud_topic",
                                            segment_point_cloud_topic,
                                            segment_point_cloud_topic);
-
+  // TODO (margaritaG): make this a param once segments of a frame are
+  // refactored to be received as one single message.
   // Large queue size to give slack to the
   // pipeline and not lose any messages.
   *segment_point_cloud_sub = node_handle_private_->subscribe(
