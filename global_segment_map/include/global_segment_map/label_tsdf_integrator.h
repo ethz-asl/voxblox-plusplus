@@ -11,8 +11,8 @@
 #include <voxblox/integrator/tsdf_integrator.h>
 #include <voxblox/utils/timing.h>
 
+#include "global_segment_map/label_fusion.h"
 #include "global_segment_map/label_tsdf_map.h"
-#include "global_segment_map/utils/label_utils.h"
 
 namespace voxblox {
 

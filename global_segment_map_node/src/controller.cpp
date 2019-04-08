@@ -426,14 +426,15 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     //     "Map");
   }
 
-  node_handle_private_->param<bool>(
-      "publish_segment_mesh", publish_segment_mesh_, publish_segment_mesh_);
-  node_handle_private_->param<bool>("publish_scene_mesh", publish_scene_mesh_,
-                                    publish_scene_mesh_);
+  node_handle_private_->param<bool>("meshing/publish_segment_mesh",
+                                    publish_segment_mesh_,
+                                    publish_segment_mesh_);
+  node_handle_private_->param<bool>("meshing/publish_scene_mesh",
+                                    publish_scene_mesh_, publish_scene_mesh_);
 
   // If set, use a timer to progressively update the mesh.
   double update_mesh_every_n_sec = 0.0;
-  node_handle_private_->param<double>("update_mesh_every_n_sec",
+  node_handle_private_->param<double>("meshing/update_mesh_every_n_sec",
                                       update_mesh_every_n_sec,
                                       update_mesh_every_n_sec);
 
@@ -443,14 +444,14 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
         this);
   }
 
-  node_handle_private_->param<std::string>("mesh_filename", mesh_filename_,
-                                           mesh_filename_);
+  node_handle_private_->param<std::string>("meshing/mesh_filename",
+                                           mesh_filename_, mesh_filename_);
 
-  node_handle_private_->param<bool>("publish_gsm_updates", publish_gsm_updates_,
-                                    publish_gsm_updates_);
+  node_handle_private_->param<bool>("object_database/publish_gsm_updates",
+                                    publish_gsm_updates_, publish_gsm_updates_);
 
-  node_handle_private_->param<double>("no_update_timeout", no_update_timeout_,
-                                      no_update_timeout_);
+  node_handle_private_->param<double>("object_database/no_update_timeout",
+                                      no_update_timeout_, no_update_timeout_);
 }
 
 Controller::~Controller() { viz_thread_.join(); }

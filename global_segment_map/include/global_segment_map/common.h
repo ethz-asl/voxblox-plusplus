@@ -1,6 +1,8 @@
 #ifndef GLOBAL_SEGMENT_MAP_COMMON_H_
 #define GLOBAL_SEGMENT_MAP_COMMON_H_
 
+#include <map>
+
 #include <pcl/point_types.h>
 
 #include "voxblox/core/common.h"

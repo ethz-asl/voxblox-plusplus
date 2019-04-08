@@ -12,7 +12,7 @@
 #include <voxblox/mesh/mesh_integrator.h>
 
 #include "global_segment_map/label_voxel.h"
-#include "global_segment_map/utils/label_utils.h"
+#include "global_segment_map/utils/color_map.h"
 
 namespace voxblox {
 
@@ -33,7 +33,9 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       const utils::InstanceLabelFusion* instance_label_fusion = nullptr,
       const utils::SemanticLabelFusion* semantic_label_fusion = nullptr,
       const std::map<Label, int>& label_age_map = {},
-      ColorScheme color_scheme = LabelColor, bool* remesh = nullptr)
+      ColorScheme color_scheme = LabelColor, bool* remesh = nullptr,
+      SemanticColorMap::SemanticColor semantic_color_mode =
+          SemanticColorMap::kNyu13)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_ptr_(CHECK_NOTNULL(label_layer)),
         label_layer_const_ptr_(CHECK_NOTNULL(label_layer)),
@@ -42,6 +44,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         all_semantic_labels_ptr_(&all_semantic_labels),
         label_age_map_ptr_(&label_age_map),
         color_scheme_(color_scheme),
+        color_map_(SemanticColorMap::create(semantic_color_mode)),
         remesh_ptr_(remesh) {
     if (remesh_ptr_ == nullptr) {
       remesh_ptr_ = &remesh_;
@@ -55,7 +58,9 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       const utils::InstanceLabelFusion* instance_label_fusion = nullptr,
       const utils::SemanticLabelFusion* semantic_label_fusion = nullptr,
       const std::map<Label, int>& label_age_map = {},
-      ColorScheme color_scheme = LabelColor, bool* remesh = nullptr)
+      ColorScheme color_scheme = LabelColor, bool* remesh = nullptr,
+      SemanticColorMap::SemanticColor semantic_color_mode =
+          SemanticColorMap::kNyu13)
       : MeshIntegrator(config, tsdf_layer, mesh_layer),
         label_layer_mutable_ptr_(nullptr),
         label_layer_const_ptr_(CHECK_NOTNULL(&label_layer)),
@@ -64,6 +69,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         all_semantic_labels_ptr_(&all_semantic_labels),
         label_age_map_ptr_(&label_age_map),
         color_scheme_(color_scheme),
+        color_map_(SemanticColorMap::create(semantic_color_mode)),
         remesh_ptr_(remesh) {
     if (remesh_ptr_ == nullptr) {
       remesh_ptr_ = &remesh_;
@@ -268,11 +274,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   }
 
   Color getColorFromSemanticLabel(const SemanticLabel& semantic_label) {
-    std::vector<std::array<float, 3>> nyu_color_code{
-        {200, 200, 200}, {20, 20, 20},    {0, 128, 128},   {250, 50, 50},
-        {102, 0, 204},   {50, 50, 250},   {220, 220, 220}, {255, 69, 20},
-        {255, 20, 127},  {50, 50, 150},   {222, 180, 140}, {50, 250, 50},
-        {255, 215, 0},   {150, 150, 150}, {0, 255, 255}};
+    color_map_.getColor(semantic_label);
 
     std::vector<std::array<float, 3>> coco_color_code{
         {200, 200, 200}, {128, 0, 0},    {0, 128, 0},    {128, 128, 0},
@@ -557,6 +559,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   // construction time.
   bool remesh_ = false;
   std::map<Label, SemanticLabel> label_instance_map_;
+
+  SemanticColorMap color_map_;
 };
 
 }  // namespace voxblox
