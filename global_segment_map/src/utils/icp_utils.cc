@@ -1,4 +1,4 @@
-#include "global_segment_map/icp_utils.h"
+#include "global_segment_map/utils/icp_utils.h"
 
 #include <gflags/gflags.h>
 
@@ -27,6 +27,7 @@ DEFINE_double(icp_inital_rotation_weighting, 100,
               "guess. See inital_translation_weighting for further details");
 
 namespace voxblox {
+
 ICP::Config getICPConfigFromGflags() {
   ICP::Config icp_config;
 

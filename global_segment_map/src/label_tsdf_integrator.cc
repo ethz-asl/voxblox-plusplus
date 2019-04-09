@@ -55,8 +55,55 @@ LabelTsdfIntegrator::LabelTsdfIntegrator(
       label_tsdf_config_(label_tsdf_config),
       label_layer_(CHECK_NOTNULL(label_layer)),
       highest_label_(CHECK_NOTNULL(highest_label)),
-      highest_instance_(CHECK_NOTNULL(highest_instance)) {
+      highest_instance_(CHECK_NOTNULL(highest_instance)),
+      icp_(new ICP(getICPConfigFromGflags())) {
   CHECK(label_layer_);
+  T_G_G_icp_.setIdentity();
+}
+
+// Pose tracking.
+Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
+    const Transformation& T_G_C_init, const Pointcloud& point_cloud) {
+  // TODO(ff): We should actually check here
+  // how many blocks are in the
+  // camera frustum.
+  if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
+    return T_G_C_init;
+  }
+  Transformation T_G_C_icp;
+  timing::Timer icp_timer("icp");
+  if (!label_tsdf_config_.keep_track_of_icp_correction) {
+    T_G_G_icp_.setIdentity();
+  }
+
+  const size_t num_icp_updates =
+      icp_->runICP(*layer_, point_cloud, T_G_G_icp_ * T_G_C_init, &T_G_C_icp);
+  if (num_icp_updates == 0u || num_icp_updates > 25u) {
+    LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
+               << num_icp_updates << ", using T_G_C_init.";
+    return T_G_C_init;
+  }
+  LOG(ERROR) << "ICP refinement performed " << num_icp_updates
+             << " successful update steps.";
+  T_G_G_icp_ = T_G_C_icp * T_G_C_init.inverse();
+
+  if (!label_tsdf_config_.keep_track_of_icp_correction) {
+    VLOG(3) << "Current ICP refinement offset: T_Gicp_G: " << T_G_G_icp_;
+  } else {
+    VLOG(3) << "ICP refinement for this pointcloud: T_Gicp_G: " << T_G_G_icp_;
+  }
+
+  if (!icp_->refiningRollPitch()) {
+    // its already removed internally but small floating point errors can
+    // build up if accumulating transforms
+    Transformation::Vector6 vec_T_Gicp_G = T_G_G_icp_.log();
+    vec_T_Gicp_G[3] = 0.0;
+    vec_T_Gicp_G[4] = 0.0;
+    T_G_G_icp_ = Transformation::exp(vec_T_Gicp_G);
+  }
+
+  icp_timer.Stop();
+  return T_G_C_icp;
 }
 
 void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(

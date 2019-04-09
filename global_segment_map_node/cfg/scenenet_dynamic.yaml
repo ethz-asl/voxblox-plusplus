@@ -1,6 +1,7 @@
 segment_point_cloud_topic: "/scenenet_node/object_segment"
 world_frame_id: "world"
 camera_frame_id: "scenenet_camera_frame"
+enable_icp: true
 
 voxblox:
   voxel_size: 0.01

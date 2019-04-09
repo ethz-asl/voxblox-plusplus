@@ -228,9 +228,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config_.max_segment_age,
       label_tsdf_integrator_config_.max_segment_age);
 
-  node_handle_private_->param<bool>("enable_icp",
-                                    label_tsdf_integrator_config.enable_icp,
-                                    label_tsdf_integrator_config.enable_icp);
+  node_handle_private_->param<bool>("enable_icp", enable_icp_, enable_icp_);
   node_handle_private_->param<bool>(
       "keep_track_of_icp_correction",
       label_tsdf_integrator_config.keep_track_of_icp_correction,
@@ -484,8 +482,29 @@ void Controller::segmentPointCloudCallback(
     start = ros::WallTime::now();
     {
       timing::Timer integrate_timer("integrate_frame_pointclouds");
+      // TODO(margaritaG) : mvoe this below.
       std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
+
+      Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+      Pointcloud point_cloud_all_segments_t;
+
       for (const auto& segment : segments_to_integrate_) {
+        // Concatenate point clouds. (NOTE(ff): We should probably just use the
+        // original cloud here instead.)
+        Pointcloud::iterator it = point_cloud_all_segments_t.end();
+        point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
+                                          segment->points_C_.end());
+      }
+
+      Transformation T_G_C_icp = T_G_C;
+
+      if (enable_icp_) {
+        T_G_C_icp =
+            integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
+      }
+
+      for (const auto& segment : segments_to_integrate_) {
+        segment->T_G_C_ = T_G_C_icp;
         integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                          segment->colors_, segment->label_,
                                          kIsFreespacePointcloud);

@@ -201,6 +201,9 @@ class Controller {
   std::map<Label, std::set<Label>> merges_to_publish_;
   std::set<Label> all_published_segments_;
 
+  // Pose tracking.
+  bool enable_icp_;
+
   std::thread viz_thread_;
   Visualizer* visualizer_;
   std::mutex updated_mesh_mutex_;

@@ -15,6 +15,7 @@
 #include "global_segment_map/common.h"
 #include "global_segment_map/label_fusion.h"
 #include "global_segment_map/label_tsdf_map.h"
+#include "global_segment_map/utils/icp_utils.h"
 
 namespace voxblox {
 
@@ -70,7 +71,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     float lognormal_weight_offset = 0.7f;
 
     // ICP params.
-    bool enable_icp = true;
     bool keep_track_of_icp_correction = true;
   };
 
@@ -79,6 +79,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
                       Layer<TsdfVoxel>* tsdf_layer,
                       Layer<LabelVoxel>* label_layer, Label* highest_label,
                       InstanceLabel* highest_instance);
+
+  // Pose tracking.
+  Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
+                                     const Pointcloud& point_cloud);
 
   // Label propagation.
   void computeSegmentLabelCandidates(
@@ -263,6 +267,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Object database.
   LMap labels_to_publish_;
+
+  // ICP variables.
+  std::shared_ptr<ICP> icp_;
+  Transformation T_G_G_icp_;
 };
 
 }  // namespace voxblox
