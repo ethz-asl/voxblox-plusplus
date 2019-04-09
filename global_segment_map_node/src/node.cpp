@@ -56,8 +56,13 @@ int main(int argc, char** argv) {
   }
 
   ros::Publisher tsdf_slice_publisher;
-  if (controller->publish_tsdf_slice_) {
+  ros::Publisher tsdf_publisher;
+  ros::Publisher label_tsdf_publisher;
+
+  if (controller->publish_pointclouds_) {
     controller->advertiseTsdfSliceTopic(&tsdf_slice_publisher);
+    controller->advertiseTsdfTopic(&tsdf_publisher);
+    controller->advertiseLabelTsdfTopic(&label_tsdf_publisher);
   }
 
   ros::ServiceServer publish_scene_srv;

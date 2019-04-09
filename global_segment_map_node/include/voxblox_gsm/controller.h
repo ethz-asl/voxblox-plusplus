@@ -55,6 +55,10 @@ class Controller {
 
   void advertiseTsdfSliceTopic(ros::Publisher* tsdf_slice_pub);
 
+  void advertiseTsdfTopic(ros::Publisher* tsdf_pub);
+
+  void advertiseLabelTsdfTopic(ros::Publisher* label_tsdf_pub);
+
   void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
   void validateMergedObjectService(
@@ -75,6 +79,8 @@ class Controller {
                                   uint32_t level);
 
   void publishTsdfSlice();
+  void publishTsdf();
+  void publishLabelTsdf();
 
   bool publishObjects(const bool publish_all = false);
 
@@ -86,7 +92,7 @@ class Controller {
 
   bool publish_scene_mesh_;
   bool publish_segment_mesh_;
-  bool publish_tsdf_slice_;
+  bool publish_pointclouds_;
 
   double no_update_timeout_;
 
@@ -124,7 +130,7 @@ class Controller {
                        const std::string& to_frame, const ros::Time& timestamp,
                        Transformation* transform);
 
-  void generateMesh(bool clear_mesh);
+  void generateMesh();
 
   void updateMeshEvent(const ros::TimerEvent& e);
 
@@ -163,6 +169,8 @@ class Controller {
   MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
   std::string mesh_filename_;
   ros::Publisher* tsdf_slice_pub_;
+  ros::Publisher* tsdf_pub_;
+  ros::Publisher* label_tsdf_pub_;
   /// Pointcloud visualization settings.
   double slice_level_x_;
   double slice_level_y_;

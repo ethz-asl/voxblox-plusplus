@@ -14,6 +14,7 @@
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/file_utils.h>
 #include <global_segment_map/utils/label_utils.h>
+#include <global_segment_map/utils/visualization.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 
@@ -127,6 +128,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
       received_first_message_(false),
+      publish_pointclouds_(false),
       updated_mesh_(false) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", camera_frame_,
@@ -306,15 +308,14 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<std::string>("meshing/mesh_filename",
                                            mesh_filename_, mesh_filename_);
 
-  node_handle_private_->param<bool>("visualization/publish_tsdf_slice",
-                                    publish_tsdf_slice_, publish_tsdf_slice_);
+  node_handle_private_->param<bool>("meshing/publish_pointclouds",
+                                    publish_pointclouds_, publish_pointclouds_);
 
   node_handle_private_->param<bool>("object_database/publish_gsm_updates",
                                     publish_gsm_updates_, publish_gsm_updates_);
 
   node_handle_private_->param<double>("object_database/no_update_timeout",
                                       no_update_timeout_, no_update_timeout_);
-  // ros::spinOnce();
 }
 
 Controller::~Controller() { viz_thread_.join(); }
@@ -404,6 +405,21 @@ void Controller::advertiseTsdfSliceTopic(ros::Publisher* tsdf_slice_pub) {
           "tsdf_slice", 1, true);
 
   tsdf_slice_pub_ = tsdf_slice_pub;
+}
+
+void Controller::advertiseTsdfTopic(ros::Publisher* tsdf_pub) {
+  *tsdf_pub = node_handle_private_->advertise<pcl::PointCloud<pcl::PointXYZI>>(
+      "tsdf", 1, true);
+
+  tsdf_pub_ = tsdf_pub;
+}
+
+void Controller::advertiseLabelTsdfTopic(ros::Publisher* label_tsdf_pub) {
+  *label_tsdf_pub =
+      node_handle_private_->advertise<pcl::PointCloud<pcl::PointXYZI>>(
+          "label_tsdf", 1, true);
+
+  label_tsdf_pub_ = label_tsdf_pub;
 }
 
 void Controller::validateMergedObjectService(
@@ -571,8 +587,7 @@ bool Controller::publishSceneCallback(std_srvs::SetBool::Request& request,
                                       std_srvs::SetBool::Response& response) {
   bool save_scene_mesh = request.data;
   if (save_scene_mesh) {
-    constexpr bool kClearMesh = true;
-    generateMesh(kClearMesh);
+    generateMesh();
   }
   publishScene();
   constexpr bool kPublishAllSegments = true;
@@ -621,8 +636,7 @@ bool Controller::validateMergedObjectCallback(
 bool Controller::generateMeshCallback(
     std_srvs::Empty::Request& request,
     std_srvs::Empty::Response& response) {  // NOLINT
-  constexpr bool kClearMesh = true;
-  generateMesh(kClearMesh);
+  generateMesh();
   return true;
 }
 
@@ -772,27 +786,44 @@ void Controller::publishTsdfSlice() {
   pcl::PointCloud<pcl::PointXYZI> pointcloud;
 
   createDistancePointcloudFromTsdfLayer(map_->getTsdfLayer(), &pointcloud);
+  pcl::PointCloud<pcl::PointXYZI> pointcloud_x;
+  pcl::PointCloud<pcl::PointXYZI> pointcloud_y;
+  pcl::PointCloud<pcl::PointXYZI> pointcloud_z;
+
+  createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 0,
+                                             slice_level_x_, &pointcloud_x);
+  createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 1,
+                                             slice_level_y_, &pointcloud_y);
+  createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 2,
+                                             slice_level_z_, &pointcloud_z);
+
+  pointcloud_x.header.frame_id = world_frame_;
+  pointcloud_y.header.frame_id = world_frame_;
+  pointcloud_z.header.frame_id = world_frame_;
+  tsdf_slice_pub_->publish(pointcloud_x);
+  tsdf_slice_pub_->publish(pointcloud_y);
+  tsdf_slice_pub_->publish(pointcloud_z);
+}
+
+void Controller::publishTsdf() {
+  // Create a pointcloud with distance = intensity.
+  pcl::PointCloud<pcl::PointXYZI> pointcloud;
+
+  createDistancePointcloudFromTsdfLayer(map_->getTsdfLayer(), &pointcloud);
 
   pointcloud.header.frame_id = world_frame_;
-  tsdf_slice_pub_->publish(pointcloud);
+  tsdf_pub_->publish(pointcloud);
+}
 
-  // pcl::PointCloud<pcl::PointXYZI> pointcloud_x;
-  // pcl::PointCloud<pcl::PointXYZI> pointcloud_y;
-  // pcl::PointCloud<pcl::PointXYZI> pointcloud_z;
-  //
-  // createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 0,
-  //                                            slice_level_x_, &pointcloud_x);
-  // createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 1,
-  //                                            slice_level_y_, &pointcloud_y);
-  // createDistancePointcloudFromTsdfLayerSlice(map_->getTsdfLayer(), 2,
-  //                                            slice_level_z_, &pointcloud_z);
-  //
-  // pointcloud_x.header.frame_id = world_frame_;
-  // pointcloud_y.header.frame_id = world_frame_;
-  // pointcloud_z.header.frame_id = world_frame_;
-  // tsdf_slice_pub_->publish(pointcloud_x);
-  // tsdf_slice_pub_->publish(pointcloud_y);
-  // tsdf_slice_pub_->publish(pointcloud_z);
+void Controller::publishLabelTsdf() {
+  // Create a pointcloud with distance = intensity.
+  pcl::PointCloud<pcl::PointXYZI> pointcloud;
+
+  createLabelDistancePointcloudFromLabelTsdfLayer(
+      map_->getTsdfLayer(), map_->getLabelLayer(), &pointcloud);
+
+  pointcloud.header.frame_id = world_frame_;
+  label_tsdf_pub_->publish(pointcloud);
 }
 
 // TODO(ff): Create this somewhere:
@@ -957,9 +988,10 @@ void Controller::publishScene() {
   publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
 }
 
-void Controller::generateMesh(bool clear_mesh) {  // NOLINT
+void Controller::generateMesh() {  // NOLINT
   voxblox::timing::Timer generate_mesh_timer("mesh/generate");
   {
+    const bool clear_mesh = true;
     std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
     if (clear_mesh) {
       constexpr bool only_mesh_updated_blocks = false;
@@ -1056,6 +1088,11 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       mesh_msg.header.frame_id = world_frame_;
       scene_mesh_pub_->publish(mesh_msg);
       publish_mesh_timer.Stop();
+    }
+    if (publish_pointclouds_) {
+      publishTsdfSlice();
+      publishTsdf();
+      publishLabelTsdf();
     }
   }
 }  // namespace voxblox_gsm
