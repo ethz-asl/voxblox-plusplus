@@ -12,9 +12,7 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-#include <pcl/common/transforms.h>
 #include <pcl/io/vtk_lib_io.h>
-#include <pcl/kdtree/kdtree.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/Marker.h>
