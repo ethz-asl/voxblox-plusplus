@@ -9,6 +9,7 @@
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_tsdf_mesh_integrator.h>
+#include <global_segment_map/label_voxel.h>
 #include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
 #include <pcl/io/vtk_lib_io.h>
@@ -73,6 +74,11 @@ class Controller {
   double no_update_timeout_;
 
  protected:
+  template <typename point_type = pcl::PointXYZRGB>
+  void fillSegmentWithData(
+      const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
+      Segment* segment);
+
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
@@ -166,7 +172,15 @@ class Controller {
 
   std::map<Label, std::set<Label>> merges_to_publish_;
 };
+
+template <>
+void Controller::fillSegmentWithData<PointSurfelLabel>(
+    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
+    Segment* segment);
+
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
 #endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
+
+#include "voxblox_gsm/controller_inl.h"

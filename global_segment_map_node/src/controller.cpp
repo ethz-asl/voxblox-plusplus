@@ -12,12 +12,9 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-#include <pcl/common/centroid.h>
 #include <pcl/common/transforms.h>
-#include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/kdtree/kdtree.h>
-#include <pcl/segmentation/extract_clusters.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/Marker.h>
@@ -371,6 +368,36 @@ void Controller::advertiseExtractSegmentsService(
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
+template <>
+void Controller::fillSegmentWithData<PointSurfelLabel>(
+    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
+    Segment* segment) {
+  pcl::PointCloud<PointSurfelLabel> point_cloud;
+
+  pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
+
+  segment->points_C_.reserve(point_cloud.points.size());
+  segment->colors_.reserve(point_cloud.points.size());
+
+  for (size_t i = 0; i < point_cloud.points.size(); ++i) {
+    if (!std::isfinite(point_cloud.points[i].x) ||
+        !std::isfinite(point_cloud.points[i].y) ||
+        !std::isfinite(point_cloud.points[i].z)) {
+      continue;
+    }
+
+    segment->points_C_.push_back(Point(point_cloud.points[i].x,
+                                       point_cloud.points[i].y,
+                                       point_cloud.points[i].z));
+
+    segment->colors_.push_back(
+        Color(point_cloud.points[i].r, point_cloud.points[i].g,
+              point_cloud.points[i].b, point_cloud.points[i].a));
+
+    segment->labels_.push_back(point_cloud.points[i].label);
+  }
+}
+
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Message timestamps are used to detect when all
@@ -459,35 +486,12 @@ void Controller::segmentPointCloudCallback(
       }
     }
 
-    // TODO(ntonci): Generalize this! Currently it will not work for Surfel
-    // type.
-    pcl::PointCloud<voxblox::PointType> point_cloud;
-
-    pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
-
-    segment->points_C_.reserve(point_cloud.points.size());
-    segment->colors_.reserve(point_cloud.points.size());
-
-    for (size_t i = 0; i < point_cloud.points.size(); ++i) {
-      if (!std::isfinite(point_cloud.points[i].x) ||
-          !std::isfinite(point_cloud.points[i].y) ||
-          !std::isfinite(point_cloud.points[i].z)) {
-        continue;
-      }
-
-      segment->points_C_.push_back(Point(point_cloud.points[i].x,
-                                         point_cloud.points[i].y,
-                                         point_cloud.points[i].z));
-
-      segment->colors_.push_back(
-          Color(point_cloud.points[i].r, point_cloud.points[i].g,
-                point_cloud.points[i].b, point_cloud.points[i].a));
-
-      if (!use_label_propagation_) {
-        segment->labels_.push_back(point_cloud.points[i].label);
-      }
+    if (use_label_propagation_) {
+      fillSegmentWithData(segment_point_cloud_msg, segment);
+    } else {
+      fillSegmentWithData<PointSurfelLabel>(segment_point_cloud_msg, segment);
     }
-    LOG(ERROR) << point_cloud.points[0].label;
+
     segment->T_G_C_ = T_G_C;
 
     if (use_label_propagation_) {
@@ -1006,106 +1010,38 @@ void Controller::computeAlignedBoundingBox(
   CHECK_NOTNULL(bbox_quaternion);
   CHECK_NOTNULL(bbox_size);
 
-  constexpr bool kUseApproxMVBB = true;
-  if (kUseApproxMVBB) {
-    ApproxMVBB::Matrix3Dyn points(3, surfel_cloud->points.size());
+  ApproxMVBB::Matrix3Dyn points(3, surfel_cloud->points.size());
 
-    for (size_t i = 0u; i < surfel_cloud->points.size(); ++i) {
-      points(0, i) = double(surfel_cloud->points.at(i).x);
-      points(1, i) = double(surfel_cloud->points.at(i).y);
-      points(2, i) = double(surfel_cloud->points.at(i).z);
-    }
-
-    // TODO(ntonci): Make params.
-    ApproxMVBB::OOBB oobb =
-        ApproxMVBB::approximateMVBB(points, 0.02, 200, 5, 0, 5);
-
-    ApproxMVBB::Matrix33 A_KI = oobb.m_q_KI.matrix().transpose();
-    const int size = points.cols();
-    for (unsigned int i = 0; i < size; ++i) {
-      oobb.unite(A_KI * points.col(i));
-    }
-
-    constexpr double kExpansionPercentage = 0.05;
-    oobb.expandToMinExtentRelative(kExpansionPercentage);
-
-    ApproxMVBB::Vector3 min_in_I = oobb.m_q_KI * oobb.m_minPoint;
-    ApproxMVBB::Vector3 max_in_I = oobb.m_q_KI * oobb.m_maxPoint;
-
-    *bbox_quaternion = oobb.m_q_KI.cast<float>();
-    *bbox_translation = ((min_in_I + max_in_I) / 2).cast<float>();
-    *bbox_size = ((oobb.m_maxPoint - oobb.m_minPoint).cwiseAbs()).cast<float>();
-  } else {
-    Eigen::Vector4f pca_centroid;
-    pcl::compute3DCentroid(*surfel_cloud, pca_centroid);
-    Eigen::Matrix3f covariance;
-    pcl::computeCovarianceMatrixNormalized(*surfel_cloud, pca_centroid,
-                                           covariance);
-    Eigen::SelfAdjointEigenSolver<Eigen::Matrix3f> eigen_solver(
-        covariance, Eigen::ComputeEigenvectors);
-    Eigen::Matrix3f eigen_vectors_pca = eigen_solver.eigenvectors();
-    eigen_vectors_pca.col(2) =
-        eigen_vectors_pca.col(0).cross(eigen_vectors_pca.col(1));
-
-    Eigen::Matrix4f projection_transform(Eigen::Matrix4f::Identity());
-    projection_transform.block<3, 3>(0, 0) = eigen_vectors_pca.transpose();
-    projection_transform.block<3, 1>(0, 3) =
-        -1.0 *
-        (projection_transform.block<3, 3>(0, 0) * pca_centroid.head<3>());
-    pcl::PointCloud<pcl::PointSurfel>::Ptr transformed_surfel_cloud(
-        new pcl::PointCloud<pcl::PointSurfel>);
-    pcl::transformPointCloud(*surfel_cloud, *transformed_surfel_cloud,
-                             projection_transform);
-
-    constexpr size_t kMeanK = 50u;
-    constexpr double kStdMulThreshold = 1.0;
-    pcl::StatisticalOutlierRemoval<pcl::PointSurfel>
-        statistical_outlier_removal;
-    statistical_outlier_removal.setInputCloud(transformed_surfel_cloud);
-    statistical_outlier_removal.setMeanK(kMeanK);
-    statistical_outlier_removal.setStddevMulThresh(kStdMulThreshold);
-    statistical_outlier_removal.filter(*transformed_surfel_cloud);
-
-    constexpr double kClusterToleranceM = 0.005;
-    constexpr double kMinClusterSize = 200;
-    constexpr double kMaxClusterSize = 500000;
-    pcl::search::KdTree<pcl::PointSurfel>::Ptr tree(
-        new pcl::search::KdTree<pcl::PointSurfel>);
-    tree->setInputCloud(transformed_surfel_cloud);
-    std::vector<pcl::PointIndices> cluster_indices;
-    pcl::EuclideanClusterExtraction<pcl::PointSurfel> euclidean_clustering;
-    euclidean_clustering.setClusterTolerance(kClusterToleranceM);  // 2cm
-    euclidean_clustering.setMinClusterSize(kMinClusterSize);
-    euclidean_clustering.setMaxClusterSize(kMaxClusterSize);
-    euclidean_clustering.setSearchMethod(tree);
-    euclidean_clustering.setInputCloud(transformed_surfel_cloud);
-    euclidean_clustering.extract(cluster_indices);
-    pcl::PointCloud<pcl::PointSurfel>::Ptr clustered_surfel_cloud(
-        new pcl::PointCloud<pcl::PointSurfel>);
-    for (std::vector<int>::const_iterator point_iterator =
-             cluster_indices.at(0).indices.begin();
-         point_iterator != cluster_indices.at(0).indices.end();
-         ++point_iterator) {
-      clustered_surfel_cloud->points.push_back(
-          transformed_surfel_cloud->points[*point_iterator]);
-    }
-    clustered_surfel_cloud->width = clustered_surfel_cloud->points.size();
-    clustered_surfel_cloud->height = 1;
-    clustered_surfel_cloud->is_dense = true;
-
-    pcl::PointSurfel min_point;
-    pcl::PointSurfel max_point;
-    pcl::getMinMax3D(*clustered_surfel_cloud, min_point, max_point);
-    const Eigen::Vector3f mean_diagonal =
-        0.5f * (max_point.getVector3fMap() + min_point.getVector3fMap());
-
-    *bbox_translation =
-        eigen_vectors_pca * mean_diagonal + pca_centroid.head<3>();
-    *bbox_quaternion = Eigen::Quaternionf(eigen_vectors_pca);
-    *bbox_size =
-        Eigen::Vector3f(max_point.x - min_point.x, max_point.y - min_point.y,
-                        max_point.z - min_point.z);
+  for (size_t i = 0u; i < surfel_cloud->points.size(); ++i) {
+    points(0, i) = double(surfel_cloud->points.at(i).x);
+    points(1, i) = double(surfel_cloud->points.at(i).y);
+    points(2, i) = double(surfel_cloud->points.at(i).z);
   }
+
+  constexpr double kEpsilon = 0.02;
+  constexpr size_t kPointSamples = 200u;
+  constexpr size_t kGridSize = 5u;
+  constexpr size_t kMvbbDiamOptLoops = 0u;
+  constexpr size_t kMvbbGridSearchOptLoops = 0u;
+  ApproxMVBB::OOBB oobb =
+      ApproxMVBB::approximateMVBB(points, kEpsilon, kPointSamples, kGridSize,
+                                  kMvbbDiamOptLoops, kMvbbGridSearchOptLoops);
+
+  ApproxMVBB::Matrix33 A_KI = oobb.m_q_KI.matrix().transpose();
+  const int size = points.cols();
+  for (unsigned int i = 0; i < size; ++i) {
+    oobb.unite(A_KI * points.col(i));
+  }
+
+  constexpr double kExpansionPercentage = 0.05;
+  oobb.expandToMinExtentRelative(kExpansionPercentage);
+
+  ApproxMVBB::Vector3 min_in_I = oobb.m_q_KI * oobb.m_minPoint;
+  ApproxMVBB::Vector3 max_in_I = oobb.m_q_KI * oobb.m_maxPoint;
+
+  *bbox_quaternion = oobb.m_q_KI.cast<float>();
+  *bbox_translation = ((min_in_I + max_in_I) / 2).cast<float>();
+  *bbox_size = ((oobb.m_maxPoint - oobb.m_minPoint).cwiseAbs()).cast<float>();
 }
 }  // namespace voxblox_gsm
 }  // namespace voxblox

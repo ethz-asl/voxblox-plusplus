@@ -23,8 +23,6 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(PointSurfelLabel,
 
 namespace voxblox {
 
-typedef PointSurfelLabel PointType;
-
 typedef uint16_t Label;
 typedef uint16_t LabelConfidence;
 typedef uint8_t SemanticLabel;
