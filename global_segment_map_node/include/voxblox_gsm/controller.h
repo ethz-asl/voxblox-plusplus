@@ -140,6 +140,8 @@ class Controller {
   ros::Time last_update_received_;
 
   LabelTsdfMap::Config map_config_;
+  LabelTsdfIntegrator::Config tsdf_integrator_config_;
+  LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config_;
 
   std::shared_ptr<LabelTsdfMap> map_;
   std::shared_ptr<LabelTsdfIntegrator> integrator_;

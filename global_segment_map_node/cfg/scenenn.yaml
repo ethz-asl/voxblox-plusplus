@@ -6,7 +6,7 @@ voxblox:
   voxel_size: 0.01
   voxels_per_side: 8
   truncation_distance_factor: 5.0
-  voxel_carving_enabled: true
+  voxel_carving_enabled: false
   min_ray_length_m: 0.1
   max_ray_length_m: 3
 
@@ -18,6 +18,9 @@ pairwise_confidence_merging:
   enable_pairwise_confidence_merging: true
   merging_min_overlap_ratio: 0.05
   merging_min_frame_count: 9
+
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: false
 
 object_database:
   publish_gsm_updates: false

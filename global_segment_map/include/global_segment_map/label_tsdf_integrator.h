@@ -11,6 +11,7 @@
 #include <voxblox/integrator/tsdf_integrator.h>
 #include <voxblox/utils/timing.h>
 
+#include "global_segment_map/common.h"
 #include "global_segment_map/label_fusion.h"
 #include "global_segment_map/label_tsdf_map.h"
 
@@ -18,6 +19,12 @@ namespace voxblox {
 
 class Segment {
  public:
+  Segment(pcl::PointCloud<voxblox::PointType> point_cloud,
+          Transformation T_G_C);
+
+  Segment(pcl::PointCloud<voxblox::PointSemanticInstanceType> point_cloud,
+          Transformation T_G_C);
+
   voxblox::Transformation T_G_C_;
   voxblox::Pointcloud points_C_;
   voxblox::Colors colors_;
@@ -46,6 +53,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     bool enable_pairwise_confidence_merging = true;
     float merging_min_overlap_ratio = 0.2f;
     int merging_min_frame_count = 30;
+
+    // Semantic instance-aware segmentation.
+    bool enable_semantic_instance_segmentation = false;
 
     // Object database logic.
     // Number of frames after which the updated
@@ -209,6 +219,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     return ++(*highest_instance_);
   }
 
+  // Label layer.
   LabelTsdfConfig label_tsdf_config_;
   Layer<LabelVoxel>* label_layer_;
 
@@ -216,18 +227,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // while integrating a new pointcloud.
   std::mutex temp_label_block_mutex_;
   Layer<LabelVoxel>::BlockHashMap temp_label_block_map_;
-
-  Label* highest_label_;
-  LMap labels_count_map_;
-
-  // Pairwise confidence merging.
-  LLMap pairwise_confidence_;
-
-  utils::SemanticLabelFusion semantic_label_fusion_;
-  utils::InstanceLabelFusion instance_label_fusion_;
-
-  InstanceLabel* highest_instance_;
-  std::map<SemanticLabel, SemanticLabel> current_to_global_instance_map_;
 
   // We need to prevent simultaneous access to the voxels in the map. We
   // could
@@ -243,9 +242,21 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // (num_threads / (2^n)). For 8 threads and 12 bits this gives 0.2%.
   ApproxHashArray<12, std::mutex, GlobalIndex, LongIndexHash> mutexes_;
 
+  Label* highest_label_;
+  LMap labels_count_map_;
   std::mutex updated_labels_mutex_;
   std::set<Label> updated_labels_;
 
+  // Pairwise confidence merging.
+  LLMap pairwise_confidence_;
+
+  // Semantic instance-aware segmentation.
+  utils::SemanticLabelFusion semantic_label_fusion_;
+  utils::InstanceLabelFusion instance_label_fusion_;
+  InstanceLabel* highest_instance_;
+  std::map<SemanticLabel, SemanticLabel> current_to_global_instance_map_;
+
+  // Object database.
   LMap labels_to_publish_;
 };
 

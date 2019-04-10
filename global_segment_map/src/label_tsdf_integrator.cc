@@ -2,6 +2,51 @@
 
 namespace voxblox {
 
+Segment::Segment(pcl::PointCloud<voxblox::PointType> point_cloud,
+                 Transformation T_G_C)
+    : T_G_C_(T_G_C), semantic_label_(0u), instance_label_(0u) {
+  points_C_.reserve(point_cloud.points.size());
+  colors_.reserve(point_cloud.points.size());
+
+  for (size_t i = 0; i < point_cloud.points.size(); ++i) {
+    if (!std::isfinite(point_cloud.points[i].x) ||
+        !std::isfinite(point_cloud.points[i].y) ||
+        !std::isfinite(point_cloud.points[i].z)) {
+      continue;
+    }
+
+    points_C_.push_back(Point(point_cloud.points[i].x, point_cloud.points[i].y,
+                              point_cloud.points[i].z));
+
+    colors_.push_back(Color(point_cloud.points[i].r, point_cloud.points[i].g,
+                            point_cloud.points[i].b, point_cloud.points[i].a));
+  }
+}
+
+Segment::Segment(
+    pcl::PointCloud<voxblox::PointSemanticInstanceType> point_cloud,
+    Transformation T_G_C)
+    : T_G_C_(T_G_C),
+      semantic_label_(point_cloud.points[0].label),
+      instance_label_(point_cloud.points[0].instance) {
+  points_C_.reserve(point_cloud.points.size());
+  colors_.reserve(point_cloud.points.size());
+
+  for (size_t i = 0; i < point_cloud.points.size(); ++i) {
+    if (!std::isfinite(point_cloud.points[i].x) ||
+        !std::isfinite(point_cloud.points[i].y) ||
+        !std::isfinite(point_cloud.points[i].z)) {
+      continue;
+    }
+
+    points_C_.push_back(Point(point_cloud.points[i].x, point_cloud.points[i].y,
+                              point_cloud.points[i].z));
+
+    colors_.push_back(Color(point_cloud.points[i].r, point_cloud.points[i].g,
+                            point_cloud.points[i].b, point_cloud.points[i].a));
+  }
+}
+
 LabelTsdfIntegrator::LabelTsdfIntegrator(
     const Config& tsdf_config, const LabelTsdfConfig& label_tsdf_config,
     Layer<TsdfVoxel>* tsdf_layer, Layer<LabelVoxel>* label_layer,
@@ -306,59 +351,61 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
     }
   }
 
-  // Instance stuff.
+  if (label_tsdf_config_.enable_semantic_instance_segmentation) {
+    // Instance stuff.
+    for (auto segment_it = labelled_segments.begin();
+         segment_it != labelled_segments.end(); ++segment_it) {
+      Label label = (*segment_it)->label_;
+      if ((*segment_it)->points_C_.size() > 0) {
+        instance_label_fusion_.increaseLabelFramesCount(label);
+      }
 
-  for (auto segment_it = labelled_segments.begin();
-       segment_it != labelled_segments.end(); ++segment_it) {
-    Label label = (*segment_it)->label_;
-    if ((*segment_it)->points_C_.size() > 0) {
-      instance_label_fusion_.increaseLabelFramesCount(label);
-    }
-
-    // Loop through all the segments.
-    if ((*segment_it)->instance_label_ != 0u) {
-      // It's a segment with a current frame instance.
-      auto global_instance_it =
-          current_to_global_instance_map_.find((*segment_it)->instance_label_);
-      if (global_instance_it != current_to_global_instance_map_.end()) {
-        // If current frame instance maps to a global instance, use it.
-        instance_label_fusion_.increaseLabelInstanceCount(
-            label, global_instance_it->second);
-      } else {
-        // Current frame instance doesn't map to any global instance.
-        // Get the global instance with max count.
-        SemanticLabel instance_label =
-            instance_label_fusion_.getLabelInstance(label, assigned_instances);
-
-        if (instance_label != 0u) {
-          current_to_global_instance_map_.emplace(
-              (*segment_it)->instance_label_, instance_label);
-          instance_label_fusion_.increaseLabelInstanceCount(label,
-                                                            instance_label);
-          assigned_instances.emplace(instance_label);
+      // Loop through all the segments.
+      if ((*segment_it)->instance_label_ != 0u) {
+        // It's a segment with a current frame instance.
+        auto global_instance_it = current_to_global_instance_map_.find(
+            (*segment_it)->instance_label_);
+        if (global_instance_it != current_to_global_instance_map_.end()) {
+          // If current frame instance maps to a global instance, use it.
+          instance_label_fusion_.increaseLabelInstanceCount(
+              label, global_instance_it->second);
         } else {
-          // Create new global instance.
-          SemanticLabel fresh_instance = getFreshInstance();
-          current_to_global_instance_map_.emplace(
-              (*segment_it)->instance_label_, fresh_instance);
-          instance_label_fusion_.increaseLabelInstanceCount(label,
-                                                            fresh_instance);
+          // Current frame instance doesn't map to any global instance.
+          // Get the global instance with max count.
+          SemanticLabel instance_label =
+              instance_label_fusion_.getLabelInstance(label,
+                                                      assigned_instances);
+
+          if (instance_label != 0u) {
+            current_to_global_instance_map_.emplace(
+                (*segment_it)->instance_label_, instance_label);
+            instance_label_fusion_.increaseLabelInstanceCount(label,
+                                                              instance_label);
+            assigned_instances.emplace(instance_label);
+          } else {
+            // Create new global instance.
+            SemanticLabel fresh_instance = getFreshInstance();
+            current_to_global_instance_map_.emplace(
+                (*segment_it)->instance_label_, fresh_instance);
+            instance_label_fusion_.increaseLabelInstanceCount(label,
+                                                              fresh_instance);
+          }
         }
+        semantic_label_fusion_.increaseLabelClassCount(
+            label, (*segment_it)->semantic_label_);
+      } else {
+        // It's a segment with no instance prediction in the current frame.
+        // Get the global instance it maps to, as set it as assigned.
+        SemanticLabel instance_label =
+            instance_label_fusion_.getLabelInstance(label);
+        // TODO(grinvalm) : also pass assigned instances here?
+        if (instance_label != 0u) {
+          assigned_instances.emplace(instance_label);
+        }
+        // if ((*segment_it)->points_C_.size() > 2500) {
+        //   decreaseLabelInstanceCount(label, instance_label);
+        // }
       }
-      semantic_label_fusion_.increaseLabelClassCount(
-          label, (*segment_it)->semantic_label_);
-    } else {
-      // It's a segment with no instance prediction in the current frame.
-      // Get the global instance it maps to, as set it as assigned.
-      SemanticLabel instance_label =
-          instance_label_fusion_.getLabelInstance(label);
-      // TODO(grinvalm) : also pass assigned instances here?
-      if (instance_label != 0u) {
-        assigned_instances.emplace(instance_label);
-      }
-      // if ((*segment_it)->points_C_.size() > 2500) {
-      //   decreaseLabelInstanceCount(label, instance_label);
-      // }
     }
   }
 }

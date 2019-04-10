@@ -3,6 +3,7 @@
 
 #include <map>
 
+#include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
 #include "voxblox/core/common.h"
@@ -31,18 +32,18 @@ struct LabelCount {
   LabelConfidence label_confidence = 0u;
 };
 
-struct PointSurfelSemanticInstance {
+struct PointSurfelSemanticInstance : public pcl::PointXYZRGB {
   PCL_ADD_POINT4D;
-  PCL_ADD_NORMAL4D;
   PCL_ADD_RGB;
-  // TODO(margaritaG): Fix field names
-  SemanticLabel label;
-  InstanceLabel instance;
+  // TODO(margaritaG): Fix field names to:
+  SemanticLabel label;     // semantic_label
+  InstanceLabel instance;  // instance_label
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 
-typedef PointSurfelSemanticInstance PointType;
+typedef pcl::PointXYZRGB PointType;
+typedef PointSurfelSemanticInstance PointSemanticInstanceType;
 
 // Pointcloud types for external interface.
 typedef AlignedVector<Label> Labels;
@@ -51,9 +52,8 @@ typedef AlignedVector<SemanticLabel> SemanticLabels;
 }  // namespace voxblox
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(
-    voxblox::PointSurfelSemanticInstance,
-    (float, x, x)(float, y, y)(float, z, z)(float, normal_x, normal_x)(
-        float, normal_y, normal_y)(float, normal_z, normal_z)(float, rgb, rgb)(
+    voxblox::PointSemanticInstanceType,
+    (float, x, x)(float, y, y)(float, z, z)(float, rgb, rgb)(
         voxblox::SemanticLabel, label,
         label)(voxblox::InstanceLabel, instance,
                instance))  // TODO(margaritaG): Fix field names

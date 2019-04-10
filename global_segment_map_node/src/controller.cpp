@@ -117,9 +117,6 @@ std::mutex updateMeshMutex;
 std::mutex viewerSpin;
 bool remesh;
 int frame_count;
-// std::thread viz_thread;
-
-void thread_function() { std::cout << "thread function\n"; }
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
@@ -293,40 +290,39 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   map_.reset(new LabelTsdfMap(map_config_));
 
   // Determine TSDF integrator parameters.
-  LabelTsdfIntegrator::Config tsdf_integrator_config;
-  tsdf_integrator_config.voxel_carving_enabled = false;
-  tsdf_integrator_config.allow_clear = true;
+  tsdf_integrator_config_.voxel_carving_enabled = false;
+  tsdf_integrator_config_.allow_clear = true;
   FloatingPoint truncation_distance_factor = 5.0f;
-  tsdf_integrator_config.max_ray_length_m = 2.5f;
+  tsdf_integrator_config_.max_ray_length_m = 2.5f;
 
   node_handle_private_->param<bool>(
       "voxblox/voxel_carving_enabled",
-      tsdf_integrator_config.voxel_carving_enabled,
-      tsdf_integrator_config.voxel_carving_enabled);
+      tsdf_integrator_config_.voxel_carving_enabled,
+      tsdf_integrator_config_.voxel_carving_enabled);
   node_handle_private_->param<bool>("voxblox/allow_clear",
-                                    tsdf_integrator_config.allow_clear,
-                                    tsdf_integrator_config.allow_clear);
+                                    tsdf_integrator_config_.allow_clear,
+                                    tsdf_integrator_config_.allow_clear);
   node_handle_private_->param<FloatingPoint>(
       "voxblox/truncation_distance_factor", truncation_distance_factor,
       truncation_distance_factor);
   node_handle_private_->param<FloatingPoint>(
-      "voxblox/min_ray_length_m", tsdf_integrator_config.min_ray_length_m,
-      tsdf_integrator_config.min_ray_length_m);
+      "voxblox/min_ray_length_m", tsdf_integrator_config_.min_ray_length_m,
+      tsdf_integrator_config_.min_ray_length_m);
   node_handle_private_->param<FloatingPoint>(
-      "voxblox/max_ray_length_m", tsdf_integrator_config.max_ray_length_m,
-      tsdf_integrator_config.max_ray_length_m);
+      "voxblox/max_ray_length_m", tsdf_integrator_config_.max_ray_length_m,
+      tsdf_integrator_config_.max_ray_length_m);
 
-  tsdf_integrator_config.default_truncation_distance =
+  tsdf_integrator_config_.default_truncation_distance =
       map_config_.voxel_size * truncation_distance_factor;
 
   std::string method("merged");
   node_handle_private_->param<std::string>("method", method, method);
   if (method.compare("merged") == 0) {
-    tsdf_integrator_config.enable_anti_grazing = false;
+    tsdf_integrator_config_.enable_anti_grazing = false;
   } else if (method.compare("merged_discard") == 0) {
-    tsdf_integrator_config.enable_anti_grazing = true;
+    tsdf_integrator_config_.enable_anti_grazing = true;
   } else {
-    tsdf_integrator_config.enable_anti_grazing = false;
+    tsdf_integrator_config_.enable_anti_grazing = false;
   }
 
   std::string mesh_color_scheme("label");
@@ -347,29 +343,31 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   }
 
   // Determine label integrator parameters.
-  LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config;
-  label_tsdf_integrator_config.enable_pairwise_confidence_merging = true;
-  label_tsdf_integrator_config.max_segment_age = 30;
-
   node_handle_private_->param<bool>(
       "pairwise_confidence_merging/enable_pairwise_confidence_merging",
-      label_tsdf_integrator_config.enable_pairwise_confidence_merging,
-      label_tsdf_integrator_config.enable_pairwise_confidence_merging);
+      label_tsdf_integrator_config_.enable_pairwise_confidence_merging,
+      label_tsdf_integrator_config_.enable_pairwise_confidence_merging);
   node_handle_private_->param<FloatingPoint>(
       "pairwise_confidence_merging/merging_min_overlap_ratio",
-      label_tsdf_integrator_config.merging_min_overlap_ratio,
-      label_tsdf_integrator_config.merging_min_overlap_ratio);
+      label_tsdf_integrator_config_.merging_min_overlap_ratio,
+      label_tsdf_integrator_config_.merging_min_overlap_ratio);
   node_handle_private_->param<int>(
       "pairwise_confidence_merging/merging_min_frame_count",
-      label_tsdf_integrator_config.merging_min_frame_count,
-      label_tsdf_integrator_config.merging_min_frame_count);
+      label_tsdf_integrator_config_.merging_min_frame_count,
+      label_tsdf_integrator_config_.merging_min_frame_count);
+
+  node_handle_private_->param<bool>(
+      "semantic_instance_segmentation/enable_semantic_instance_segmentation",
+      label_tsdf_integrator_config_.enable_semantic_instance_segmentation,
+      label_tsdf_integrator_config_.enable_semantic_instance_segmentation);
+
   node_handle_private_->param<int>(
       "object_database/max_segment_age",
-      label_tsdf_integrator_config.max_segment_age,
-      label_tsdf_integrator_config.max_segment_age);
+      label_tsdf_integrator_config_.max_segment_age,
+      label_tsdf_integrator_config_.max_segment_age);
 
   integrator_.reset(new LabelTsdfIntegrator(
-      tsdf_integrator_config, label_tsdf_integrator_config,
+      tsdf_integrator_config_, label_tsdf_integrator_config_,
       map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       map_->getHighestLabelPtr(), map_->getHighestInstancePtr()));
 
@@ -611,8 +609,8 @@ void Controller::segmentPointCloudCallback(
 
     end = ros::WallTime::now();
     ROS_INFO(
-        "Finished integrating %lu pointclouds in %f seconds, have %lu tsdf "
-        "blocks, %lu label blocks.",
+        "Integrated %lu pointclouds in %f secs, have %lu tsdf "
+        "and %lu label blocks.",
         segments_to_integrate_.size(), (end - start).toSec(),
         map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks(),
         map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks());
@@ -625,7 +623,7 @@ void Controller::segmentPointCloudCallback(
 
     end = ros::WallTime::now();
     ROS_INFO(
-        "Finished merging segments and fetching the ones to publish in %f "
+        "Merged segments and fetched the ones to publish in %f "
         "seconds.",
         (end - start).toSec());
     start = ros::WallTime::now();
@@ -657,13 +655,7 @@ void Controller::segmentPointCloudCallback(
   }
   if (lookupTransform(from_frame, world_frame_,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {
-    // if (lookupTransform("scenenn_camera_frame", world_frame_,
-    //                     segment_point_cloud_msg->header.stamp, &T_G_C)) {
-    Segment* segment = new Segment();
-    segments_to_integrate_.push_back(segment);
-
     // Convert the PCL pointcloud into voxblox format.
-    // TODO(helenol): improve...
     // Horrible hack fix to fix color parsing colors in PCL.
     for (size_t d = 0; d < segment_point_cloud_msg->fields.size(); ++d) {
       if (segment_point_cloud_msg->fields[d].name == std::string("rgb")) {
@@ -671,36 +663,20 @@ void Controller::segmentPointCloudCallback(
             sensor_msgs::PointField::FLOAT32;
       }
     }
-
     timing::Timer ptcloud_timer("ptcloud_preprocess");
 
-    pcl::PointCloud<voxblox::PointType> point_cloud;
-    pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
-
-    segment->points_C_.reserve(point_cloud.points.size());
-    segment->colors_.reserve(point_cloud.points.size());
-
-    for (size_t i = 0; i < point_cloud.points.size(); ++i) {
-      if (!std::isfinite(point_cloud.points[i].x) ||
-          !std::isfinite(point_cloud.points[i].y) ||
-          !std::isfinite(point_cloud.points[i].z)) {
-        continue;
-      }
-
-      segment->points_C_.push_back(Point(point_cloud.points[i].x,
-                                         point_cloud.points[i].y,
-                                         point_cloud.points[i].z));
-
-      segment->colors_.push_back(
-          Color(point_cloud.points[i].r, point_cloud.points[i].g,
-                point_cloud.points[i].b, point_cloud.points[i].a));
+    Segment* segment;
+    if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+      pcl::PointCloud<voxblox::PointSemanticInstanceType>
+          point_cloud_semantic_instance;
+      pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_semantic_instance);
+      segment = new Segment(point_cloud_semantic_instance, T_G_C);
+    } else {
+      pcl::PointCloud<voxblox::PointType> point_cloud;
+      pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
+      segment = new Segment(point_cloud, T_G_C);
     }
-    // TODO(margaritaG): fix
-    // segment->semantic_label_ = point_cloud.points[0].semantic_label;
-    // segment->instance_label_ = point_cloud.points[0].instance_label;
-    segment->semantic_label_ = point_cloud.points[0].label;
-    segment->instance_label_ = point_cloud.points[0].instance;
-    segment->T_G_C_ = T_G_C;
+    segments_to_integrate_.push_back(segment);
 
     ptcloud_timer.Stop();
 
