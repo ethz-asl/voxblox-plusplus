@@ -16,9 +16,7 @@
 #include <global_segment_map/utils/label_utils.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-#include <pcl/io/vtk_lib_io.h>
-#include <pcl/visualization/pcl_visualizer.h>
-#include <pcl_conversions/pcl_conversions.h>
+
 #include <voxblox/core/common.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
@@ -112,149 +110,7 @@ std::string classes[81] = {"BG",
                            "hair drier",
                            "toothbrush"};
 
-bool updatedMesh;
-std::mutex updateMeshMutex;
-std::mutex viewerSpin;
 bool remesh;
-int frame_count;
-
-// TODO(grinvalm): make it more efficient by only updating the
-// necessary polygons and not all of them each time.
-void visualizeMesh(const MeshLayer& mesh_layer,
-                   const MeshLayer& mesh_merged_layer,
-                   const MeshLayer& mesh_semantic_layer,
-                   const MeshLayer& mesh_instance_layer, std::string name) {
-  frame_count = 0;
-  std::array<std::shared_ptr<pcl::visualization::PCLVisualizer>, 2> viewer;
-  for (int count = 0; count < viewer.size(); count++) {
-    viewer[count] = std::make_shared<pcl::visualization::PCLVisualizer>();
-    std::string name = name + std::to_string(count + 1);
-    viewer[count]->setWindowName(name.c_str());
-    viewer[count]->setBackgroundColor(255, 255, 255);
-    viewer[count]->initCameraParameters();
-    // TODO(grinvalm): find some general default parameters.
-    // // 066 position
-    // viewer->setCameraPosition(-0.258698, 2.4965, 2.50443, -0.40446,
-    // 0.988025,
-    //                           0.279138, -0.0487525, 0.828238, -0.558252);
-    // viewer->setCameraClipDistances(1.35139, 6.41007);
-    // scenenn231
-    // viewer[count]->setCameraPosition(-1.41162, 6.28602, -0.300336, -1.49346,
-    //                                  0.117437, 0.0843885, 0.0165199,
-    //                                  -0.0624571, -0.997911);
-    // viewer[count]->setCameraClipDistances(1.79126, 8.86051);
-    viewer[count]->setCameraPosition(-9.26672, -7.73843, 22.3946, -12.9445,
-                                     -8.20767, -5.76437, -0.395892, 0.917575,
-                                     0.0364161);
-    viewer[count]->setCameraClipDistances(16.4938, 31.2009);
-
-    // ycb
-    // viewer[count]->setCameraPosition(0.202015, 0.0747601, 0.353257,
-    // -0.01501,
-    //                                  0.00435276, -0.0620349, -0.833126,
-    //                                  -0.272117, 0.481512);
-    // viewer[count]->setCameraClipDistances(0.00135658, 1.35658);
-    viewer[count]->setSize(1898, 1301);
-    viewer[count]->setPosition(646, 801);
-  }
-  // viewer->setBackgroundColor(255, 255, 255);
-  // // viewer->addCoordinateSystem(0.2);
-  // viewer->initCameraParameters();
-  // // TODO(grinvalm): find some general default parameters.
-  // // // 066 position
-  // // viewer->setCameraPosition(-0.258698, 2.4965, 2.50443, -0.40446,
-  // 0.988025,
-  // //                           0.279138, -0.0487525, 0.828238, -0.558252);
-  // // viewer->setCameraClipDistances(1.35139, 6.41007);
-  // // Tango1 position
-  // viewer->setCameraPosition(1.77882, 2.88621, -0.791648, -1.19562,
-  // 0.365496,
-  //                           -1.37201, -0.611348, 0.766607, -0.196386);
-  // viewer->setCameraClipDistances(1.62481, 6.95296);
-
-  // pcl::PointCloud<pcl::PointXYZRGBA> cloud;
-  std::array<pcl::PointCloud<pcl::PointXYZRGBA>, 2> cloud;
-  while (1) {
-    for (int count = 0; count < viewer.size(); count++) {
-      // if (viewer->wasStopped()) {
-      constexpr int updateIntervalms = 1000;
-      viewer[count]->spinOnce(updateIntervalms);
-    }
-
-    std::lock_guard<std::mutex> updatedMeshLock(updateMeshMutex);
-
-    std::array<voxblox::Mesh, 2> mesh;
-    mesh[0] = voxblox::Mesh();
-    mesh[1] = voxblox::Mesh();
-    // mesh[2] = voxblox::Mesh();
-    // mesh[3] = voxblox::Mesh();
-    if (updatedMesh) {
-      for (int count = 0; count < viewer.size(); count++) {
-        cloud[count].points.clear();
-      }
-
-      // mesh_layer.getMesh(&mesh[0]);
-      mesh_merged_layer.getMesh(&mesh[0]);
-      mesh_semantic_layer.getMesh(&mesh[1]);
-      // mesh_instance_layer.getMesh(&mesh[3]);
-
-      // if (mesh[0].vertices.size() != mesh[1].vertices.size() ||
-      //     mesh[0].vertices.size() != mesh[2].vertices.size()) {
-      //   LOG(FATAL) << "Different number of vertices?";
-      // }
-
-      pcl::PCLPointCloud2 pcl_pc;
-      std::vector<pcl::Vertices> polygons;
-      std::array<pcl::PolygonMesh, 2> polygon_mesh;
-
-      for (int count = 0; count < viewer.size(); count++) {
-        size_t vert_idx = 0;
-        for (const Point& vert : mesh[count].vertices) {
-          pcl::PointXYZRGBA point;
-          point.x = vert(0);
-          point.y = vert(1);
-          point.z = vert(2);
-          // = pcl::PointXYZRGBA(color.r, color.g, color.b, color.a);
-
-          const Color& color = mesh[count].colors[vert_idx];
-          point.r = color.r;
-          point.g = color.g;
-          point.b = color.b;
-          point.a = color.a;
-          cloud[count].points.push_back(point);
-          // cloud.points.push_back(point);
-
-          vert_idx++;
-        }
-
-        for (size_t i = 0u; i < mesh[count].indices.size(); i += 3u) {
-          pcl::Vertices face;
-          for (int j = 0; j < 3; j++) {
-            face.vertices.push_back(mesh[count].indices.at(i + j));
-          }
-          polygons.push_back(face);
-        }
-
-        pcl::toPCLPointCloud2(cloud[count], pcl_pc);
-        polygon_mesh[count].cloud = pcl_pc;
-        polygon_mesh[count].polygons = polygons;
-      }
-
-      for (int count = 0; count < viewer.size(); count++) {
-        viewer[count]->removePolygonMesh("meshes");
-        if (!viewer[count]->updatePolygonMesh(polygon_mesh[count], "meshes")) {
-          viewer[count]->addPolygonMesh(polygon_mesh[count], "meshes", 0);
-        }
-        viewer[count]->saveScreenshot(std::to_string(count) + "/frame_" +
-                                      std::to_string(frame_count) + ".png");
-      }
-      frame_count++;
-
-      updatedMesh = false;
-      // viewerSpinLock.unlock();
-    }
-  }
-}
 
 Controller::Controller(ros::NodeHandle* node_handle_private)
     : node_handle_private_(node_handle_private),
@@ -267,7 +123,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       no_update_timeout_(0.0),
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
-      received_first_message_(false) {
+      received_first_message_(false),
+      updated_mesh_(false) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", camera_frame_,
                                            world_frame_);
@@ -371,13 +228,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       map_->getHighestLabelPtr(), map_->getHighestInstancePtr()));
 
-  mesh_layer_.reset(new MeshLayer(map_->block_size()));
+  mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_layer_.get(), all_semantic_labels_,
+      mesh_label_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(), MeshLabelIntegrator::LabelColor,
       &remesh));
@@ -404,19 +261,17 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   bool visualize = false;
   node_handle_private_->param<bool>("meshing/visualize", visualize, visualize);
   if (visualize) {
-    // std::thread visualizerThread(visualizeMesh, std::ref(*mesh_layer_),
-    // "GSM Labels");
-    // std::thread semanticVisualizerThread(
-    //     visualizeMesh, std::ref(*mesh_semantic_layer_), "GSM Semantics");
-    viz_thread_ = std::thread(visualizeMesh, std::ref(*mesh_layer_),
-                              std::ref(*mesh_merged_layer_),
-                              std::ref(*mesh_semantic_layer_),
-                              std::ref(*mesh_instance_layer_), "Map");
+    std::vector<std::shared_ptr<MeshLayer>> mesh_layers;
+    mesh_layers.push_back(mesh_label_layer_);
 
-    // std::thread instanceVisualizerThread(
-    //     visualizeMesh, std::ref(*mesh_layer_), std::ref(*mesh_merged_layer_),
-    //     std::ref(*mesh_semantic_layer_), std::ref(*mesh_instance_layer_),
-    //     "Map");
+    if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+      mesh_layers.push_back(mesh_merged_layer_);
+      mesh_layers.push_back(mesh_semantic_layer_);
+      mesh_layers.push_back(mesh_instance_layer_);
+    }
+    visualizer_ =
+        new Visualizer(mesh_layers, &updated_mesh_, &updated_mesh_mutex_);
+    viz_thread_ = std::thread(&Visualizer::visualizeMesh, visualizer_);
   }
 
   node_handle_private_->param<bool>("meshing/publish_segment_mesh",
@@ -543,21 +398,6 @@ void Controller::advertiseGenerateMeshService(
       "generate_mesh", &Controller::generateMeshCallback, this);
 }
 
-// void Controller::advertiseGenerateSemanticMeshService(
-//     ros::ServiceServer* generate_semantic_mesh_srv) {
-//   CHECK_NOTNULL(generate_semantic_mesh_srv);
-//   *generate_semantic_mesh_srv = node_handle_private_->advertiseService(
-//       "generate_semantic_mesh", "generate_mesh",
-//       &Controller::generateMeshCallback, this);
-// }
-//
-// void Controller::advertiseGenerateInstanceMeshService(
-//     ros::ServiceServer* generate_instance_mesh_srv) {
-//   CHECK_NOTNULL(generate_instance_mesh_srv);
-//   *generate_mesh_srv = node_handle_private_->advertiseService(
-//       "generate_mesh", &Controller::generateMeshCallback, this);
-// }
-
 void Controller::advertiseExtractSegmentsService(
     ros::ServiceServer* extract_segments_srv) {
   CHECK_NOTNULL(extract_segments_srv);
@@ -598,7 +438,7 @@ void Controller::segmentPointCloudCallback(
     start = ros::WallTime::now();
     {
       timing::Timer integrate_timer("integrate_frame_pointclouds");
-      std::lock_guard<std::mutex> updatedMeshLock(updateMeshMutex);
+      std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
       for (const auto& segment : segments_to_integrate_) {
         integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                          segment->colors_, segment->label_,
@@ -1061,7 +901,7 @@ void Controller::publishScene() {
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
   voxblox::timing::Timer generate_mesh_timer("mesh/generate");
   {
-    std::lock_guard<std::mutex> updateMeshLock(updateMeshMutex);
+    std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
     if (clear_mesh) {
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = true;
@@ -1092,22 +932,22 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     }
     generate_mesh_timer.Stop();
 
-    updatedMesh = true;
-  }
+    updated_mesh_ = true;
 
-  if (publish_scene_mesh_) {
-    timing::Timer publish_mesh_timer("mesh/publish");
-    voxblox_msgs::Mesh mesh_msg;
-    generateVoxbloxMeshMsg(mesh_layer_, ColorMode::kColor, &mesh_msg);
-    mesh_msg.header.frame_id = world_frame_;
-    scene_mesh_pub_->publish(mesh_msg);
-    publish_mesh_timer.Stop();
+    if (publish_scene_mesh_) {
+      timing::Timer publish_mesh_timer("mesh/publish");
+      voxblox_msgs::Mesh mesh_msg;
+      generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
+      mesh_msg.header.frame_id = world_frame_;
+      scene_mesh_pub_->publish(mesh_msg);
+      publish_mesh_timer.Stop();
+    }
   }
 
   if (!mesh_filename_.empty()) {
     timing::Timer output_mesh_timer("mesh/output");
-    bool success =
-        outputMeshLayerAsPly("label_" + mesh_filename_, false, *mesh_layer_);
+    bool success = outputMeshLayerAsPly("label_" + mesh_filename_, false,
+                                        *mesh_label_layer_);
     // bool success =
     success &= outputMeshLayerAsPly("semantic_" + mesh_filename_, false,
                                     *mesh_semantic_layer_);
@@ -1129,7 +969,7 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   {
-    std::lock_guard<std::mutex> updateMeshLock(updateMeshMutex);
+    std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
     timing::Timer generate_mesh_timer("mesh/update");
     bool only_mesh_updated_blocks = true;
     if (remesh) {
@@ -1137,27 +977,27 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       remesh = false;
     }
     bool clear_updated_flag = false;
-    updatedMesh |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                  clear_updated_flag);
-    updatedMesh |= mesh_instance_integrator_->generateMesh(
+    updated_mesh_ |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                    clear_updated_flag);
+    updated_mesh_ |= mesh_instance_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
 
-    updatedMesh |= mesh_merged_integrator_->generateMesh(
+    updated_mesh_ |= mesh_merged_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
 
     clear_updated_flag = true;
-    updatedMesh |= mesh_semantic_integrator_->generateMesh(
+    updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
     generate_mesh_timer.Stop();
-  }
 
-  if (publish_scene_mesh_) {
-    timing::Timer publish_mesh_timer("mesh/publish");
-    voxblox_msgs::Mesh mesh_msg;
-    generateVoxbloxMeshMsg(mesh_layer_, ColorMode::kColor, &mesh_msg);
-    mesh_msg.header.frame_id = world_frame_;
-    scene_mesh_pub_->publish(mesh_msg);
-    publish_mesh_timer.Stop();
+    if (publish_scene_mesh_) {
+      timing::Timer publish_mesh_timer("mesh/publish");
+      voxblox_msgs::Mesh mesh_msg;
+      generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
+      mesh_msg.header.frame_id = world_frame_;
+      scene_mesh_pub_->publish(mesh_msg);
+      publish_mesh_timer.Stop();
+    }
   }
 }
 

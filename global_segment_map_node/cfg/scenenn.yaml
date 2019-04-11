@@ -20,7 +20,7 @@ pairwise_confidence_merging:
   merging_min_frame_count: 9
 
 semantic_instance_segmentation:
-  enable_semantic_instance_segmentation: false
+  enable_semantic_instance_segmentation: true
 
 object_database:
   publish_gsm_updates: false

@@ -9,6 +9,7 @@
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_tsdf_mesh_integrator.h>
+#include <global_segment_map/utils/visualizer.h>
 #include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
 #include <pcl/io/vtk_lib_io.h>
@@ -153,7 +154,7 @@ class Controller {
   MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
   std::string mesh_filename_;
 
-  std::shared_ptr<MeshLayer> mesh_layer_;
+  std::shared_ptr<MeshLayer> mesh_label_layer_;
   std::shared_ptr<MeshLayer> mesh_semantic_layer_;
   std::shared_ptr<MeshLayer> mesh_instance_layer_;
   std::shared_ptr<MeshLayer> mesh_merged_layer_;
@@ -179,6 +180,9 @@ class Controller {
   std::set<Label> all_published_segments_;
 
   std::thread viz_thread_;
+  Visualizer* visualizer_;
+  std::mutex updated_mesh_mutex_;
+  bool updated_mesh_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox
