@@ -372,7 +372,7 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
         } else {
           // Current frame instance doesn't map to any global instance.
           // Get the global instance with max count.
-          SemanticLabel instance_label =
+          InstanceLabel instance_label =
               instance_label_fusion_.getLabelInstance(label,
                                                       assigned_instances);
 
@@ -384,7 +384,7 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
             assigned_instances.emplace(instance_label);
           } else {
             // Create new global instance.
-            SemanticLabel fresh_instance = getFreshInstance();
+            InstanceLabel fresh_instance = getFreshInstance();
             current_to_global_instance_map_.emplace(
                 (*segment_it)->instance_label_, fresh_instance);
             instance_label_fusion_.increaseLabelInstanceCount(label,
@@ -396,7 +396,7 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
       } else {
         // It's a segment with no instance prediction in the current frame.
         // Get the global instance it maps to, as set it as assigned.
-        SemanticLabel instance_label =
+        InstanceLabel instance_label =
             instance_label_fusion_.getLabelInstance(label);
         // TODO(grinvalm) : also pass assigned instances here?
         if (instance_label != 0u) {

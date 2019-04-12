@@ -49,7 +49,7 @@ void InstanceLabelFusion::increaseLabelFramesCount(const Label& label) {
 InstanceLabel InstanceLabelFusion::getLabelInstance(
     const Label& label,
     const std::set<InstanceLabel>& assigned_instances) const {
-  SemanticLabel instance_label = 0u;
+  InstanceLabel instance_label = 0u;
   int max_count = 0;
   auto label_it = label_instance_count_.find(label);
   if (label_it != label_instance_count_.end()) {

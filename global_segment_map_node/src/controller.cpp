@@ -110,8 +110,6 @@ std::string classes[81] = {"BG",
                            "hair drier",
                            "toothbrush"};
 
-bool remesh;
-
 Controller::Controller(ros::NodeHandle* node_handle_private)
     : node_handle_private_(node_handle_private),
       // Increased time limit for lookup in the past of tf messages
@@ -124,7 +122,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
       received_first_message_(false),
-      updated_mesh_(false) {
+      updated_mesh_(false),
+      need_full_remesh_(false) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", camera_frame_,
                                            world_frame_);
@@ -237,25 +236,25 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       mesh_label_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(), MeshLabelIntegrator::LabelColor,
-      &remesh));
+      &need_full_remesh_));
   mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_semantic_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(),
-      MeshLabelIntegrator::SemanticColor, &remesh));
+      MeshLabelIntegrator::SemanticColor, &need_full_remesh_));
   mesh_instance_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_instance_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(),
-      MeshLabelIntegrator::InstanceColor, &remesh));
+      MeshLabelIntegrator::InstanceColor, &need_full_remesh_));
   mesh_merged_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_merged_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(),
-      MeshLabelIntegrator::GeometricInstanceColor, &remesh));
+      MeshLabelIntegrator::GeometricInstanceColor, &need_full_remesh_));
 
   // Visualization settings.
   bool visualize = false;
@@ -972,9 +971,9 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
     timing::Timer generate_mesh_timer("mesh/update");
     bool only_mesh_updated_blocks = true;
-    if (remesh) {
+    if (need_full_remesh_) {
       only_mesh_updated_blocks = false;
-      remesh = false;
+      need_full_remesh_ = false;
     }
     bool clear_updated_flag = false;
     updated_mesh_ |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,

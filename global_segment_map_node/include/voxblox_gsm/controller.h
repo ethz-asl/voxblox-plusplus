@@ -183,6 +183,7 @@ class Controller {
   Visualizer* visualizer_;
   std::mutex updated_mesh_mutex_;
   bool updated_mesh_;
+  bool need_full_remesh_;
 };
 }  // namespace voxblox_gsm
 }  // namespace voxblox
