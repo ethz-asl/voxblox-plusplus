@@ -384,61 +384,62 @@ void Controller::segmentPointCloudCallback(
     constexpr bool kIsFreespacePointcloud = false;
 
     start = ros::WallTime::now();
+    if (segments_to_integrate_.size() > 0) {
+      Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+      Pointcloud point_cloud_all_segments_t;
+      for (const auto& segment : segments_to_integrate_) {
+        // Concatenate point clouds. (NOTE(ff): We should probably just use the
+        // original cloud here instead.)
+        Pointcloud::iterator it = point_cloud_all_segments_t.end();
+        point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
+                                          segment->points_C_.end());
+      }
 
-    Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
-    Pointcloud point_cloud_all_segments_t;
-    for (const auto& segment : segments_to_integrate_) {
-      // Concatenate point clouds. (NOTE(ff): We should probably just use the
-      // original cloud here instead.)
-      Pointcloud::iterator it = point_cloud_all_segments_t.end();
-      point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
-                                        segment->points_C_.end());
-    }
+      Transformation T_Gicp_C = T_G_C;
+      LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_config =
+          integrator_->getLabelTsdfConfig();
+      if (label_tsdf_config.enable_icp) {
+        T_Gicp_C =
+            integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
+      }
 
-    Transformation T_Gicp_C = T_G_C;
-    LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_config =
-        integrator_->getLabelTsdfConfig();
-    if (label_tsdf_config.enable_icp) {
-      T_Gicp_C =
-          integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
-    }
+      for (const auto& segment : segments_to_integrate_) {
+        segment->T_G_C_ = T_Gicp_C;
+        integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                         segment->colors_, segment->labels_,
+                                         kIsFreespacePointcloud);
+      }
 
-    for (const auto& segment : segments_to_integrate_) {
-      segment->T_G_C_ = T_Gicp_C;
-      integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                       segment->colors_, segment->labels_,
-                                       kIsFreespacePointcloud);
-    }
+      end = ros::WallTime::now();
+      ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
+               segments_to_integrate_.size(), (end - start).toSec());
 
-    end = ros::WallTime::now();
-    ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
-             segments_to_integrate_.size(), (end - start).toSec());
+      start = ros::WallTime::now();
 
-    start = ros::WallTime::now();
+      integrator_->mergeLabels(&merges_to_publish_);
+      integrator_->getLabelsToPublish(&segment_labels_to_publish_);
 
-    integrator_->mergeLabels(&merges_to_publish_);
-    integrator_->getLabelsToPublish(&segment_labels_to_publish_);
+      end = ros::WallTime::now();
+      ROS_INFO(
+          "Finished merging segments and fetching the ones to publish in %f "
+          "seconds.",
+          (end - start).toSec());
+      start = ros::WallTime::now();
 
-    end = ros::WallTime::now();
-    ROS_INFO(
-        "Finished merging segments and fetching the ones to publish in %f "
-        "seconds.",
-        (end - start).toSec());
-    start = ros::WallTime::now();
+      segment_merge_candidates_.clear();
+      segment_label_candidates.clear();
+      for (Segment* segment : segments_to_integrate_) {
+        delete segment;
+      }
+      segments_to_integrate_.clear();
 
-    segment_merge_candidates_.clear();
-    segment_label_candidates.clear();
-    for (Segment* segment : segments_to_integrate_) {
-      delete segment;
-    }
-    segments_to_integrate_.clear();
+      end = ros::WallTime::now();
+      ROS_INFO("Cleared candidates and memory in %f seconds.",
+               (end - start).toSec());
 
-    end = ros::WallTime::now();
-    ROS_INFO("Cleared candidates and memory in %f seconds.",
-             (end - start).toSec());
-
-    if (publish_gsm_updates_ && publishObjects()) {
-      publishScene();
+      if (publish_gsm_updates_ && publishObjects()) {
+        publishScene();
+      }
     }
   }
   received_first_message_ = true;
