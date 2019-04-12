@@ -868,14 +868,10 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 
   if (publish_scene_mesh_) {
     timing::Timer publish_mesh_timer("mesh/publish");
-    visualization_msgs::MarkerArray marker_array;
-    marker_array.markers.resize(1);
-    fillMarkerWithMesh(mesh_layer_, ColorMode::kColor,
-                       &marker_array.markers[0]);
-    ColorMode color_mode_ = ColorMode::kColor;
-    marker_array.markers[0].header.frame_id = world_frame_;
-    scene_mesh_pub_->publish(marker_array);
-
+    voxblox_msgs::Mesh mesh_msg;
+    generateVoxbloxMeshMsg(mesh_layer_, ColorMode::kColor, &mesh_msg);
+    mesh_msg.header.frame_id = world_frame_;
+    scene_mesh_pub_->publish(mesh_msg);
     publish_mesh_timer.Stop();
   }
 
@@ -907,15 +903,11 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   generate_mesh_timer.Stop();
 
   if (publish_scene_mesh_) {
-    // TODO(helenol): also think about how to update markers incrementally?
     timing::Timer publish_mesh_timer("mesh/publish");
-    visualization_msgs::MarkerArray marker_array;
-    marker_array.markers.resize(1);
-    fillMarkerWithMesh(mesh_layer_, ColorMode::kColor,
-                       &marker_array.markers[0]);
-    marker_array.markers[0].header.frame_id = world_frame_;
-    scene_mesh_pub_->publish(marker_array);
-
+    voxblox_msgs::Mesh mesh_msg;
+    generateVoxbloxMeshMsg(mesh_layer_, ColorMode::kColor, &mesh_msg);
+    mesh_msg.header.frame_id = world_frame_;
+    scene_mesh_pub_->publish(mesh_msg);
     publish_mesh_timer.Stop();
   }
 }
