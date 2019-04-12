@@ -205,8 +205,8 @@ void LabelTsdfIntegrator::addVoxelLabelConfidence(
   }
   if (updated == false) {
     // TODO(margaritaG): handle this nicely or remove.
-    // LOG(FATAL) << "Out-of-memory for storing labels and confidences for
-    // this " "voxel. Please increse size of array.";
+    LOG(FATAL) << "Out-of-memory for storing labels and confidences for this "
+                  " voxel. Please increse size of array.";
   }
 }
 
@@ -395,7 +395,7 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
             label, (*segment_it)->semantic_label_);
       } else {
         // It's a segment with no instance prediction in the current frame.
-        // Get the global instance it maps to, as set it as assigned.
+        // Get the global instance it maps to, and set it as assigned.
         InstanceLabel instance_label =
             instance_label_fusion_.getLabelInstance(label);
         // TODO(grinvalm) : also pass assigned instances here?

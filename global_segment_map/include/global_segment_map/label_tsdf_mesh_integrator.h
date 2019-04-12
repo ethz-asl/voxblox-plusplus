@@ -152,6 +152,10 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
     InstanceLabel instance_label =
         instance_label_fusion_ptr_->getLabelInstance(label);
 
+    // TODO(grinvalm): here the condition was if (instance_count.second >
+    //             0.1f * (float)(frames_count - instance_count.second))
+    // Check if this changes anything in the performance.
+
     auto prev_instance_it = label_instance_map_.find(label);
     if (prev_instance_it != label_instance_map_.end()) {
       if (prev_instance_it->second != instance_label) {

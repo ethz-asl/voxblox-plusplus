@@ -228,33 +228,38 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       map_->getHighestLabelPtr(), map_->getHighestInstancePtr()));
 
   mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
-  mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
-  mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
-  mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
-  mesh_integrator_.reset(new MeshLabelIntegrator(
+
+  mesh_label_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_label_layer_.get(), all_semantic_labels_,
       integrator_->getInstanceLabelFusionPtr(),
       integrator_->getSemanticLabelFusionPtr(), MeshLabelIntegrator::LabelColor,
       &need_full_remesh_));
-  mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
-      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_semantic_layer_.get(), all_semantic_labels_,
-      integrator_->getInstanceLabelFusionPtr(),
-      integrator_->getSemanticLabelFusionPtr(),
-      MeshLabelIntegrator::SemanticColor, &need_full_remesh_));
-  mesh_instance_integrator_.reset(new MeshLabelIntegrator(
-      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_instance_layer_.get(), all_semantic_labels_,
-      integrator_->getInstanceLabelFusionPtr(),
-      integrator_->getSemanticLabelFusionPtr(),
-      MeshLabelIntegrator::InstanceColor, &need_full_remesh_));
-  mesh_merged_integrator_.reset(new MeshLabelIntegrator(
-      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_merged_layer_.get(), all_semantic_labels_,
-      integrator_->getInstanceLabelFusionPtr(),
-      integrator_->getSemanticLabelFusionPtr(),
-      MeshLabelIntegrator::GeometricInstanceColor, &need_full_remesh_));
+
+  if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+    mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
+    mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
+    mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
+
+    mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
+        mesh_semantic_layer_.get(), all_semantic_labels_,
+        integrator_->getInstanceLabelFusionPtr(),
+        integrator_->getSemanticLabelFusionPtr(),
+        MeshLabelIntegrator::SemanticColor, &need_full_remesh_));
+    mesh_instance_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
+        mesh_instance_layer_.get(), all_semantic_labels_,
+        integrator_->getInstanceLabelFusionPtr(),
+        integrator_->getSemanticLabelFusionPtr(),
+        MeshLabelIntegrator::InstanceColor, &need_full_remesh_));
+    mesh_merged_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
+        mesh_merged_layer_.get(), all_semantic_labels_,
+        integrator_->getInstanceLabelFusionPtr(),
+        integrator_->getSemanticLabelFusionPtr(),
+        MeshLabelIntegrator::GeometricInstanceColor, &need_full_remesh_));
+  }
 
   // Visualization settings.
   bool visualize = false;
@@ -904,30 +909,35 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     if (clear_mesh) {
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = true;
-      mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                     clear_updated_flag);
-      all_semantic_labels_.clear();
-      mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+      mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
+                                           clear_updated_flag);
+      if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+        all_semantic_labels_.clear();
+        mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                clear_updated_flag);
+        for (auto sl : all_semantic_labels_) {
+          LOG(ERROR) << classes[(unsigned)sl];
+        }
+        mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                clear_updated_flag);
+        mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
                                               clear_updated_flag);
-      for (auto sl : all_semantic_labels_) {
-        LOG(ERROR) << classes[(unsigned)sl];
       }
-      mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                              clear_updated_flag);
-      mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                            clear_updated_flag);
 
     } else {
       constexpr bool only_mesh_updated_blocks = true;
       constexpr bool clear_updated_flag = true;
-      mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                     clear_updated_flag);
-      mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+      mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
+                                           clear_updated_flag);
+
+      if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+        mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                clear_updated_flag);
+        mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                clear_updated_flag);
+        mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
                                               clear_updated_flag);
-      mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                              clear_updated_flag);
-      mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                            clear_updated_flag);
+      }
     }
     generate_mesh_timer.Stop();
 
@@ -947,13 +957,14 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     timing::Timer output_mesh_timer("mesh/output");
     bool success = outputMeshLayerAsPly("label_" + mesh_filename_, false,
                                         *mesh_label_layer_);
-    // bool success =
-    success &= outputMeshLayerAsPly("semantic_" + mesh_filename_, false,
-                                    *mesh_semantic_layer_);
-    success &= outputMeshLayerAsPly("instance_" + mesh_filename_, false,
-                                    *mesh_instance_layer_);
-    success &= outputMeshLayerAsPly("merged_" + mesh_filename_, false,
-                                    *mesh_merged_layer_);
+    if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+      success &= outputMeshLayerAsPly("semantic_" + mesh_filename_, false,
+                                      *mesh_semantic_layer_);
+      success &= outputMeshLayerAsPly("instance_" + mesh_filename_, false,
+                                      *mesh_instance_layer_);
+      success &= outputMeshLayerAsPly("merged_" + mesh_filename_, false,
+                                      *mesh_merged_layer_);
+    }
     output_mesh_timer.Stop();
     if (success) {
       ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
@@ -976,17 +987,20 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       need_full_remesh_ = false;
     }
     bool clear_updated_flag = false;
-    updated_mesh_ |= mesh_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                    clear_updated_flag);
-    updated_mesh_ |= mesh_instance_integrator_->generateMesh(
+    updated_mesh_ |= mesh_label_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
 
-    updated_mesh_ |= mesh_merged_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
+    if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+      updated_mesh_ |= mesh_merged_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
 
-    clear_updated_flag = true;
-    updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
+      updated_mesh_ |= mesh_instance_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
+
+      clear_updated_flag = true;
+      updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
+    }
     generate_mesh_timer.Stop();
 
     if (publish_scene_mesh_) {

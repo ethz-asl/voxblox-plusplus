@@ -158,7 +158,7 @@ class Controller {
   std::shared_ptr<MeshLayer> mesh_semantic_layer_;
   std::shared_ptr<MeshLayer> mesh_instance_layer_;
   std::shared_ptr<MeshLayer> mesh_merged_layer_;
-  std::shared_ptr<MeshLabelIntegrator> mesh_integrator_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_label_integrator_;
   std::shared_ptr<MeshLabelIntegrator> mesh_semantic_integrator_;
   std::shared_ptr<MeshLabelIntegrator> mesh_instance_integrator_;
   std::shared_ptr<MeshLabelIntegrator> mesh_merged_integrator_;
