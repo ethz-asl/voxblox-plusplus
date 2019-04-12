@@ -6,7 +6,7 @@ DEFINE_bool(icp_refine_roll_pitch, false,
             "If enabled, ICP will refine not only translation and yaw, but "
             "also roll and pitch.");
 DEFINE_int32(
-    icp_mini_batch_size, 20,
+    icp_mini_batch_size, 200,
     "Number of points used in each alignment step. To allow simple threading "
     "the ICP process is split up into a large number of separate alignments "
     "performed on small pointclouds. This parameter dictates how many points "

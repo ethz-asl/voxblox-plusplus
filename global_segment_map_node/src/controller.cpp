@@ -231,8 +231,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("enable_icp", enable_icp_, enable_icp_);
   node_handle_private_->param<bool>(
       "keep_track_of_icp_correction",
-      label_tsdf_integrator_config.keep_track_of_icp_correction,
-      label_tsdf_integrator_config.keep_track_of_icp_correction);
+      label_tsdf_integrator_config_.keep_track_of_icp_correction,
+      label_tsdf_integrator_config_.keep_track_of_icp_correction);
 
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_,
@@ -461,32 +461,15 @@ void Controller::segmentPointCloudCallback(
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
-    timing::Timer ptcloud_timer("label_propagation");
 
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
              segment_point_cloud_msg->header.stamp.toSec());
-    ros::WallTime start = ros::WallTime::now();
 
-    integrator_->decideLabelPointClouds(&segments_to_integrate_,
-                                        &segment_label_candidates,
-                                        &segment_merge_candidates_);
-    ptcloud_timer.Stop();
-
-    ros::WallTime end = ros::WallTime::now();
-    ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
-             segments_to_integrate_.size(), (end - start).toSec());
-
-    constexpr bool kIsFreespacePointcloud = false;
-
-    start = ros::WallTime::now();
-    {
-      timing::Timer integrate_timer("integrate_frame_pointclouds");
-      // TODO(margaritaG) : mvoe this below.
-      std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
-
-      Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+    if (enable_icp_) {
       Pointcloud point_cloud_all_segments_t;
+      Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+      Transformation T_G_C_icp = T_G_C;
 
       for (const auto& segment : segments_to_integrate_) {
         // Concatenate point clouds. (NOTE(ff): We should probably just use the
@@ -495,22 +478,57 @@ void Controller::segmentPointCloudCallback(
         point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
                                           segment->points_C_.end());
       }
-
-      Transformation T_G_C_icp = T_G_C;
-
-      if (enable_icp_) {
-        T_G_C_icp =
-            integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
-      }
+      T_G_C_icp =
+          integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
 
       for (const auto& segment : segments_to_integrate_) {
         segment->T_G_C_ = T_G_C_icp;
+      }
+    }
+
+    timing::Timer label_candidates_timer("compute_label_candidates");
+    ros::WallTime start = ros::WallTime::now();
+
+    for (const auto& segment : segments_to_integrate_) {
+      integrator_->computeSegmentLabelCandidates(
+          segment, &segment_label_candidates, &segment_merge_candidates_);
+    }
+    ros::WallTime end = ros::WallTime::now();
+    label_candidates_timer.Stop();
+
+    ROS_INFO("Computed label candidates for %lu pointclouds in %f seconds.",
+             segments_to_integrate_.size(), (end - start).toSec());
+
+    timing::Timer ptcloud_timer("label_propagation");
+
+    start = ros::WallTime::now();
+
+    integrator_->decideLabelPointClouds(&segments_to_integrate_,
+                                        &segment_label_candidates,
+                                        &segment_merge_candidates_);
+
+    end = ros::WallTime::now();
+
+    ptcloud_timer.Stop();
+
+    ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
+             segments_to_integrate_.size(), (end - start).toSec());
+
+    constexpr bool kIsFreespacePointcloud = false;
+
+    start = ros::WallTime::now();
+    timing::Timer integrate_timer("integrate_frame_pointclouds");
+
+    {
+      std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
+
+      for (const auto& segment : segments_to_integrate_) {
         integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                          segment->colors_, segment->label_,
                                          kIsFreespacePointcloud);
       }
-      integrate_timer.Stop();
     }
+    integrate_timer.Stop();
 
     end = ros::WallTime::now();
     ROS_INFO(
@@ -586,12 +604,6 @@ void Controller::segmentPointCloudCallback(
     ptcloud_timer.Stop();
 
     // ros::WallTime start = ros::WallTime::now();
-
-    timing::Timer label_candidates_timer("compute_label_candidates");
-
-    integrator_->computeSegmentLabelCandidates(
-        segment, &segment_label_candidates, &segment_merge_candidates_);
-    label_candidates_timer.Stop();
 
     //     "Comput
     // ros::WallTime end = ros::WallTime::now();

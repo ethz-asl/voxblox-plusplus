@@ -4,7 +4,7 @@ camera_frame_id: "scenenet_camera_frame"
 enable_icp: true
 
 voxblox:
-  voxel_size: 0.01
+  voxel_size: 0.02
   voxels_per_side: 8
   truncation_distance_factor: 5.0
   voxel_carving_enabled: false
@@ -16,6 +16,9 @@ pairwise_confidence_merging:
   pairwise_confidence_ratio_threshold: 0.05
   pairwise_confidence_count_threshold: 9
 
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: false
+
 object_database:
   publish_gsm_updates: false
 
@@ -25,5 +28,5 @@ meshing:
   mesh_color_scheme: "geometric_instance_label"
   publish_segment_mesh: false
   publish_scene_mesh: true
-  mesh_filename: "gsm_scenenn_mesh.ply"
+  mesh_filename: "scenenet_gsm.ply"
   publish_pointclouds: true

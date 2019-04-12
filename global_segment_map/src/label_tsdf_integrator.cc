@@ -78,7 +78,7 @@ Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
 
   const size_t num_icp_updates =
       icp_->runICP(*layer_, point_cloud, T_G_G_icp_ * T_G_C_init, &T_G_C_icp);
-  if (num_icp_updates == 0u || num_icp_updates > 25u) {
+  if (num_icp_updates == 0u || num_icp_updates > 500u) {
     LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
                << num_icp_updates << ", using T_G_C_init.";
     return T_G_C_init;
@@ -88,9 +88,10 @@ Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
   T_G_G_icp_ = T_G_C_icp * T_G_C_init.inverse();
 
   if (!label_tsdf_config_.keep_track_of_icp_correction) {
-    VLOG(3) << "Current ICP refinement offset: T_Gicp_G: " << T_G_G_icp_;
+    LOG(ERROR) << "Current ICP refinement offset: T_Gicp_G: " << T_G_G_icp_;
   } else {
-    VLOG(3) << "ICP refinement for this pointcloud: T_Gicp_G: " << T_G_G_icp_;
+    LOG(ERROR) << "ICP refinement for this pointcloud: T_Gicp_G: "
+               << T_G_G_icp_;
   }
 
   if (!icp_->refiningRollPitch()) {
