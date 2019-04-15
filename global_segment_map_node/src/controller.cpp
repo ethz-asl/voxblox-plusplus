@@ -150,6 +150,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
+  feature_layer_.reset(new FeatureLayer<Feature3D>(
+      map_config_.voxel_size * map_config_.voxels_per_side));
 
   // Determine TSDF integrator parameters.
   LabelTsdfIntegrator::Config integrator_config;
@@ -210,6 +212,11 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
       map_->getLabelLayerPtr(), map_->getHighestLabelPtr()));
 
+  // TODO(ntonci): Make rosparam.
+  FeatureIntegrator::Config feature_integrator_config;
+  feature_integrator_.reset(
+      new FeatureIntegrator(feature_integrator_config, feature_layer_.get()));
+
   mesh_layer_.reset(new MeshLayer(map_->block_size()));
   mesh_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
@@ -257,6 +264,18 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 }
 
 Controller::~Controller() {}
+
+void Controller::subscribeFeatureTopic(ros::Subscriber* feature_sub) {
+  CHECK_NOTNULL(feature_sub);
+  std::string feature_topic = "/rgbd_feature_node/features";
+  node_handle_private_->param<std::string>("feature_topic", feature_topic,
+                                           feature_topic);
+
+  // Large queue size to give slack to the
+  // pipeline and not lose any messages.
+  *feature_sub = node_handle_private_->subscribe(
+      feature_topic, 2000, &Controller::featureCallback, this);
+}
 
 void Controller::subscribeSegmentPointCloudTopic(
     ros::Subscriber* segment_point_cloud_sub) {
@@ -393,6 +412,74 @@ void Controller::fillSegmentWithData<PointSurfelLabel>(
               point_cloud.points[i].b, point_cloud.points[i].a));
 
     segment->labels_.push_back(point_cloud.points[i].label);
+  }
+}
+
+std::vector<Feature3D> Controller::fromFeaturesMsgToFeature3D(
+    const modelify_msgs::Features& features_msg, size_t* number_of_features,
+    std::string* camera_frame, ros::Time* timestamp) {
+  std::vector<Feature3D> features;
+  *number_of_features = features_msg.length;
+  *camera_frame = features_msg.header.frame_id;
+  *timestamp = features_msg.header.stamp;
+
+  for (modelify_msgs::Feature msg : features_msg.features) {
+    Feature3D feature;
+
+    feature.keypoint.x = msg.x;
+    feature.keypoint.y = msg.y;
+    feature.keypoint.z = msg.z;
+    feature.keypoint.r = msg.r;
+    feature.keypoint.g = msg.g;
+    feature.keypoint.b = msg.b;
+    feature.keypoint.a = msg.a;
+    feature.keypoint_scale = msg.scale;
+    feature.keypoint_response = msg.response;
+
+    // TODO(ntonci): This should depend on the descriptor.
+    constexpr size_t kRows = 1;
+    constexpr size_t kCols = 128;
+    feature.descriptor = cv::Mat(kRows, kCols, CV_64FC1);
+    memcpy(feature.descriptor.data, msg.descriptor.data(),
+           msg.descriptor.size() * sizeof(double));
+
+    CHECK_EQ(feature.descriptor.cols, msg.descriptor.size())
+        << "Descriptor size is wrong!";
+
+    features.push_back(feature);
+  }
+
+  if (features.size() != *number_of_features) {
+    ROS_WARN_STREAM(
+        "Number of features is different from the one "
+        "specified in the message: "
+        << features.size() << " vs. " << *number_of_features);
+  }
+
+  return features;
+}
+
+void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
+  size_t number_of_features;
+  std::string camera_frame;
+  ros::Time timestamp;
+  std::vector<Feature3D> features = fromFeaturesMsgToFeature3D(
+      features_msg, &number_of_features, &camera_frame, &timestamp);
+
+  if (camera_frame != camera_frame_) {
+    ROS_WARN_STREAM("Camera frame in the header ("
+                    << camera_frame
+                    << "), is not the same as specified rosparam camera frame ("
+                    << camera_frame_ << ").");
+  }
+
+  Transformation T_G_C;
+  if (lookupTransform(camera_frame, world_frame_, timestamp, &T_G_C)) {
+    feature_integrator_->integrateFeatures(T_G_C, features);
+  } else {
+    ROS_WARN_STREAM("Could not find the transform to "
+                    << camera_frame << ", at time " << timestamp.toSec()
+                    << ", in the tf tree.");
   }
 }
 
@@ -573,7 +660,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   std::vector<Label> labels = integrator_->getLabelsList();
   static constexpr bool kConnectedMesh = false;
 
-  std::unordered_map<Label, LayerPair> label_to_layers;
+  std::unordered_map<Label, LayerTuple> label_to_layers;
   // Extract the TSDF and label layers corresponding to a segment.
   constexpr bool kLabelsListIsComplete = true;
   extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
@@ -583,8 +670,12 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     CHECK(it != label_to_layers.end())
         << "Layers for label " << label << " could not be extracted.";
 
-    const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
-    const Layer<LabelVoxel>& segment_label_layer = it->second.second;
+    const Layer<TsdfVoxel>& segment_tsdf_layer = std::get<0>(it->second);
+    const Layer<LabelVoxel>& segment_label_layer = std::get<1>(it->second);
+
+    // TODO(ntonci): Currently this does not output features.
+    // const FeatureLayer<Feature3D>& segmented_feature_layer =
+    //     std::get<2>(it->second);
 
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
@@ -607,7 +698,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
 
 void Controller::extractSegmentLayers(
     const std::vector<Label>& labels,
-    std::unordered_map<Label, LayerPair>* label_layers_map,
+    std::unordered_map<Label, LayerTuple>* label_layers_map,
     bool labels_list_is_complete) {
   CHECK(label_layers_map);
 
@@ -617,9 +708,13 @@ void Controller::extractSegmentLayers(
                                     map_config_.voxels_per_side);
   Layer<LabelVoxel> label_layer_empty(map_config_.voxel_size,
                                       map_config_.voxels_per_side);
+  FeatureLayer<Feature3D> feature_layer_empty(map_config_.voxel_size *
+                                              map_config_.voxels_per_side);
+
   for (const Label& label : labels) {
     label_layers_map->emplace(
-        label, std::make_pair(tsdf_layer_empty, label_layer_empty));
+        label, std::make_tuple(tsdf_layer_empty, label_layer_empty,
+                               feature_layer_empty));
   }
 
   BlockIndexList all_label_blocks;
@@ -630,6 +725,8 @@ void Controller::extractSegmentLayers(
         map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
     Block<LabelVoxel>::Ptr global_label_block =
         map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
+    FeatureBlock<Feature3D>::Ptr global_feature_block =
+        feature_layer_->getBlockPtrByIndex(block_index);
 
     const size_t vps = global_label_block->voxels_per_side();
     for (size_t i = 0; i < vps * vps * vps; ++i) {
@@ -651,15 +748,19 @@ void Controller::extractSegmentLayers(
         continue;
       }
 
-      Layer<TsdfVoxel>& tsdf_layer = it->second.first;
-      Layer<LabelVoxel>& label_layer = it->second.second;
+      Layer<TsdfVoxel>& tsdf_layer = std::get<0>(it->second);
+      Layer<LabelVoxel>& label_layer = std::get<1>(it->second);
+      FeatureLayer<Feature3D>& feature_layer = std::get<2>(it->second);
 
       Block<TsdfVoxel>::Ptr tsdf_block =
           tsdf_layer.allocateBlockPtrByIndex(block_index);
       Block<LabelVoxel>::Ptr label_block =
           label_layer.allocateBlockPtrByIndex(block_index);
+      FeatureBlock<Feature3D>::Ptr feature_block =
+          feature_layer.allocateBlockPtrByIndex(block_index);
       CHECK(tsdf_block);
       CHECK(label_block);
+      CHECK(feature_block);
 
       TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
       LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
@@ -669,6 +770,8 @@ void Controller::extractSegmentLayers(
 
       tsdf_voxel = global_tsdf_voxel;
       label_voxel = global_label_voxel;
+
+      feature_block->getFeatures() = global_feature_block->getFeatures();
     }
   }
 }
@@ -708,7 +811,7 @@ bool Controller::publishObjects(const bool publish_all) {
   std::vector<Label> labels_to_publish;
   getLabelsToPublish(publish_all, &labels_to_publish);
 
-  std::unordered_map<Label, LayerPair> label_to_layers;
+  std::unordered_map<Label, LayerTuple> label_to_layers;
   ros::Time start = ros::Time::now();
   extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
   ros::Time stop = ros::Time::now();
@@ -720,8 +823,9 @@ bool Controller::publishObjects(const bool publish_all) {
     CHECK(it != label_to_layers.end())
         << "Layers for " << label << " could not be extracted.";
 
-    Layer<TsdfVoxel>& tsdf_layer = it->second.first;
-    Layer<LabelVoxel>& label_layer = it->second.second;
+    Layer<TsdfVoxel>& tsdf_layer = std::get<0>(it->second);
+    Layer<LabelVoxel>& label_layer = std::get<1>(it->second);
+    FeatureLayer<Feature3D>& feature_layer = std::get<2>(it->second);
 
     // TODO(ff): Check what a reasonable size is for this.
     constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
@@ -766,6 +870,9 @@ bool Controller::publishObjects(const bool publish_all) {
     // yet, hence it doesn't work.
     serializeLayerAsMsg<LabelVoxel>(label_layer, kSerializeOnlyUpdated,
                                     &gsm_update_msg.object.label_layer);
+    // TODO(ntonci): Serialize Feature layer.
+    // serializeLayerAsMsg<Feature3D>(feature_layer, kSerializeOnlyUpdated,
+    //                                &gsm_update_msg.object.feature_layer);
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.old_labels.clear();
@@ -893,6 +1000,7 @@ void Controller::publishScene() {
   // yet, hence it doesn't work.
   serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(), kSerializeOnlyUpdated,
                                   &gsm_update_msg.object.label_layer);
+  // TODO(ntonci): Also publish feature layer for scene.
 
   gsm_update_msg.object.label = 0u;
   gsm_update_msg.old_labels.clear();
