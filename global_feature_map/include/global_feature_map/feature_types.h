@@ -3,20 +3,28 @@
 
 #include <string>
 
+#include <pcl/point_types.h>
+#include <opencv2/features2d.hpp>
+#include <opencv2/opencv.hpp>
+#include <opencv2/xfeatures2d.hpp>
+
 #include <voxblox/core/common.h>
 
 namespace voxblox {
 
 struct Feature3D {
+  pcl::PointSurfel keypoint;
+  double keypoint_scale;
+  double keypoint_response;
+  cv::Mat descriptor;
+
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
-  Point point;
-
-  // Add feature stuff.
 };
 
 template <typename Type>
-std::string getFeatureType();
+inline std::string getFeatureType() {
+  return "Unknown";
+};
 
 template <>
 std::string getFeatureType<Feature3D>();

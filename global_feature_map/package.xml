@@ -5,6 +5,7 @@
   <description>Global Feature Map voxblox extension</description>
 
   <author email="tonci.novkovic@gmail.com">Tonci Novkovic</author>
+  <author email="marius.b.fehr@gmail.com">Marius Fehr</author>
 
   <maintainer email="tonci.novkovic@gmail.com">Tonci Novkovic</maintainer>
   <maintainer email="margaritagrinvald@gmail.com">Margarita Grinvald</maintainer>
@@ -21,4 +22,5 @@
   <depend>glog_catkin</depend>
   <depend>pcl_catkin</depend>
   <depend>voxblox</depend>
+  <depend>opencv3_catkin</depend>
 </package>

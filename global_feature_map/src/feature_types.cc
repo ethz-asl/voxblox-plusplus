@@ -3,7 +3,7 @@
 namespace voxblox {
 
 template <>
-inline std::string getFeatureType<Feature3D>() {
+std::string getFeatureType<Feature3D>() {
   return "Feature3D";
 }
 

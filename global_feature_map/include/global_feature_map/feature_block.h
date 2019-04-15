@@ -35,43 +35,21 @@ class FeatureBlock {
     return getGridIndexFromOriginPoint<BlockIndex>(origin_, block_size_inv_);
   }
 
-  size_t num_features() const {
-    return features_.size();
-  }
-  Point origin() const {
-    return origin_;
-  }
-  void setOrigin(const Point& new_origin) {
-    origin_ = new_origin;
-  }
-  FloatingPoint block_size() const {
-    return block_size_;
-  }
+  size_t num_features() const { return features_.size(); }
+  Point origin() const { return origin_; }
+  void setOrigin(const Point& new_origin) { origin_ = new_origin; }
+  FloatingPoint block_size() const { return block_size_; }
 
-  inline const std::vector<FeatureType>& features() const {
-    return features_;
-  }
+  inline const std::vector<FeatureType>& features() const { return features_; }
 
-  bool has_data() const {
-    return has_data_;
-  }
-  bool updated() const {
-    return updated_;
-  }
+  bool has_data() const { return has_data_; }
+  bool updated() const { return updated_; }
 
-  std::atomic<bool>& updated() {
-    return updated_;
-  }
-  bool& has_data() {
-    return has_data_;
-  }
+  std::atomic<bool>& updated() { return updated_; }
+  bool& has_data() { return has_data_; }
 
-  void set_updated(bool updated) {
-    updated_ = updated;
-  }
-  void set_has_data(bool has_data) {
-    has_data_ = has_data;
-  }
+  void set_updated(bool updated) { updated_ = updated; }
+  void set_has_data(bool has_data) { has_data_ = has_data; }
 
   const FeatureType& getFeature(const size_t index) const {
     CHECK_LT(index, features_.size());
@@ -83,9 +61,9 @@ class FeatureBlock {
     return features_[index];
   }
 
-  void addFeature(const FeatureType& feature) {
-    features_.push_back(feature);
-  }
+  std::vector<FeatureType>& getFeatures() { return features_; }
+
+  void addFeature(const FeatureType& feature) { features_.push_back(feature); }
 
   void mergeBlock(const FeatureBlock<FeatureType>& other_block);
 

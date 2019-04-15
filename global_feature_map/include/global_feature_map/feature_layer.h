@@ -148,12 +148,8 @@ class FeatureLayer {
     DCHECK(insert_status.first->second);
   }
 
-  void removeBlock(const BlockIndex& index) {
-    block_map_.erase(index);
-  }
-  void removeAllBlocks() {
-    block_map_.clear();
-  }
+  void removeBlock(const BlockIndex& index) { block_map_.erase(index); }
+  void removeAllBlocks() { block_map_.clear(); }
 
   void removeBlockByCoordinates(const Point& coords) {
     block_map_.erase(computeBlockIndexFromCoordinates(coords));
@@ -194,20 +190,14 @@ class FeatureLayer {
     }
   }
 
-  size_t getNumberOfAllocatedBlocks() const {
-    return block_map_.size();
-  }
+  size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
 
   bool hasBlock(const BlockIndex& block_index) const {
     return block_map_.count(block_index) > 0;
   }
 
-  FloatingPoint block_size() const {
-    return block_size_;
-  }
-  FloatingPoint block_size_inv() const {
-    return block_size_inv_;
-  }
+  FloatingPoint block_size() const { return block_size_; }
+  FloatingPoint block_size_inv() const { return block_size_inv_; }
 
   size_t getMemorySize() const;
 

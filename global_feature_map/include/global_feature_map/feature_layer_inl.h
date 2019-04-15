@@ -34,7 +34,7 @@ FeatureLayer<FeatureType>::FeatureLayer(const FeatureLayer& other) {
         allocateBlockPtrByIndex(block_idx);
     CHECK(new_block);
 
-    *new_block = *block_ptr;
+    new_block->getFeatures() = block_ptr->getFeatures();
   }
 }
 
