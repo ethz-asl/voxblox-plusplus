@@ -28,12 +28,10 @@ void InstanceLabelFusion::decreaseLabelInstanceCount(
     if (instance_it != label_it->second.end()) {
       --instance_it->second;
     } else {
-      // label_it->second.emplace(instance_label, 1);
+      // TODO(margaritaG): Shouldn't happen, what are we decreasing else?
     }
   } else {
-    // SLMap instance_count;
-    // instance_count.emplace(instance_label, 1);
-    // label_instance_count_.emplace(label, instance_count);
+    // TODO(margaritaG): Shouldn't happen, what are we decreasing else?
   }
 }
 

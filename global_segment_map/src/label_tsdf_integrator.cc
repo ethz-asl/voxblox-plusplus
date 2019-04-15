@@ -205,8 +205,9 @@ void LabelTsdfIntegrator::addVoxelLabelConfidence(
   }
   if (updated == false) {
     // TODO(margaritaG): handle this nicely or remove.
-    LOG(FATAL) << "Out-of-memory for storing labels and confidences for this "
-                  " voxel. Please increse size of array.";
+    // LOG(FATAL) << "Out-of-memory for storing labels and confidences for this
+    // "
+    //               " voxel. Please increse size of array.";
   }
 }
 
