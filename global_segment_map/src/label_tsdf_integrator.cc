@@ -931,11 +931,15 @@ void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
 // for which the voxel count is greater than 0.
 std::vector<Label> LabelTsdfIntegrator::getLabelsList() {
   std::vector<Label> labels;
+  int count_unused_labels = 0;
   for (std::pair<Label, int> label_count_pair : labels_count_map_) {
     if (label_count_pair.second > 0) {
       labels.push_back(label_count_pair.first);
+    } else {
+      count_unused_labels++;
     }
   }
+  LOG(ERROR) << "Unused labels count: " << count_unused_labels;
   return labels;
 }
 

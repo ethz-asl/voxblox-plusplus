@@ -13,7 +13,6 @@
 
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/file_utils.h>
-#include <global_segment_map/utils/label_utils.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 
@@ -406,7 +405,6 @@ void Controller::advertiseExtractSegmentsService(
     ros::ServiceServer* extract_segments_srv) {
   CHECK_NOTNULL(extract_segments_srv);
   *extract_segments_srv = node_handle_private_->advertiseService(
-      // "extract_segments", &Controller::extractTSDFCallback, this);
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
@@ -599,13 +597,6 @@ bool Controller::generateMeshCallback(
   return true;
 }
 
-// bool Controller::extractTSDFCallback(std_srvs::Empty::Request& request,
-//                                          std_srvs::Empty::Response&
-//                                          response)
-//                                          {
-//
-//                                          }
-
 bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
                                          std_srvs::Empty::Response& response) {
   // Get list of all labels in the map.
@@ -650,8 +641,7 @@ void Controller::extractSegmentLayers(
     bool labels_list_is_complete) {
   CHECK(label_layers_map);
 
-  // Build map from labels to tsdf and label layers. Each will contain the
-  // segment of the corresponding layer.
+  // Map a label to its corresponding TSDF and label layers.
   Layer<TsdfVoxel> tsdf_layer_empty(map_config_.voxel_size,
                                     map_config_.voxels_per_side);
   Layer<LabelVoxel> label_layer_empty(map_config_.voxel_size,
