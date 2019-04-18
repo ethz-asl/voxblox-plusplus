@@ -4,6 +4,6 @@ catkin config --cmake-args -DCMAKE_CXX_STANDARD=14
 
 CMAKE_VERSION=$(cmake --version | sed -ne 's/[^0-9]*\(\([0-9]\.\)\{0,4\}[0-9][^.]\).*/\1/p')
 MIN_CMAKE_VERSION=3.10
-if if (($(echo "${CMAKE_VERSION} >= ${MIN_CMAKE_VERSION}" | bc -l) )); then
+if (($(echo "${CMAKE_VERSION} >= ${MIN_CMAKE_VERSION}" | bc -l) )); then
   catkin build approxmvbb_catkin
 fi
