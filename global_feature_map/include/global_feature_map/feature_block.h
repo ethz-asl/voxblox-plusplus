@@ -31,39 +31,41 @@ class FeatureBlock {
 
   ~FeatureBlock() {}
 
-  BlockIndex block_index() const {
+  inline BlockIndex block_index() const {
     return getGridIndexFromOriginPoint<BlockIndex>(origin_, block_size_inv_);
   }
 
-  size_t num_features() const { return features_.size(); }
-  Point origin() const { return origin_; }
-  void setOrigin(const Point& new_origin) { origin_ = new_origin; }
-  FloatingPoint block_size() const { return block_size_; }
+  inline FloatingPoint block_size() const { return block_size_; }
 
-  inline const std::vector<FeatureType>& features() const { return features_; }
+  inline Point origin() const { return origin_; }
+  inline void setOrigin(const Point& new_origin) { origin_ = new_origin; }
 
-  bool has_data() const { return has_data_; }
-  bool updated() const { return updated_; }
+  inline void set_updated(bool updated) { updated_ = updated; }
+  inline std::atomic<bool>& updated() { return updated_; }
+  inline bool updated() const { return updated_; }
 
-  std::atomic<bool>& updated() { return updated_; }
-  bool& has_data() { return has_data_; }
+  inline void set_has_data(bool has_data) { has_data_ = has_data; }
+  inline bool& has_data() { return has_data_; }
+  inline bool has_data() const { return has_data_; }
 
-  void set_updated(bool updated) { updated_ = updated; }
-  void set_has_data(bool has_data) { has_data_ = has_data; }
+  inline std::vector<FeatureType>& getFeatures() { return features_; }
+  inline void setFeatures(const std::vector<FeatureType>& features) {
+    features_ = features;
+  }
 
-  const FeatureType& getFeature(const size_t index) const {
+  inline const FeatureType& getFeature(const size_t index) const {
     CHECK_LT(index, features_.size());
     return features_[index];
   }
-
-  FeatureType& getFeature(const size_t index) {
+  inline FeatureType& getFeature(const size_t index) {
     CHECK_LT(index, features_.size());
     return features_[index];
   }
+  inline void addFeature(const FeatureType& feature) {
+    features_.push_back(feature);
+  }
 
-  std::vector<FeatureType>& getFeatures() { return features_; }
-
-  void addFeature(const FeatureType& feature) { features_.push_back(feature); }
+  inline size_t num_features() const { return features_.size(); }
 
   void mergeBlock(const FeatureBlock<FeatureType>& other_block);
 

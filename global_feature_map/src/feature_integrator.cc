@@ -129,6 +129,7 @@ void FeatureIntegrator::updateFeatureBlock(
   DCHECK(block != nullptr);
 
   (*block)->addFeature(feature);
+  (*block)->set_has_data(true);
 }
 
 }  // namespace voxblox

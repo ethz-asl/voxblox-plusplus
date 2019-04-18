@@ -23,4 +23,5 @@
   <depend>pcl_catkin</depend>
   <depend>voxblox</depend>
   <depend>opencv3_catkin</depend>
+  <depend>visualization_msgs</depend>
 </package>

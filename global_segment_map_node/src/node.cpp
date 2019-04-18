@@ -31,6 +31,9 @@ int main(int argc, char** argv) {
     controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
   }
 
+  ros::Subscriber feature_sub;
+  controller->subscribeFeatureTopic(&feature_sub);
+
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
