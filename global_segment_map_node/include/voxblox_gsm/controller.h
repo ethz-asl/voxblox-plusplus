@@ -34,6 +34,13 @@ namespace voxblox_gsm {
 typedef std::tuple<Layer<TsdfVoxel>, Layer<LabelVoxel>, FeatureLayer<Feature3D>>
     LayerTuple;
 
+enum LayerAccessor {
+  kTsdfLayer = 0,
+  kLabelLayer = 1,
+  kFeatureLayer = 2,
+  kCount
+};
+
 class Controller {
  public:
   Controller(ros::NodeHandle* node_handle);

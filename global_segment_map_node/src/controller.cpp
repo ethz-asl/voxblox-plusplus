@@ -429,10 +429,6 @@ std::vector<Feature3D> Controller::fromFeaturesMsgToFeature3D(
     feature.keypoint.x = msg.x;
     feature.keypoint.y = msg.y;
     feature.keypoint.z = msg.z;
-    feature.keypoint.r = msg.r;
-    feature.keypoint.g = msg.g;
-    feature.keypoint.b = msg.b;
-    feature.keypoint.a = msg.a;
     feature.keypoint_scale = msg.scale;
     feature.keypoint_response = msg.response;
 
@@ -665,24 +661,32 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
   constexpr bool kLabelsListIsComplete = true;
   extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
 
+  const char* kSegmentFolder = "gsm_segments";
+
+  struct stat info;
+  if (stat(kSegmentFolder, &info) != 0) {
+    CHECK_EQ(mkdir(kSegmentFolder, ACCESSPERMS), 0);
+  }
+
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
     CHECK(it != label_to_layers.end())
         << "Layers for label " << label << " could not be extracted.";
 
-    const Layer<TsdfVoxel>& segment_tsdf_layer = std::get<0>(it->second);
-    const Layer<LabelVoxel>& segment_label_layer = std::get<1>(it->second);
+    const Layer<TsdfVoxel>& segment_tsdf_layer =
+        std::get<LayerAccessor::kTsdfLayer>(it->second);
+    const Layer<LabelVoxel>& segment_label_layer =
+        std::get<LayerAccessor::kLabelLayer>(it->second);
 
     // TODO(ntonci): Currently this does not output features.
     // const FeatureLayer<Feature3D>& segmented_feature_layer =
-    //     std::get<2>(it->second);
+    //     std::get<LayerAccessor::kFeatureLayer>(it->second);
 
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
                                      &segment_mesh, kConnectedMesh)) {
-      CHECK_EQ(mkdir("segments", 0777), 0);
-
-      std::string mesh_filename = "gsm_segments/gsm_segment_mesh_label_" +
+      std::string mesh_filename = std::string(kSegmentFolder) +
+                                  "/gsm_segment_mesh_label_" +
                                   std::to_string(label) + ".ply";
 
       bool success = outputMeshAsPly(mesh_filename, segment_mesh);
@@ -748,9 +752,12 @@ void Controller::extractSegmentLayers(
         continue;
       }
 
-      Layer<TsdfVoxel>& tsdf_layer = std::get<0>(it->second);
-      Layer<LabelVoxel>& label_layer = std::get<1>(it->second);
-      FeatureLayer<Feature3D>& feature_layer = std::get<2>(it->second);
+      Layer<TsdfVoxel>& tsdf_layer =
+          std::get<LayerAccessor::kTsdfLayer>(it->second);
+      Layer<LabelVoxel>& label_layer =
+          std::get<LayerAccessor::kLabelLayer>(it->second);
+      FeatureLayer<Feature3D>& feature_layer =
+          std::get<LayerAccessor::kFeatureLayer>(it->second);
 
       Block<TsdfVoxel>::Ptr tsdf_block =
           tsdf_layer.allocateBlockPtrByIndex(block_index);
@@ -771,7 +778,9 @@ void Controller::extractSegmentLayers(
       tsdf_voxel = global_tsdf_voxel;
       label_voxel = global_label_voxel;
 
-      feature_block->getFeatures() = global_feature_block->getFeatures();
+      if (global_feature_block != nullptr) {
+        feature_block->getFeatures() = global_feature_block->getFeatures();
+      }
     }
   }
 }
@@ -823,9 +832,12 @@ bool Controller::publishObjects(const bool publish_all) {
     CHECK(it != label_to_layers.end())
         << "Layers for " << label << " could not be extracted.";
 
-    Layer<TsdfVoxel>& tsdf_layer = std::get<0>(it->second);
-    Layer<LabelVoxel>& label_layer = std::get<1>(it->second);
-    FeatureLayer<Feature3D>& feature_layer = std::get<2>(it->second);
+    Layer<TsdfVoxel>& tsdf_layer =
+        std::get<LayerAccessor::kTsdfLayer>(it->second);
+    Layer<LabelVoxel>& label_layer =
+        std::get<LayerAccessor::kLabelLayer>(it->second);
+    FeatureLayer<Feature3D>& feature_layer =
+        std::get<LayerAccessor::kFeatureLayer>(it->second);
 
     // TODO(ff): Check what a reasonable size is for this.
     constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
