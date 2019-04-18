@@ -9,26 +9,35 @@ endif()
 find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
-if(${CMAKE_VERSION} VERSION_LESS "3.8.0")
-    message(WARNING, "ApproxMVBB is not available for this cmake version and will be disabled.")
-else()
-    find_package(approxmvbb_catkin)
-    
-    if (NOT ${approxmvbb_catkin_FOUND})
-      message(WARNING, "ApproxMVBB is not found, trying to build it.")
-      execute_process (
-          COMMAND bash -c "catkin build approxmvbb_catkin"
-      )
-      find_package(approxmvbb_catkin)
-    endif()
+option(WITH_APPROXMVBB "Build with approxMVBB library for bounding box support." TRUE)
 
-    if (${approxmvbb_catkin_FOUND})
-      message("ApproxMVBB is found.")
-      add_definitions(-DAPPROXMVBB_AVAILABLE)
-      include_directories(include ${catkin_INCLUDE_DIRS} ${approxmvbb_catkin_INCLUDE_DIRS} )
-    else()
-      message(WARNING, "ApproxMVBB is not found and could not build it. Please place approxmvbb_catkin package in your current workspace to have support for the bounding boxes in GSM.")
-    endif()
+if (WITH_APPROXMVBB)
+  if(${CMAKE_VERSION} VERSION_LESS "3.8.0")
+      message(WARNING "ApproxMVBB is not available for this cmake version and will be disabled.")
+  else()
+      find_package(approxmvbb_catkin)
+
+      if (NOT ${approxmvbb_catkin_FOUND})
+        message(WARNING "ApproxMVBB is not found, trying to build it.")
+        execute_process (
+            COMMAND catkin build approxmvbb_catkin
+            OUTPUT_VARIABLE build_log
+            ERROR_VARIABLE build_log
+        )
+        message(STATUS build_log)
+        find_package(approxmvbb_catkin)
+      endif()
+
+      if (${approxmvbb_catkin_FOUND})
+        message(STATUS "ApproxMVBB is found.")
+        add_definitions(-DAPPROXMVBB_AVAILABLE)
+        include_directories(include ${catkin_INCLUDE_DIRS} ${approxmvbb_catkin_INCLUDE_DIRS} )
+      else()
+        message(WARNING "ApproxMVBB is not found and could not be built. Please place approxmvbb_catkin package in your current workspace to have support for the bounding boxes in the GSM.")
+      endif()
+  endif()
+else()
+  message(STATUS "ApproxMVBB has been disabled. GSM will not support bounding box computation.")
 endif()
 
 cs_add_library(${PROJECT_NAME}_library
