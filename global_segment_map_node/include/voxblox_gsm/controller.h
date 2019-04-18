@@ -56,12 +56,6 @@ class Controller {
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
-  // void advertiseGenerateSemanticMeshService(
-  //     ros::ServiceServer* generate_semantic_mesh_srv);
-  //
-  // void advertiseGenerateInstanceMeshService(
-  //     ros::ServiceServer* generate_instance_mesh_srv);
-
   void advertiseExtractSegmentsService(
       ros::ServiceServer* extract_segments_srv);
 
