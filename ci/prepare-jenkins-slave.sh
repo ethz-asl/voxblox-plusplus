@@ -1,6 +1,7 @@
 #!/bin/bash -e
 echo "Running the prepare script for voxblox_gsm.";
-catkin config --cmake-args -DCMAKE_CXX_STANDARD=14 --merge-devel
+catkin config --cmake-args -DCMAKE_CXX_STANDARD=14
+catkin config --merge-devel 
 
 sudo apt-get install bc
 CMAKE_VERSION=$(cmake --version | sed -ne 's/[^0-9]*\(\([0-9]\.\)\{0,4\}[0-9][^.]\).*/\1/p')
