@@ -9,15 +9,17 @@
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_tsdf_mesh_integrator.h>
+#include <global_segment_map/label_voxel.h>
 #include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
 #include <pcl/io/vtk_lib_io.h>
 #include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
-#include <std_srvs/SetBool.h>
 #include <std_srvs/Empty.h>
+#include <std_srvs/SetBool.h>
 #include <tf/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
 
@@ -43,6 +45,8 @@ class Controller {
 
   void advertiseSceneMeshTopic(ros::Publisher* scene_mesh_pub);
 
+  void advertiseBboxTopic(ros::Publisher* bbox_pub);
+
   void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
   void validateMergedObjectService(
@@ -63,10 +67,18 @@ class Controller {
 
   bool publish_scene_mesh_;
   bool publish_segment_mesh_;
+  bool compute_and_publish_bbox_;
+
+  bool use_label_propagation_;
 
   double no_update_timeout_;
 
  protected:
+  template <typename point_type = pcl::PointXYZRGB>
+  void fillSegmentWithData(
+      const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
+      Segment* segment);
+
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
@@ -93,8 +105,8 @@ class Controller {
    * gsm.
    */
   virtual void extractSegmentLayers(
-      const std::vector<Label> &labels,
-      std::unordered_map<Label, LayerPair> *label_layers_map,
+      const std::vector<Label>& labels,
+      std::unordered_map<Label, LayerPair>* label_layers_map,
       bool labels_list_is_complete = false);
 
   bool lookupTransform(const std::string& from_frame,
@@ -111,9 +123,15 @@ class Controller {
   virtual void getLabelsToPublish(const bool get_all,
                                   std::vector<Label>* labels);
 
+  void computeAlignedBoundingBox(
+      const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
+      Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
+      Eigen::Vector3f* bbox_size);
+
   ros::NodeHandle* node_handle_private_;
 
   tf::TransformListener tf_listener_;
+  tf2_ros::TransformBroadcaster tf_broadcaster_;
   ros::Time last_segment_msg_timestamp_;
   size_t integrated_frames_count_;
 
@@ -128,6 +146,8 @@ class Controller {
   ros::Timer update_mesh_timer_;
   ros::Publisher* scene_mesh_pub_;
   ros::Publisher* segment_mesh_pub_;
+  ros::Publisher* bbox_pub_;
+  ros::Publisher* scene_pointcloud_pub_;
   std::string mesh_filename_;
 
   std::string world_frame_;
@@ -152,7 +172,15 @@ class Controller {
 
   std::map<Label, std::set<Label>> merges_to_publish_;
 };
+
+template <>
+void Controller::fillSegmentWithData<PointSurfelLabel>(
+    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
+    Segment* segment);
+
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
 #endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
+
+#include "voxblox_gsm/controller_inl.h"
