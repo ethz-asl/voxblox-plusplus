@@ -43,28 +43,6 @@ void FeatureIntegrator::integrateFeatures(
   insertion_timer.Stop();
 }
 
-void FeatureIntegrator::updateLayerWithStoredBlocks() {
-  BlockIndex last_block_idx;
-  FeatureBlock<Feature3D>::Ptr block = nullptr;
-
-  for (const std::pair<const BlockIndex, FeatureBlock<Feature3D>::Ptr>&
-           temp_block_pair : temp_block_map_) {
-    const BlockIndex block_idx = temp_block_pair.first;
-    FeatureBlock<Feature3D>::Ptr block = temp_block_pair.second;
-    std::vector<Feature3D> features = block->getFeatures();
-
-    FeatureBlock<Feature3D>::Ptr original_block =
-        layer_->allocateBlockPtrByIndex(block_idx);
-
-    // TODO(ntonci): Do the sorting here.
-    for (Feature3D& feature : features) {
-      original_block->addFeature(feature);
-    }
-  }
-
-  temp_block_map_.clear();
-}
-
 void FeatureIntegrator::integrateFunction(
     const Transformation& T_G_C, const std::vector<Feature3D>& features,
     ThreadSafeIndex* index_getter) {
@@ -128,8 +106,32 @@ void FeatureIntegrator::updateFeatureBlock(
     const Feature3D& feature, FeatureBlock<Feature3D>::Ptr* block) {
   DCHECK(block != nullptr);
 
+  std::lock_guard<std::mutex> lock((*block)->getMutex());
+
   (*block)->addFeature(feature);
   (*block)->set_has_data(true);
+}
+
+void FeatureIntegrator::updateLayerWithStoredBlocks() {
+  BlockIndex last_block_idx;
+  FeatureBlock<Feature3D>::Ptr block = nullptr;
+
+  for (const std::pair<const BlockIndex, FeatureBlock<Feature3D>::Ptr>&
+           temp_block_pair : temp_block_map_) {
+    const BlockIndex block_idx = temp_block_pair.first;
+    FeatureBlock<Feature3D>::Ptr block = temp_block_pair.second;
+    std::vector<Feature3D> features = block->getFeatures();
+
+    FeatureBlock<Feature3D>::Ptr original_block =
+        layer_->allocateBlockPtrByIndex(block_idx);
+
+    // TODO(ntonci): Do the sorting here.
+    for (Feature3D& feature : features) {
+      original_block->addFeature(feature);
+    }
+  }
+
+  temp_block_map_.clear();
 }
 
 }  // namespace voxblox

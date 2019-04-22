@@ -36,8 +36,8 @@ size_t FeatureBlock<FeatureType>::getMemorySize() const {
   size += sizeof(has_data_);
   size += sizeof(updated_);
 
-  if (num_features() > 0u) {
-    size += (num_features() * sizeof(FeatureType));
+  if (numFeatures() > 0u) {
+    size += (numFeatures() * sizeof(FeatureType));
   }
   return size;
 }

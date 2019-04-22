@@ -19,6 +19,7 @@
 
 namespace voxblox {
 
+// TODO(ntonci): Template with FeatureType
 class FeatureIntegrator {
  public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -36,26 +37,26 @@ class FeatureIntegrator {
 
   FeatureIntegrator(const Config& config, FeatureLayer<Feature3D>* layer);
 
+  void setLayer(FeatureLayer<Feature3D>* layer);
+
+  inline const Config& getConfig() const { return config_; }
+
   void integrateFeatures(const Transformation& T_G_C,
                          const std::vector<Feature3D>& features);
 
+ protected:
   void integrateFunction(const Transformation& T_G_C,
                          const std::vector<Feature3D>& features,
                          ThreadSafeIndex* index_getter);
 
-  inline const Config& getConfig() const { return config_; }
-
-  void setLayer(FeatureLayer<Feature3D>* layer);
-
- protected:
   void allocateStorageAndGetBlockPtr(const Point& point_G,
                                      FeatureBlock<Feature3D>::Ptr* last_block,
                                      BlockIndex* last_block_idx);
 
-  void updateLayerWithStoredBlocks();
-
   void updateFeatureBlock(const Feature3D& feature,
                           FeatureBlock<Feature3D>::Ptr* block);
+
+  void updateLayerWithStoredBlocks();
 
   Config config_;
   FeatureLayer<Feature3D>* layer_;
@@ -65,7 +66,6 @@ class FeatureIntegrator {
 
   std::mutex temp_block_mutex_;
   FeatureLayer<Feature3D>::FeatureBlockHashMap temp_block_map_;
-  ApproxHashArray<12, std::mutex, GlobalIndex, LongIndexHash> mutexes_;
 };
 
 }  // namespace voxblox

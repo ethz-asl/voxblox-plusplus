@@ -919,6 +919,8 @@ bool Controller::publishObjects(const bool publish_all) {
     }
 
     if (compute_and_publish_bbox_) {
+      CHECK_NOTNULL(bbox_pub_);
+
       Eigen::Vector3f bbox_translation;
       Eigen::Quaternionf bbox_quaternion;
       Eigen::Vector3f bbox_size;

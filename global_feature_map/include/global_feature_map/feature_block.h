@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include <voxblox/core/common.h>
@@ -65,11 +66,13 @@ class FeatureBlock {
     features_.push_back(feature);
   }
 
-  inline size_t num_features() const { return features_.size(); }
+  inline size_t numFeatures() const { return features_.size(); }
 
   void mergeBlock(const FeatureBlock<FeatureType>& other_block);
 
   size_t getMemorySize() const;
+
+  inline std::mutex& getMutex() { return block_mutex_; }
 
  protected:
   std::vector<FeatureType> features_;
@@ -86,6 +89,8 @@ class FeatureBlock {
 
   /// Is set to true when data is updated.
   std::atomic<bool> updated_;
+
+  std::mutex block_mutex_;
 };
 
 }  // namespace voxblox

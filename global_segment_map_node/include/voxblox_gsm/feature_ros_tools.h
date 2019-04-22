@@ -1,10 +1,12 @@
 #ifndef VOXBLOX_GSM_FEATURE_ROS_TOOLS_H
 #define VOXBLOX_GSM_FEATURE_ROS_TOOLS_H
 
+#include <algorithm>
+
 #include <std_msgs/ColorRGBA.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-#include <voxblox/common.h>
+#include <voxblox/core/common.h>
 
 #include <global_feature_map/feature_block.h>
 #include <global_feature_map/feature_layer.h>
@@ -13,19 +15,16 @@ namespace voxblox {
 namespace voxblox_gsm {
 
 inline std_msgs::ColorRGBA getColorFromBlockFeatures(
-    const double min_value_of_features, const double max_value_of_features,
-    const double number_of_features) {
-  double ratio = 2 * (number_of_features - min_value_of_features) /
-                 (max_value_of_features - min_value_of_features);
-  b = max(0.0, 1.0 * (1 - ratio));
-  r = max(0.0, 1.0 * (ratio - 1));
-  g = 1.0 - b - r;
+    const double max_number_of_features, const double number_of_features) {
+  double ratio = 2 * std::min(1.0, number_of_features / max_number_of_features);
+  double r = std::max(0.0, ratio - 1.0);
+  double b = std::max(0.0, 1.0 - ratio);
 
   std_msgs::ColorRGBA color_msg;
   color_msg.r = r;
-  color_msg.g = g;
+  color_msg.g = 1.0 - b - r;
   color_msg.b = b;
-  color_msg.a = 0.3;
+  color_msg.a = 0.2;
 
   return color_msg;
 }
@@ -33,6 +32,7 @@ inline std_msgs::ColorRGBA getColorFromBlockFeatures(
 template <typename FeatureType>
 inline void createOccupancyBlocksFromFeatureLayer(
     const FeatureLayer<FeatureType>& layer, const std::string& frame_id,
+    const double& max_number_of_features,
     visualization_msgs::MarkerArray* marker_array) {
   CHECK_NOTNULL(marker_array);
 
@@ -41,7 +41,7 @@ inline void createOccupancyBlocksFromFeatureLayer(
 
   visualization_msgs::Marker block_marker;
   block_marker.header.frame_id = frame_id;
-  block_marker.ns = "occupied_voxels";
+  block_marker.ns = "feature_blocks";
   block_marker.id = 0;
   block_marker.type = visualization_msgs::Marker::CUBE_LIST;
   block_marker.scale.x = block_marker.scale.y = block_marker.scale.z =
@@ -52,13 +52,15 @@ inline void createOccupancyBlocksFromFeatureLayer(
   layer.getAllAllocatedBlocks(&blocks);
   for (const BlockIndex& index : blocks) {
     const FeatureBlock<FeatureType>& block = layer.getBlockByIndex(index);
-    Point coord = block.computeBlockCoordinatesFromIndex(linear_index);
+    Point coord = block.origin();
     geometry_msgs::Point cube_center;
-    cube_center.x = coord.x();
-    cube_center.y = coord.y();
-    cube_center.z = coord.z();
+    cube_center.x = coord.x() + block_size / 2.0;
+    cube_center.y = coord.y() + block_size / 2.0;
+    cube_center.z = coord.z() + block_size / 2.0;
     block_marker.points.push_back(cube_center);
-    std_msgs::ColorRGBA color_msg = getColorFromBlockFeatures();
+    size_t number_of_features = block.numFeatures();
+    std_msgs::ColorRGBA color_msg =
+        getColorFromBlockFeatures(max_number_of_features, number_of_features);
     block_marker.colors.push_back(color_msg);
   }
   marker_array->markers.push_back(block_marker);

@@ -118,10 +118,6 @@ class FeatureLayer {
     return getGridIndexFromPoint<BlockIndex>(coords, block_size_inv_);
   }
 
-  inline Point computeBlockCoordinatesFromIndex(const BlockIndex& idx) const {
-    return getCenterPointFromGridIndex<BlockIndex>(idx, block_size_inv_);
-  }
-
   typename FeatureBlockType::Ptr allocateNewBlock(const BlockIndex& index) {
     auto insert_status = block_map_.emplace(
         index,
