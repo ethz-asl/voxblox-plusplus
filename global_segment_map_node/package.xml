@@ -27,7 +27,6 @@
   <depend>global_feature_map</depend>
   <depend>voxblox_msgs</depend>
   <depend>voxblox_ros</depend>
-  <depend>approxmvbb_catkin</depend>
   <depend>opencv3_catkin</depend>
 
 </package>

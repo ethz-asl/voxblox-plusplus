@@ -22,7 +22,10 @@
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
+
+#ifdef APPROXMVBB_AVAILABLE
 #include <ApproxMVBB/ComputeApproxMVBB.hpp>
+#endif
 
 #include <boost/thread.hpp>
 
@@ -236,6 +239,16 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("compute_and_publish_bbox",
                                     compute_and_publish_bbox_,
                                     compute_and_publish_bbox_);
+
+#ifndef APPROXMVBB_AVAILABLE
+  if (compute_and_publish_bbox_) {
+    ROS_WARN_STREAM(
+        "ApproxMVBB is not available and therefore bounding box functionality "
+        "is disabled.");
+  }
+  compute_and_publish_bbox_ = false;
+#endif
+
   node_handle_private_->param<bool>(
       "use_label_propagation", use_label_propagation_, use_label_propagation_);
 
@@ -396,7 +409,7 @@ void Controller::fillSegmentWithData<PointSurfelLabel>(
   segment->points_C_.reserve(point_cloud.points.size());
   segment->colors_.reserve(point_cloud.points.size());
 
-  for (size_t i = 0; i < point_cloud.points.size(); ++i) {
+  for (size_t i = 0u; i < point_cloud.points.size(); ++i) {
     if (!std::isfinite(point_cloud.points[i].x) ||
         !std::isfinite(point_cloud.points[i].y) ||
         !std::isfinite(point_cloud.points[i].z)) {
@@ -1129,7 +1142,7 @@ void Controller::computeAlignedBoundingBox(
   CHECK_NOTNULL(bbox_translation);
   CHECK_NOTNULL(bbox_quaternion);
   CHECK_NOTNULL(bbox_size);
-
+#ifdef APPROXMVBB_AVAILABLE
   ApproxMVBB::Matrix3Dyn points(3, surfel_cloud->points.size());
 
   for (size_t i = 0u; i < surfel_cloud->points.size(); ++i) {
@@ -1162,6 +1175,12 @@ void Controller::computeAlignedBoundingBox(
   *bbox_quaternion = oobb.m_q_KI.cast<float>();
   *bbox_translation = ((min_in_I + max_in_I) / 2).cast<float>();
   *bbox_size = ((oobb.m_maxPoint - oobb.m_minPoint).cwiseAbs()).cast<float>();
+#else
+  ROS_WARN_STREAM(
+      "Bounding box computation is not supported since ApproxMVBB is "
+      "disabled.");
+#endif
 }
+
 }  // namespace voxblox_gsm
 }  // namespace voxblox
