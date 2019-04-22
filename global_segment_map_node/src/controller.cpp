@@ -459,9 +459,7 @@ std::vector<Feature3D> Controller::fromFeaturesMsgToFeature3D(
   for (modelify_msgs::Feature msg : features_msg.features) {
     Feature3D feature;
 
-    feature.keypoint.x = msg.x;
-    feature.keypoint.y = msg.y;
-    feature.keypoint.z = msg.z;
+    feature.keypoint << msg.x, msg.y, msg.z;
     feature.keypoint_scale = msg.scale;
     feature.keypoint_response = msg.response;
 
@@ -1021,6 +1019,8 @@ bool Controller::publishObjects(const bool publish_all) {
     publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
 
     if (publish_segment_mesh_) {
+      // TODO(ntonci): Why not call generateMesh?
+
       // Generate mesh for visualization purposes.
       std::shared_ptr<MeshLayer> mesh_layer;
       mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
@@ -1048,6 +1048,8 @@ void Controller::publishScene() {
   CHECK_NOTNULL(scene_gsm_update_pub_);
   modelify_msgs::GsmUpdate gsm_update_msg;
 
+  // TODO(ntonci): Create a method that generalizes this part such that you dont
+  // need to do it twice, for objects and scene.
   gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
   gsm_update_msg.header.frame_id = world_frame_;
 
@@ -1056,6 +1058,7 @@ void Controller::publishScene() {
                                  &gsm_update_msg.object.tsdf_layer);
   // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
   // yet, hence it doesn't work.
+  // TODO(ntonci): This seems to work?
   serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(), kSerializeOnlyUpdated,
                                   &gsm_update_msg.object.label_layer);
   // TODO(ntonci): Also publish feature layer for scene.
@@ -1076,6 +1079,8 @@ void Controller::publishScene() {
   publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
 }
 
+// TODO(ntonci): Generalize this and rename since this one is also publishing
+// and saving, not just generating.
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
   voxblox::timing::Timer generate_mesh_timer("mesh/generate");
   boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
@@ -1125,6 +1130,8 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   timing::Timer generate_mesh_timer("mesh/update");
   constexpr bool only_mesh_updated_blocks = true;
   constexpr bool clear_updated_flag = true;
+
+  // TODO(ntonci): Why not calling generateMesh instead?
   updatedMesh = mesh_integrator_->generateMesh(only_mesh_updated_blocks,
                                                clear_updated_flag);
   updateMeshLock.unlock();

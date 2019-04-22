@@ -13,7 +13,7 @@
 namespace voxblox {
 
 struct Feature3D {
-  pcl::PointSurfel keypoint;
+  Point keypoint;
   double keypoint_scale;
   double keypoint_response;
   cv::Mat descriptor;

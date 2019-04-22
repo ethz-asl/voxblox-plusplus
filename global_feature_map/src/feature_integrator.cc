@@ -34,7 +34,7 @@ void FeatureIntegrator::integrateFunction(
     const Feature3D& feature = features.at(point_idx);
 
     Point point_C;
-    point_C << feature.keypoint.x, feature.keypoint.y, feature.keypoint.z;
+    point_C = feature.keypoint;
     const Point origin = T_G_C.getPosition();
     const Point point_G = T_G_C * point_C;
 
