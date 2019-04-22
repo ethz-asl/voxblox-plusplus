@@ -202,10 +202,10 @@ class FeatureLayer {
   size_t getMemorySize() const;
 
  protected:
+  std::string getType() const;
+
   FloatingPoint block_size_;
   FloatingPoint block_size_inv_;
-
-  std::string getType() const;
 
   FeatureBlockHashMap block_map_;
 };

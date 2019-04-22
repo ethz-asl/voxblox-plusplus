@@ -11,7 +11,6 @@
 #include <voxblox/utils/approx_hash_array.h>
 #include <voxblox/utils/timing.h>
 #include <Eigen/Core>
-#include <opencv2/opencv.hpp>
 
 #include "global_feature_map/feature_block.h"
 #include "global_feature_map/feature_layer.h"
@@ -35,9 +34,23 @@ class FeatureIntegrator {
     size_t number_of_features_to_keep = 0u;
   };
 
-  FeatureIntegrator(const Config& config, FeatureLayer<Feature3D>* layer);
+  FeatureIntegrator(const Config& config, FeatureLayer<Feature3D>* layer)
+      : config_(config) {
+    setLayer(layer);
 
-  void setLayer(FeatureLayer<Feature3D>* layer);
+    if (config_.integrator_threads == 0u) {
+      LOG(WARNING) << "Automatic core count failed, defaulting to 1 threads";
+      config_.integrator_threads = 1u;
+    }
+  }
+
+  inline void setLayer(FeatureLayer<Feature3D>* layer) {
+    CHECK_NOTNULL(layer);
+
+    layer_ = layer;
+    block_size_ = layer_->block_size();
+    block_size_inv_ = 1.0 / block_size_;
+  }
 
   inline const Config& getConfig() const { return config_; }
 

@@ -30,6 +30,7 @@
 #include <boost/thread.hpp>
 
 #include "voxblox_gsm/conversions.h"
+#include "voxblox_gsm/feature_ros_tools.h"
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -127,6 +128,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_scene_mesh_(false),
       received_first_message_(false),
       compute_and_publish_bbox_(false),
+      publish_feature_blocks_marker_(false),
       use_label_propagation_(true) {
   CHECK_NOTNULL(node_handle_private_);
 
@@ -215,7 +217,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
       map_->getLabelLayerPtr(), map_->getHighestLabelPtr()));
 
-  // TODO(ntonci): Make rosparam.
+  // Determine feature integrator parameters.
+  // TODO(ntonci): Make rosparam if there are any.
   FeatureIntegrator::Config feature_integrator_config;
   feature_integrator_.reset(
       new FeatureIntegrator(feature_integrator_config, feature_layer_.get()));
@@ -239,6 +242,11 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("compute_and_publish_bbox",
                                     compute_and_publish_bbox_,
                                     compute_and_publish_bbox_);
+  node_handle_private_->param<bool>("publish_feature_blocks_marker",
+                                    publish_feature_blocks_marker_,
+                                    publish_feature_blocks_marker_);
+  node_handle_private_->param<bool>(
+      "use_label_propagation", use_label_propagation_, use_label_propagation_);
 
 #ifndef APPROXMVBB_AVAILABLE
   if (compute_and_publish_bbox_) {
@@ -248,9 +256,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   }
   compute_and_publish_bbox_ = false;
 #endif
-
-  node_handle_private_->param<bool>(
-      "use_label_propagation", use_label_propagation_, use_label_propagation_);
 
   // If set, use a timer to progressively update the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -286,8 +291,22 @@ void Controller::subscribeFeatureTopic(ros::Subscriber* feature_sub) {
 
   // Large queue size to give slack to the
   // pipeline and not lose any messages.
+  constexpr int kFeatureQueueSize = 2000;
   *feature_sub = node_handle_private_->subscribe(
-      feature_topic, 2000, &Controller::featureCallback, this);
+      feature_topic, kFeatureQueueSize, &Controller::featureCallback, this);
+}
+
+void Controller::advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub) {
+  CHECK_NOTNULL(feature_block_pub);
+  std::string feature_block_topic = "feature_block_array";
+  node_handle_private_->param<std::string>(
+      "feature_block_topic", feature_block_topic, feature_block_topic);
+
+  constexpr int kFeatureBlockQueueSize = 2000;
+  *feature_block_pub =
+      node_handle_private_->advertise<visualization_msgs::MarkerArray>(
+          feature_block_topic, kFeatureBlockQueueSize, true);
+  feature_block_pub_ = feature_block_pub;
 }
 
 void Controller::subscribeSegmentPointCloudTopic(
@@ -301,9 +320,10 @@ void Controller::subscribeSegmentPointCloudTopic(
 
   // Large queue size to give slack to the
   // pipeline and not lose any messages.
+  constexpr int kSegmentPointCloudQueueSize = 2000;
   *segment_point_cloud_sub = node_handle_private_->subscribe(
-      segment_point_cloud_topic, 2000, &Controller::segmentPointCloudCallback,
-      this);
+      segment_point_cloud_topic, kSegmentPointCloudQueueSize,
+      &Controller::segmentPointCloudCallback, this);
 }
 
 void Controller::advertiseSegmentGsmUpdateTopic(
@@ -315,7 +335,6 @@ void Controller::advertiseSegmentGsmUpdateTopic(
                                            segment_gsm_update_topic);
   // TODO(ff): Reduce this value, once we know some reasonable limit.
   constexpr int kGsmUpdateQueueSize = 2000;
-
   *segment_gsm_update_pub =
       node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
           segment_gsm_update_topic, kGsmUpdateQueueSize, true);
@@ -445,7 +464,8 @@ std::vector<Feature3D> Controller::fromFeaturesMsgToFeature3D(
     feature.keypoint_scale = msg.scale;
     feature.keypoint_response = msg.response;
 
-    // TODO(ntonci): This should depend on the descriptor.
+    // TODO(ntonci): This should depend on the descriptor, currently it assumes
+    // SIFT. Template!
     constexpr size_t kRows = 1;
     constexpr size_t kCols = 128;
     feature.descriptor = cv::Mat(kRows, kCols, CV_64FC1);
@@ -489,6 +509,16 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
     ROS_WARN_STREAM("Could not find the transform to "
                     << camera_frame << ", at time " << timestamp.toSec()
                     << ", in the tf tree.");
+  }
+
+  if (publish_feature_blocks_marker_) {
+    CHECK_NOTNULL(feature_block_pub_);
+    visualization_msgs::MarkerArray feature_blocks;
+    // TODO(ntonci): Make this a param.
+    constexpr double kMaxNumberOfFeatures = 500;
+    createOccupancyBlocksFromFeatureLayer(
+        *feature_layer_, world_frame_, kMaxNumberOfFeatures, &feature_blocks);
+    feature_block_pub_->publish(feature_blocks);
   }
 }
 
@@ -778,6 +808,7 @@ void Controller::extractSegmentLayers(
           label_layer.allocateBlockPtrByIndex(block_index);
       FeatureBlock<Feature3D>::Ptr feature_block =
           feature_layer.allocateBlockPtrByIndex(block_index);
+
       CHECK(tsdf_block);
       CHECK(label_block);
       CHECK(feature_block);

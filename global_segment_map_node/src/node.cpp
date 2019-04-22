@@ -58,6 +58,11 @@ int main(int argc, char** argv) {
     controller->advertiseBboxTopic(&bbox_pub);
   }
 
+  ros::Publisher feature_block_pub;
+  if (controller->publish_feature_blocks_marker_) {
+    controller->advertiseFeatureBlockTopic(&feature_block_pub);
+  }
+
   ros::ServiceServer publish_scene_srv;
   controller->advertisePublishSceneService(&publish_scene_srv);
 

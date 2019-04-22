@@ -2,25 +2,6 @@
 
 namespace voxblox {
 
-FeatureIntegrator::FeatureIntegrator(const Config& config,
-                                     FeatureLayer<Feature3D>* layer)
-    : config_(config) {
-  setLayer(layer);
-
-  if (config_.integrator_threads == 0u) {
-    LOG(WARNING) << "Automatic core count failed, defaulting to 1 threads";
-    config_.integrator_threads = 1u;
-  }
-}
-
-void FeatureIntegrator::setLayer(FeatureLayer<Feature3D>* layer) {
-  CHECK_NOTNULL(layer);
-
-  layer_ = layer;
-  block_size_ = layer_->block_size();
-  block_size_inv_ = 1.0 / block_size_;
-}
-
 void FeatureIntegrator::integrateFeatures(
     const Transformation& T_G_C, const std::vector<Feature3D>& features) {
   timing::Timer integrate_timer("integrate/features");
@@ -125,7 +106,7 @@ void FeatureIntegrator::updateLayerWithStoredBlocks() {
     FeatureBlock<Feature3D>::Ptr original_block =
         layer_->allocateBlockPtrByIndex(block_idx);
 
-    // TODO(ntonci): Do the sorting here.
+    // TODO(ntonci): Do the sorting here or in modelify.
     for (Feature3D& feature : features) {
       original_block->addFeature(feature);
     }

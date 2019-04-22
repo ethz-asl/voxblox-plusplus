@@ -36,7 +36,8 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(
     // window radius, the whole segment is valid. Otherwise, the blocks
     // containing the segment are removed from the GSM
     BlockIndexList blocks_of_label;
-    (std::get<0>(layer_pair)).getAllAllocatedBlocks(&blocks_of_label);
+    (std::get<LayerAccessor::kTsdfLayer>(layer_pair))
+        .getAllAllocatedBlocks(&blocks_of_label);
     bool has_block_within_radius = false;
     for (const BlockIndex& block_index : blocks_of_label) {
       Point center_block = getCenterPointFromGridIndex(

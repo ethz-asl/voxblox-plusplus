@@ -49,6 +49,8 @@ class Controller {
 
   void subscribeFeatureTopic(ros::Subscriber* feature_sub);
 
+  void advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub);
+
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
 
@@ -83,6 +85,7 @@ class Controller {
   bool publish_scene_mesh_;
   bool publish_segment_mesh_;
   bool compute_and_publish_bbox_;
+  bool publish_feature_blocks_marker_;
 
   bool use_label_propagation_;
 
@@ -163,6 +166,7 @@ class Controller {
 
   ros::Publisher* scene_gsm_update_pub_;
   ros::Publisher* segment_gsm_update_pub_;
+  ros::Publisher* feature_block_pub_;
 
   ros::Timer update_mesh_timer_;
   ros::Publisher* scene_mesh_pub_;
