@@ -72,8 +72,8 @@ int main(int argc, char** argv) {
   ros::ServiceServer generate_mesh_srv;
   controller->advertiseGenerateMeshService(&generate_mesh_srv);
 
-  ros::ServiceServer extract_segments_srv;
-  controller->advertiseExtractSegmentsService(&extract_segments_srv);
+  ros::ServiceServer save_segments_as_mesh_srv;
+  controller->advertiseSaveSegmentsAsMeshService(&save_segments_as_mesh_srv);
 
   while (ros::ok() && !controller->noNewUpdatesReceived()) {
     ros::spinOnce();

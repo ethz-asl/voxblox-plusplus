@@ -283,6 +283,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
 Controller::~Controller() {}
 
+// TODO(ntonci): Move all sub, pub, etc., and helpers to inline header.
 void Controller::subscribeFeatureTopic(ros::Subscriber* feature_sub) {
   CHECK_NOTNULL(feature_sub);
   std::string feature_topic = "/rgbd_feature_node/features";
@@ -410,11 +411,11 @@ void Controller::advertiseGenerateMeshService(
       "generate_mesh", &Controller::generateMeshCallback, this);
 }
 
-void Controller::advertiseExtractSegmentsService(
-    ros::ServiceServer* extract_segments_srv) {
-  CHECK_NOTNULL(extract_segments_srv);
-  *extract_segments_srv = node_handle_private_->advertiseService(
-      "extract_segments", &Controller::extractSegmentsCallback, this);
+void Controller::advertiseSaveSegmentsAsMeshService(
+    ros::ServiceServer* save_segments_as_mesh_srv) {
+  CHECK_NOTNULL(save_segments_as_mesh_srv);
+  *save_segments_as_mesh_srv = node_handle_private_->advertiseService(
+      "save_segments_as_mesh", &Controller::saveSegmentsAsMeshCallback, this);
 }
 
 template <>
@@ -693,8 +694,8 @@ bool Controller::generateMeshCallback(
   return true;
 }
 
-bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
-                                         std_srvs::Empty::Response& response) {
+bool Controller::saveSegmentsAsMeshCallback(
+    std_srvs::Empty::Request& request, std_srvs::Empty::Response& response) {
   // Get list of all labels in the map.
   std::vector<Label> labels = integrator_->getLabelsList();
   static constexpr bool kConnectedMesh = false;
@@ -711,6 +712,7 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     CHECK_EQ(mkdir(kSegmentFolder, ACCESSPERMS), 0);
   }
 
+  bool overall_success = true;
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
     CHECK(it != label_to_layers.end())
@@ -720,10 +722,6 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
         std::get<LayerAccessor::kTsdfLayer>(it->second);
     const Layer<LabelVoxel>& segment_label_layer =
         std::get<LayerAccessor::kLabelLayer>(it->second);
-
-    // TODO(ntonci): Currently this does not output features.
-    // const FeatureLayer<Feature3D>& segmented_feature_layer =
-    //     std::get<LayerAccessor::kFeatureLayer>(it->second);
 
     voxblox::Mesh segment_mesh;
     if (convertTsdfLabelLayersToMesh(segment_tsdf_layer, segment_label_layer,
@@ -738,9 +736,11 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
       } else {
         ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
       }
+      overall_success &= success;
     }
   }
-  return true;
+
+  return overall_success;
 }
 
 void Controller::extractSegmentLayers(

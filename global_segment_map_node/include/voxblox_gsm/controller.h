@@ -71,8 +71,8 @@ class Controller {
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
-  void advertiseExtractSegmentsService(
-      ros::ServiceServer* extract_segments_srv);
+  void advertiseSaveSegmentsAsMeshService(
+      ros::ServiceServer* save_segments_as_mesh_srv);
 
   bool publishObjects(const bool publish_all = false);
 
@@ -116,8 +116,8 @@ class Controller {
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
 
-  bool extractSegmentsCallback(std_srvs::Empty::Request& request,
-                               std_srvs::Empty::Response& response);
+  bool saveSegmentsAsMeshCallback(std_srvs::Empty::Request& request,
+                                  std_srvs::Empty::Response& response);
 
   /**
    * Extracts separate tsdf and label layers from the gsm, for every given
