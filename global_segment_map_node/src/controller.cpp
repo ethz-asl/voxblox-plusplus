@@ -924,9 +924,12 @@ bool Controller::publishObjects(const bool publish_all) {
     // yet, hence it doesn't work.
     serializeLayerAsMsg<LabelVoxel>(label_layer, kSerializeOnlyUpdated,
                                     &gsm_update_msg.object.label_layer);
-    // TODO(ntonci): Serialize Feature layer.
-    // serializeLayerAsMsg<Feature3D>(feature_layer, kSerializeOnlyUpdated,
-    //                                &gsm_update_msg.object.feature_layer);
+    // TODO(ntonci): Check action and maybe change convention to be in the same
+    // style as above.
+    constexpr size_t kUpdateAction = 0u;
+    feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
+                                      &gsm_update_msg.object.feature_layer,
+                                      kUpdateAction);
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.old_labels.clear();

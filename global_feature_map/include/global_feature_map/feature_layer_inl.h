@@ -94,17 +94,13 @@ void FeatureLayer<FeatureType>::serializeLayerAsMsg(
 
 template <typename FeatureType>
 bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
-    const modelify_msgs::FeatureLayer& msg, FeatureLayer<FeatureType>* layer) {
-  CHECK_NOTNULL(layer);
-  return deserializeMsgToLayer(msg, msg.action, layer);
+    const modelify_msgs::FeatureLayer& msg) {
+  return deserializeMsgToLayer(msg, msg.action);
 }
 
 template <typename FeatureType>
 bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
-    const modelify_msgs::FeatureLayer& msg, const size_t& action,
-    FeatureLayer<FeatureType>* layer) {
-  CHECK_NOTNULL(layer);
-
+    const modelify_msgs::FeatureLayer& msg, const size_t& action) {
   if (getType().compare(msg.layer_type) != 0) {
     LOG(ERROR) << "Feature type does not match!";
     return false;

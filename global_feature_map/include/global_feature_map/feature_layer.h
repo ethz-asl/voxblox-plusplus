@@ -206,12 +206,10 @@ class FeatureLayer {
                            modelify_msgs::FeatureLayer* msg,
                            const size_t& action);
 
-  bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg,
-                             FeatureLayer<FeatureType>* layer);
+  bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg);
 
   bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg,
-                             const size_t& action,
-                             FeatureLayer<FeatureType>* layer);
+                             const size_t& action);
 
  protected:
   std::string getType() const;
