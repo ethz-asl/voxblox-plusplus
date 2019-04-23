@@ -17,11 +17,12 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
   // FloatingPoint z              4
   // FloatingPoint scale          4
   // FloatingPoint response       4
+  // FloatingPoint angle          4
   // double descriptor            size*8, 1024 (for SIFT)
 
   const size_t number_of_features = numFeatures();
 
-  constexpr size_t kFeatureBlockSizeWithoutDescriptor = 5u;
+  constexpr size_t kFeatureBlockSizeWithoutDescriptor = 6u;
   // TODO(ntonci): Template on descirptor type.
   constexpr size_t kDescriptorSize = 128u;
   data->clear();
@@ -46,6 +47,9 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
     const uint32_t* bytes_5_ptr =
         reinterpret_cast<const uint32_t*>(&feature.keypoint_response);
     data->push_back(*bytes_5_ptr);
+    const uint32_t* bytes_6_ptr =
+        reinterpret_cast<const uint32_t*>(&feature.keypoint_angle);
+    data->push_back(*bytes_6_ptr);
 
     // TODO(ntonci): Template on descriptor type.
     for (size_t i = 0u; i < kDescriptorSize; ++i) {
@@ -69,7 +73,7 @@ void FeatureBlock<Feature3D>::deserializeFromIntegers(
   CHECK_EQ(numFeatures(), 0u);
 
   // TODO(ntonci): Template on descirptor type.
-  constexpr size_t kFeature3DSize = 133u;
+  constexpr size_t kFeature3DSize = 134u;
   constexpr size_t kDescriptorSize = 128u;
 
   const size_t num_data_packets = data.size();
@@ -83,6 +87,7 @@ void FeatureBlock<Feature3D>::deserializeFromIntegers(
     const uint32_t bytes_3 = data[data_idx + 2u];
     const uint32_t bytes_4 = data[data_idx + 3u];
     const uint32_t bytes_5 = data[data_idx + 4u];
+    const uint32_t bytes_6 = data[data_idx + 5u];
 
     Feature3D feature;
 
@@ -91,12 +96,13 @@ void FeatureBlock<Feature3D>::deserializeFromIntegers(
     memcpy(&(feature.keypoint(2)), &bytes_3, sizeof(bytes_3));
     memcpy(&feature.keypoint_scale, &bytes_4, sizeof(bytes_4));
     memcpy(&feature.keypoint_response, &bytes_5, sizeof(bytes_5));
+    memcpy(&feature.keypoint_angle, &bytes_6, sizeof(bytes_6));
 
     feature.descriptor = cv::Mat(1u, kDescriptorSize, CV_64FC1);
 
     for (size_t j = 0u; j < kDescriptorSize; ++j) {
       float descriptor;
-      const uint32_t bytes_d = data[data_idx + 5u + j];
+      const uint32_t bytes_d = data[data_idx + 6u + j];
 
       memcpy(&(descriptor), &bytes_d, sizeof(bytes_d));
 

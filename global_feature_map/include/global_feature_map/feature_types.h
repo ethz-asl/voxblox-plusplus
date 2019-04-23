@@ -16,6 +16,7 @@ struct Feature3D {
   Point keypoint;
   FloatingPoint keypoint_scale;
   FloatingPoint keypoint_response;
+  FloatingPoint keypoint_angle;
   cv::Mat descriptor;
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW

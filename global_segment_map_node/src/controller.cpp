@@ -462,6 +462,7 @@ std::vector<Feature3D> Controller::fromFeaturesMsgToFeature3D(
     feature.keypoint << msg.x, msg.y, msg.z;
     feature.keypoint_scale = msg.scale;
     feature.keypoint_response = msg.response;
+    feature.keypoint_angle = msg.angle;
 
     // TODO(ntonci): This should depend on the descriptor, currently it assumes
     // SIFT. Template!
