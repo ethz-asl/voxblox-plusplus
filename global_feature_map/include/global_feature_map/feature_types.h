@@ -23,9 +23,7 @@ struct Feature3D {
 };
 
 template <typename Type>
-inline std::string getFeatureType() {
-  return "Unknown";
-};
+std::string getFeatureType();
 
 template <>
 std::string getFeatureType<Feature3D>();

@@ -3,15 +3,15 @@
 namespace voxblox {
 
 void FeatureIntegrator::integrateFeatures(
-    const Transformation& T_G_C, const std::vector<Feature3D>& features) {
+    const Transformation& T_G_C, const std::vector<Feature3D>& features_G) {
   timing::Timer integrate_timer("integrate/features");
 
-  ThreadSafeIndex index_getter(features.size());
+  ThreadSafeIndex index_getter(features_G.size());
 
   std::list<std::thread> integration_threads;
   for (size_t i = 0; i < config_.integrator_threads; ++i) {
     integration_threads.emplace_back(&FeatureIntegrator::integrateFunction,
-                                     this, T_G_C, features, &index_getter);
+                                     this, T_G_C, features_G, &index_getter);
   }
 
   for (std::thread& thread : integration_threads) {
@@ -25,21 +25,19 @@ void FeatureIntegrator::integrateFeatures(
 }
 
 void FeatureIntegrator::integrateFunction(
-    const Transformation& T_G_C, const std::vector<Feature3D>& features,
+    const Transformation& T_G_C, const std::vector<Feature3D>& features_G,
     ThreadSafeIndex* index_getter) {
   DCHECK(index_getter != nullptr);
 
   size_t point_idx;
+  FeatureBlock<Feature3D>::Ptr block = nullptr;
+  BlockIndex block_idx;
   while (index_getter->getNextIndex(&point_idx)) {
-    const Feature3D& feature = features.at(point_idx);
+    const Feature3D& feature = features_G.at(point_idx);
 
-    Point point_C;
-    point_C = feature.keypoint;
-    const Point origin = T_G_C.getPosition();
+    const Point& point_C = feature.keypoint;
+    const Point& origin = T_G_C.getPosition();
     const Point point_G = T_G_C * point_C;
-
-    FeatureBlock<Feature3D>::Ptr block = nullptr;
-    BlockIndex block_idx;
 
     allocateStorageAndGetBlockPtr(point_G, &block, &block_idx);
     updateFeatureBlock(feature, &block);
@@ -84,12 +82,12 @@ void FeatureIntegrator::allocateStorageAndGetBlockPtr(
 }
 
 void FeatureIntegrator::updateFeatureBlock(
-    const Feature3D& feature, FeatureBlock<Feature3D>::Ptr* block) {
+    const Feature3D& feature_G, FeatureBlock<Feature3D>::Ptr* block) {
   DCHECK(block != nullptr);
 
   std::lock_guard<std::mutex> lock((*block)->getMutex());
 
-  (*block)->addFeature(feature);
+  (*block)->addFeature(feature_G);
   (*block)->set_has_data(true);
 }
 
@@ -101,14 +99,15 @@ void FeatureIntegrator::updateLayerWithStoredBlocks() {
            temp_block_pair : temp_block_map_) {
     const BlockIndex block_idx = temp_block_pair.first;
     FeatureBlock<Feature3D>::Ptr block = temp_block_pair.second;
-    std::vector<Feature3D> features = block->getFeatures();
+    std::vector<Feature3D> features_G = block->getFeatures();
 
     FeatureBlock<Feature3D>::Ptr original_block =
         layer_->allocateBlockPtrByIndex(block_idx);
 
-    // TODO(ntonci): Do the sorting here or in modelify.
-    for (Feature3D& feature : features) {
-      original_block->addFeature(feature);
+    // TODO(ntonci): Do the sorting here or in modelify. If done here consider
+    // implementing it as mergeBlock function.
+    for (Feature3D& feature_G : features_G) {
+      original_block->addFeature(feature_G);
     }
   }
 

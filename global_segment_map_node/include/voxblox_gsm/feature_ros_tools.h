@@ -16,9 +16,10 @@ namespace voxblox_gsm {
 
 inline std_msgs::ColorRGBA getColorFromBlockFeatures(
     const double max_number_of_features, const double number_of_features) {
-  double ratio = 2 * std::min(1.0, number_of_features / max_number_of_features);
-  double r = std::max(0.0, ratio - 1.0);
-  double b = std::max(0.0, 1.0 - ratio);
+  const double ratio =
+      2 * std::min(1.0, number_of_features / max_number_of_features);
+  const double r = std::max(0.0, ratio - 1.0);
+  const double b = std::max(0.0, 1.0 - ratio);
 
   std_msgs::ColorRGBA color_msg;
   color_msg.r = r;
@@ -30,7 +31,7 @@ inline std_msgs::ColorRGBA getColorFromBlockFeatures(
 }
 
 template <typename FeatureType>
-inline void createOccupancyBlocksFromFeatureLayer(
+void createOccupancyBlocksFromFeatureLayer(
     const FeatureLayer<FeatureType>& layer, const std::string& frame_id,
     const double& max_number_of_features,
     visualization_msgs::MarkerArray* marker_array) {

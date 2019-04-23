@@ -36,6 +36,7 @@ class FeatureIntegrator {
 
   FeatureIntegrator(const Config& config, FeatureLayer<Feature3D>* layer)
       : config_(config) {
+    CHECK_NOTNULL(layer);
     setLayer(layer);
 
     if (config_.integrator_threads == 0u) {
@@ -55,18 +56,18 @@ class FeatureIntegrator {
   inline const Config& getConfig() const { return config_; }
 
   void integrateFeatures(const Transformation& T_G_C,
-                         const std::vector<Feature3D>& features);
+                         const std::vector<Feature3D>& features_G);
 
  protected:
   void integrateFunction(const Transformation& T_G_C,
-                         const std::vector<Feature3D>& features,
+                         const std::vector<Feature3D>& features_G,
                          ThreadSafeIndex* index_getter);
 
   void allocateStorageAndGetBlockPtr(const Point& point_G,
                                      FeatureBlock<Feature3D>::Ptr* last_block,
                                      BlockIndex* last_block_idx);
 
-  void updateFeatureBlock(const Feature3D& feature,
+  void updateFeatureBlock(const Feature3D& feature_G,
                           FeatureBlock<Feature3D>::Ptr* block);
 
   void updateLayerWithStoredBlocks();

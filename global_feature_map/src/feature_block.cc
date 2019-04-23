@@ -10,7 +10,7 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
     std::vector<uint32_t>* data) const {
   CHECK_NOTNULL(data);
 
-  //          Type            |  Bits
+  //          Type            |  Bytes
   // --------------------------------------
   // FloatingPoint x              4
   // FloatingPoint y              4
@@ -18,7 +18,7 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
   // FloatingPoint scale          4
   // FloatingPoint response       4
   // FloatingPoint angle          4
-  // double descriptor            size*8, 1024 (for SIFT)
+  // float descriptor             size*4, 512 (for SIFT)
 
   const size_t number_of_features = numFeatures();
 
@@ -29,9 +29,11 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
   data->reserve(number_of_features *
                 (kFeatureBlockSizeWithoutDescriptor + kDescriptorSize));
 
+  // TODO(ntonci): Currently Feature3D uses FloatingPoint type, however, if
+  // this ever changes to double, conversion to uint32 will be wrong!
+  CHECK_EQ(sizeof(FloatingPoint), 4);
+
   for (const Feature3D& feature : getFeatures()) {
-    // TODO(ntonci): Currently Feature3D uses FloatingPoint type, however, if
-    // this ever changes to double, conversion to uint32 will be wrong!
     const uint32_t* bytes_1_ptr =
         reinterpret_cast<const uint32_t*>(&feature.keypoint(0));
     data->push_back(*bytes_1_ptr);

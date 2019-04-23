@@ -448,15 +448,19 @@ void Controller::fillSegmentWithData<PointSurfelLabel>(
   }
 }
 
-std::vector<Feature3D> Controller::fromFeaturesMsgToFeature3D(
+void Controller::fromFeaturesMsgToFeature3D(
     const modelify_msgs::Features& features_msg, size_t* number_of_features,
-    std::string* camera_frame, ros::Time* timestamp) {
-  std::vector<Feature3D> features;
+    std::string* camera_frame, ros::Time* timestamp,
+    std::vector<Feature3D>* features_G) {
+  CHECK_NOTNULL(camera_frame);
+  CHECK_NOTNULL(timestamp);
+  CHECK_NOTNULL(features_G);
+
   *number_of_features = features_msg.length;
   *camera_frame = features_msg.header.frame_id;
   *timestamp = features_msg.header.stamp;
 
-  for (modelify_msgs::Feature msg : features_msg.features) {
+  for (const modelify_msgs::Feature& msg : features_msg.features) {
     Feature3D feature;
 
     feature.keypoint << msg.x, msg.y, msg.z;
@@ -475,25 +479,24 @@ std::vector<Feature3D> Controller::fromFeaturesMsgToFeature3D(
     CHECK_EQ(feature.descriptor.cols, msg.descriptor.size())
         << "Descriptor size is wrong!";
 
-    features.push_back(feature);
+    features_G->push_back(feature);
   }
 
-  if (features.size() != *number_of_features) {
+  if (features_G->size() != *number_of_features) {
     ROS_WARN_STREAM(
         "Number of features is different from the one "
         "specified in the message: "
-        << features.size() << " vs. " << *number_of_features);
+        << features_G->size() << " vs. " << *number_of_features);
   }
-
-  return features;
 }
 
 void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
   size_t number_of_features;
   std::string camera_frame;
   ros::Time timestamp;
-  std::vector<Feature3D> features = fromFeaturesMsgToFeature3D(
-      features_msg, &number_of_features, &camera_frame, &timestamp);
+  std::vector<Feature3D> features_G;
+  fromFeaturesMsgToFeature3D(features_msg, &number_of_features, &camera_frame,
+                             &timestamp, &features_G);
 
   if (camera_frame != camera_frame_) {
     ROS_WARN_STREAM("Camera frame in the header ("
@@ -504,7 +507,7 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
 
   Transformation T_G_C;
   if (lookupTransform(camera_frame, world_frame_, timestamp, &T_G_C)) {
-    feature_integrator_->integrateFeatures(T_G_C, features);
+    feature_integrator_->integrateFeatures(T_G_C, features_G);
   } else {
     ROS_WARN_STREAM("Could not find the transform to "
                     << camera_frame << ", at time " << timestamp.toSec()
@@ -515,7 +518,7 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
     CHECK_NOTNULL(feature_block_pub_);
     visualization_msgs::MarkerArray feature_blocks;
     // TODO(ntonci): Make this a param.
-    constexpr double kMaxNumberOfFeatures = 500;
+    constexpr size_t kMaxNumberOfFeatures = 500u;
     createOccupancyBlocksFromFeatureLayer(
         *feature_layer_, world_frame_, kMaxNumberOfFeatures, &feature_blocks);
     feature_block_pub_->publish(feature_blocks);
