@@ -80,11 +80,6 @@ class Controller {
   double no_update_timeout_;
 
  protected:
-  template <typename point_type = pcl::PointXYZRGB>
-  void fillSegmentWithData(
-      const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
-      Segment* segment);
-
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
@@ -197,14 +192,7 @@ class Controller {
   bool need_full_remesh_;
 };
 
-template <>
-void Controller::fillSegmentWithData<PointSurfelLabel>(
-    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
-    Segment* segment);
-
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
 #endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
-
-#include "voxblox_gsm/controller_inl.h"

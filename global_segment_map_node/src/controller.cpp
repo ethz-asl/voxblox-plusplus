@@ -296,7 +296,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("meshing/compute_and_publish_bbox",
                                     compute_and_publish_bbox_,
                                     compute_and_publish_bbox_);
-
 #ifndef APPROXMVBB_AVAILABLE
   if (compute_and_publish_bbox_) {
     ROS_WARN_STREAM(
@@ -442,36 +441,6 @@ void Controller::advertiseExtractSegmentsService(
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
-template <>
-void Controller::fillSegmentWithData<PointSurfelLabel>(
-    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
-    Segment* segment) {
-  pcl::PointCloud<PointSurfelLabel> point_cloud;
-
-  pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
-
-  segment->points_C_.reserve(point_cloud.points.size());
-  segment->colors_.reserve(point_cloud.points.size());
-
-  for (size_t i = 0u; i < point_cloud.points.size(); ++i) {
-    if (!std::isfinite(point_cloud.points[i].x) ||
-        !std::isfinite(point_cloud.points[i].y) ||
-        !std::isfinite(point_cloud.points[i].z)) {
-      continue;
-    }
-
-    segment->points_C_.push_back(Point(point_cloud.points[i].x,
-                                       point_cloud.points[i].y,
-                                       point_cloud.points[i].z));
-
-    segment->colors_.push_back(
-        Color(point_cloud.points[i].r, point_cloud.points[i].g,
-              point_cloud.points[i].b, point_cloud.points[i].a));
-
-    segment->label_ = point_cloud.points[i].label;
-  }
-}
-
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Message timestamps are used to detect when all
@@ -586,11 +555,12 @@ void Controller::segmentPointCloudCallback(
     }
     segments_to_integrate_.push_back(segment);
 
-    if (use_label_propagation_) {
-      fillSegmentWithData(segment_point_cloud_msg, segment);
-    } else {
-      fillSegmentWithData<PointSurfelLabel>(segment_point_cloud_msg, segment);
-    }
+    // if (use_label_propagation_) {
+    //   fillSegmentWithData(segment_point_cloud_msg, segment);
+    // } else {
+    //   fillSegmentWithData<PointSurfelLabel>(segment_point_cloud_msg,
+    //   segment);
+    // }
     ptcloud_timer.Stop();
 
     timing::Timer label_candidates_timer("compute_label_candidates");
@@ -609,7 +579,7 @@ void Controller::segmentPointCloudCallback(
 
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
   }
-}  // namespace voxblox_gsm
+}
 
 bool Controller::publishSceneCallback(std_srvs::SetBool::Request& request,
                                       std_srvs::SetBool::Response& response) {
