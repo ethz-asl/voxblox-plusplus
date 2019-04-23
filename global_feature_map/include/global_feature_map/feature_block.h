@@ -50,6 +50,9 @@ class FeatureBlock {
   inline bool has_data() const { return has_data_; }
 
   inline std::vector<FeatureType>& getFeatures() { return features_; }
+  inline const std::vector<FeatureType>& getFeatures() const {
+    return features_;
+  }
   inline void setFeatures(const std::vector<FeatureType>& features) {
     features_ = features;
   }
@@ -73,6 +76,10 @@ class FeatureBlock {
   size_t getMemorySize() const;
 
   inline std::mutex& getMutex() { return block_mutex_; }
+
+  void serializeToIntegers(std::vector<uint32_t>* data) const;
+
+  void deserializeFromIntegers(const std::vector<uint32_t>& data);
 
  protected:
   std::vector<FeatureType> features_;

@@ -6,6 +6,7 @@
 #include <utility>
 
 #include <glog/logging.h>
+#include <modelify_msgs/FeatureLayer.h>
 #include <voxblox/core/block_hash.h>
 #include <voxblox/core/common.h>
 
@@ -200,6 +201,17 @@ class FeatureLayer {
   FloatingPoint block_size_inv() const { return block_size_inv_; }
 
   size_t getMemorySize() const;
+
+  void serializeLayerAsMsg(const bool only_updated,
+                           modelify_msgs::FeatureLayer* msg,
+                           const size_t& action);
+
+  bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg,
+                             FeatureLayer<FeatureType>* layer);
+
+  bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg,
+                             const size_t& action,
+                             FeatureLayer<FeatureType>* layer);
 
  protected:
   std::string getType() const;

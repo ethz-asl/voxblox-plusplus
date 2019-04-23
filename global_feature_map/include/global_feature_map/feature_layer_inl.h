@@ -60,6 +60,109 @@ std::string FeatureLayer<FeatureType>::getType() const {
   return getFeatureType<FeatureType>();
 }
 
+template <typename FeatureType>
+void FeatureLayer<FeatureType>::serializeLayerAsMsg(
+    const bool only_updated, modelify_msgs::FeatureLayer* msg,
+    const size_t& action) {
+  CHECK_NOTNULL(msg);
+  msg->block_size = block_size();
+  msg->layer_type = getType();
+
+  BlockIndexList block_list;
+  if (only_updated) {
+    getAllUpdatedBlocks(&block_list);
+  } else {
+    getAllAllocatedBlocks(&block_list);
+  }
+
+  msg->action = static_cast<uint8_t>(action);
+
+  modelify_msgs::FeatureBlock block_msg;
+  msg->blocks.reserve(block_list.size());
+  for (const BlockIndex& index : block_list) {
+    block_msg.x_index = index.x();
+    block_msg.y_index = index.y();
+    block_msg.z_index = index.z();
+
+    std::vector<uint32_t> data;
+    getBlockByIndex(index).serializeToIntegers(&data);
+
+    block_msg.data = data;
+    msg->blocks.push_back(block_msg);
+  }
+}
+
+template <typename FeatureType>
+bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
+    const modelify_msgs::FeatureLayer& msg, FeatureLayer<FeatureType>* layer) {
+  CHECK_NOTNULL(layer);
+  return deserializeMsgToLayer(msg, msg.action, layer);
+}
+
+template <typename FeatureType>
+bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
+    const modelify_msgs::FeatureLayer& msg, const size_t& action,
+    FeatureLayer<FeatureType>* layer) {
+  CHECK_NOTNULL(layer);
+
+  if (getType().compare(msg.layer_type) != 0) {
+    LOG(ERROR) << "Feature type does not match!";
+    return false;
+  }
+
+  if (msg.block_size != block_size()) {
+    LOG(ERROR) << "Sizes don't match!";
+    return false;
+  }
+
+  if (action == 2u) {
+    removeAllBlocks();
+  }
+
+  for (const modelify_msgs::FeatureBlock& block_msg : msg.blocks) {
+    BlockIndex index(block_msg.x_index, block_msg.y_index, block_msg.z_index);
+
+    // Either we want to update an existing block or there was no block there
+    // before.
+    if (action == 0u || !hasBlock(index)) {
+      // Create a new block if it doesn't exist yet, or get the existing one
+      // at the correct block index.
+      typename FeatureBlock<FeatureType>::Ptr block_ptr =
+          allocateBlockPtrByIndex(index);
+
+      std::vector<uint32_t> data = block_msg.data;
+      block_ptr->deserializeFromIntegers(data);
+
+    } else if (action == 1u) {
+      typename FeatureBlock<FeatureType>::Ptr old_block_ptr =
+          getBlockPtrByIndex(index);
+      CHECK(old_block_ptr);
+
+      typename FeatureBlock<FeatureType>::Ptr new_block_ptr(
+          new FeatureBlock<FeatureType>(old_block_ptr->block_size(),
+                                        old_block_ptr->origin()));
+
+      std::vector<uint32_t> data = block_msg.data;
+      new_block_ptr->deserializeFromIntegers(data);
+
+      old_block_ptr->mergeBlock(*new_block_ptr);
+    }
+  }
+
+  switch (action) {
+    case 2u:
+      CHECK_EQ(getNumberOfAllocatedBlocks(), msg.blocks.size());
+      break;
+    case 0u:
+      // Fall through intended.
+    case 1u:
+      CHECK_GE(getNumberOfAllocatedBlocks(), msg.blocks.size());
+      break;
+  }
+
+  return true;
+}
+
 }  // namespace voxblox
 
 #endif  // GLOBAL_FEATURE_MAP_FEATURE_LAYER_INL_H_

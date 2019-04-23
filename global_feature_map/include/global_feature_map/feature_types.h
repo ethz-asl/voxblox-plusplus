@@ -14,8 +14,8 @@ namespace voxblox {
 
 struct Feature3D {
   Point keypoint;
-  double keypoint_scale;
-  double keypoint_response;
+  FloatingPoint keypoint_scale;
+  FloatingPoint keypoint_response;
   cv::Mat descriptor;
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
