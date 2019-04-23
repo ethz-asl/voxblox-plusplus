@@ -8,7 +8,6 @@
 #include "voxblox_gsm/sliding_window_controller.h"
 
 int main(int argc, char** argv) {
-  LOG(ERROR) << "HERE";
   ros::init(argc, argv, "gsm_node");
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, false);

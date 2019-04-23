@@ -41,7 +41,7 @@ struct PointSurfelLabel {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 
-struct PointSurfelSemanticInstance : public pcl::PointXYZRGB {
+struct PointSurfelSemanticInstance {
   PCL_ADD_POINT4D;
   PCL_ADD_RGB;
   // TODO(margaritaG): Fix field names to:
@@ -52,6 +52,7 @@ struct PointSurfelSemanticInstance : public pcl::PointXYZRGB {
 } EIGEN_ALIGN16;
 
 typedef pcl::PointXYZRGB PointType;
+typedef PointSurfelLabel PointLabelType;
 typedef PointSurfelSemanticInstance PointSemanticInstanceType;
 
 // Pointcloud types for external interface.

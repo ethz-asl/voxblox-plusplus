@@ -548,6 +548,10 @@ void Controller::segmentPointCloudCallback(
           point_cloud_semantic_instance;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_semantic_instance);
       segment = new Segment(point_cloud_semantic_instance, T_G_C);
+    } else if (use_label_propagation_) {
+      pcl::PointCloud<voxblox::PointLabelType> point_cloud_label;
+      pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_label);
+      segment = new Segment(point_cloud_label, T_G_C);
     } else {
       pcl::PointCloud<voxblox::PointType> point_cloud;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
