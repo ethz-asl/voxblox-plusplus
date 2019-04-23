@@ -11,16 +11,25 @@
 #include <utility>
 #include <vector>
 
+#include <geometry_msgs/TransformStamped.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/file_utils.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
+
+#include <minkindr_conversions/kindr_tf.h>
+#include <visualization_msgs/Marker.h>
+#include <visualization_msgs/MarkerArray.h>
 
 #include <voxblox/core/common.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
+
+#ifdef APPROXMVBB_AVAILABLE
+#include <ApproxMVBB/ComputeApproxMVBB.hpp>
+#endif
 
 #include "voxblox_gsm/conversions.h"
 
@@ -122,7 +131,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_scene_mesh_(false),
       received_first_message_(false),
       updated_mesh_(false),
-      need_full_remesh_(false) {
+      need_full_remesh_(false),
+      compute_and_publish_bbox_(false),
+      use_label_propagation_(true) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", camera_frame_,
                                            world_frame_);
@@ -282,6 +293,21 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
                                     publish_segment_mesh_);
   node_handle_private_->param<bool>("meshing/publish_scene_mesh",
                                     publish_scene_mesh_, publish_scene_mesh_);
+  node_handle_private_->param<bool>("meshing/compute_and_publish_bbox",
+                                    compute_and_publish_bbox_,
+                                    compute_and_publish_bbox_);
+
+#ifndef APPROXMVBB_AVAILABLE
+  if (compute_and_publish_bbox_) {
+    ROS_WARN_STREAM(
+        "ApproxMVBB is not available and therefore bounding box functionality "
+        "is disabled.");
+  }
+  compute_and_publish_bbox_ = false;
+#endif
+
+  node_handle_private_->param<bool>(
+      "use_label_propagation", use_label_propagation_, use_label_propagation_);
 
   // If set, use a timer to progressively update the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -370,6 +396,14 @@ void Controller::advertiseSceneMeshTopic(ros::Publisher* scene_mesh_pub) {
   scene_mesh_pub_ = scene_mesh_pub;
 }
 
+void Controller::advertiseBboxTopic(ros::Publisher* bbox_pub) {
+  CHECK_NOTNULL(bbox_pub);
+  *bbox_pub = node_handle_private_->advertise<visualization_msgs::Marker>(
+      "bbox", 1, true);
+
+  bbox_pub_ = bbox_pub;
+}
+
 void Controller::advertisePublishSceneService(
     ros::ServiceServer* publish_scene_srv) {
   CHECK_NOTNULL(publish_scene_srv);
@@ -408,6 +442,36 @@ void Controller::advertiseExtractSegmentsService(
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
+template <>
+void Controller::fillSegmentWithData<PointSurfelLabel>(
+    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
+    Segment* segment) {
+  pcl::PointCloud<PointSurfelLabel> point_cloud;
+
+  pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
+
+  segment->points_C_.reserve(point_cloud.points.size());
+  segment->colors_.reserve(point_cloud.points.size());
+
+  for (size_t i = 0u; i < point_cloud.points.size(); ++i) {
+    if (!std::isfinite(point_cloud.points[i].x) ||
+        !std::isfinite(point_cloud.points[i].y) ||
+        !std::isfinite(point_cloud.points[i].z)) {
+      continue;
+    }
+
+    segment->points_C_.push_back(Point(point_cloud.points[i].x,
+                                       point_cloud.points[i].y,
+                                       point_cloud.points[i].z));
+
+    segment->colors_.push_back(
+        Color(point_cloud.points[i].r, point_cloud.points[i].g,
+              point_cloud.points[i].b, point_cloud.points[i].a));
+
+    segment->label_ = point_cloud.points[i].label;
+  }
+}
+
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Message timestamps are used to detect when all
@@ -424,20 +488,22 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
              segment_point_cloud_msg->header.stamp.toSec());
-    ros::WallTime start = ros::WallTime::now();
 
-    integrator_->decideLabelPointClouds(&segments_to_integrate_,
-                                        &segment_label_candidates,
-                                        &segment_merge_candidates_);
-    ptcloud_timer.Stop();
+    if (use_label_propagation_) {
+      ros::WallTime start = ros::WallTime::now();
 
-    ros::WallTime end = ros::WallTime::now();
-    ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
-             segments_to_integrate_.size(), (end - start).toSec());
+      integrator_->decideLabelPointClouds(&segments_to_integrate_,
+                                          &segment_label_candidates,
+                                          &segment_merge_candidates_);
+
+      ros::WallTime end = ros::WallTime::now();
+      ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
+               segments_to_integrate_.size(), (end - start).toSec());
+    }
 
     constexpr bool kIsFreespacePointcloud = false;
 
-    start = ros::WallTime::now();
+    ros::WallTime start = ros::WallTime::now();
     {
       timing::Timer integrate_timer("integrate_frame_pointclouds");
       std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
@@ -449,7 +515,7 @@ void Controller::segmentPointCloudCallback(
       integrate_timer.Stop();
     }
 
-    end = ros::WallTime::now();
+    ros::WallTime end = ros::WallTime::now();
     ROS_INFO(
         "Integrated %lu pointclouds in %f secs, have %lu tsdf "
         "and %lu label blocks.",
@@ -520,23 +586,30 @@ void Controller::segmentPointCloudCallback(
     }
     segments_to_integrate_.push_back(segment);
 
+    if (use_label_propagation_) {
+      fillSegmentWithData(segment_point_cloud_msg, segment);
+    } else {
+      fillSegmentWithData<PointSurfelLabel>(segment_point_cloud_msg, segment);
+    }
     ptcloud_timer.Stop();
-
-    // ros::WallTime start = ros::WallTime::now();
 
     timing::Timer label_candidates_timer("compute_label_candidates");
 
-    integrator_->computeSegmentLabelCandidates(
-        segment, &segment_label_candidates, &segment_merge_candidates_);
-    label_candidates_timer.Stop();
-    //     "Comput
-    // ros::WallTime end = ros::WallTime::now();
-    // ROS_INFO(
-    //     "Computed label candidates for a pointcloud of size %lu in %f "
-    //     "seconds.",
-    //     segment->points_C_.size(), (end - start).toSec());
+    if (use_label_propagation_) {
+      ros::WallTime start = ros::WallTime::now();
+      integrator_->computeSegmentLabelCandidates(
+          segment, &segment_label_candidates, &segment_merge_candidates_);
+
+      ros::WallTime end = ros::WallTime::now();
+      ROS_INFO(
+          "Computed label candidates for a pointcloud of size %lu in %f "
+          "seconds.",
+          segment->points_C_.size(), (end - start).toSec());
+    }
+
+    ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
   }
-}
+}  // namespace voxblox_gsm
 
 bool Controller::publishSceneCallback(std_srvs::SetBool::Request& request,
                                       std_srvs::SetBool::Response& response) {
@@ -815,6 +888,7 @@ bool Controller::publishObjects(const bool publish_all) {
     transform.rotation.z = 0.;
     gsm_update_msg.object.transforms.clear();
     gsm_update_msg.object.transforms.push_back(transform);
+    gsm_update_msg.object.surfel_cloud.header.frame_id = world_frame_;
     pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
@@ -833,8 +907,62 @@ bool Controller::publishObjects(const bool publish_all) {
       }
       merges_to_publish_.erase(merged_label_it);
     }
+
+    if (compute_and_publish_bbox_) {
+      Eigen::Vector3f bbox_translation;
+      Eigen::Quaternionf bbox_quaternion;
+      Eigen::Vector3f bbox_size;
+      computeAlignedBoundingBox(surfel_cloud, &bbox_translation,
+                                &bbox_quaternion, &bbox_size);
+
+      gsm_update_msg.object.bbox.pose.position.x =
+          origin_shifted_tsdf_layer_W[0] + bbox_translation(0);
+      gsm_update_msg.object.bbox.pose.position.y =
+          origin_shifted_tsdf_layer_W[1] + bbox_translation(1);
+      gsm_update_msg.object.bbox.pose.position.z =
+          origin_shifted_tsdf_layer_W[2] + bbox_translation(2);
+      gsm_update_msg.object.bbox.pose.orientation.x = bbox_quaternion.x();
+      gsm_update_msg.object.bbox.pose.orientation.y = bbox_quaternion.y();
+      gsm_update_msg.object.bbox.pose.orientation.z = bbox_quaternion.z();
+      gsm_update_msg.object.bbox.pose.orientation.w = bbox_quaternion.w();
+      gsm_update_msg.object.bbox.dimensions.x = bbox_size(0);
+      gsm_update_msg.object.bbox.dimensions.y = bbox_size(1);
+      gsm_update_msg.object.bbox.dimensions.z = bbox_size(2);
+
+      visualization_msgs::Marker marker;
+      marker.header.frame_id = world_frame_;
+      marker.header.stamp = ros::Time();
+      marker.id = gsm_update_msg.object.label;
+      marker.type = visualization_msgs::Marker::CUBE;
+      marker.action = visualization_msgs::Marker::ADD;
+      marker.pose.position.x =
+          origin_shifted_tsdf_layer_W[0] + bbox_translation(0);
+      marker.pose.position.y =
+          origin_shifted_tsdf_layer_W[1] + bbox_translation(1);
+      marker.pose.position.z =
+          origin_shifted_tsdf_layer_W[2] + bbox_translation(2);
+      marker.pose.orientation = gsm_update_msg.object.bbox.pose.orientation;
+      marker.scale = gsm_update_msg.object.bbox.dimensions;
+      marker.color.a = 0.3;
+      marker.color.r = 0.0;
+      marker.color.g = 1.0;
+      marker.color.b = 0.0;
+      marker.lifetime = ros::Duration();
+
+      bbox_pub_->publish(marker);
+
+      geometry_msgs::TransformStamped bbox_tf;
+      bbox_tf.header = gsm_update_msg.header;
+      bbox_tf.child_frame_id = std::to_string(gsm_update_msg.object.label);
+      bbox_tf.transform.translation.x = marker.pose.position.x;
+      bbox_tf.transform.translation.y = marker.pose.position.y;
+      bbox_tf.transform.translation.z = marker.pose.position.z;
+      bbox_tf.transform.rotation = marker.pose.orientation;
+
+      tf_broadcaster_.sendTransform(bbox_tf);
+    }
+
     publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
-    // TODO(ff): Fill in gsm_update_msg.object.surfel_cloud if needed.
 
     if (publish_segment_mesh_) {
       // Generate mesh for visualization purposes.
@@ -1027,5 +1155,54 @@ void Controller::getLabelsToPublish(const bool get_all,
     *labels = segment_labels_to_publish_;
   }
 }
+
+void Controller::computeAlignedBoundingBox(
+    const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
+    Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
+    Eigen::Vector3f* bbox_size) {
+  CHECK(surfel_cloud);
+  CHECK_NOTNULL(bbox_translation);
+  CHECK_NOTNULL(bbox_quaternion);
+  CHECK_NOTNULL(bbox_size);
+#ifdef APPROXMVBB_AVAILABLE
+  ApproxMVBB::Matrix3Dyn points(3, surfel_cloud->points.size());
+
+  for (size_t i = 0u; i < surfel_cloud->points.size(); ++i) {
+    points(0, i) = double(surfel_cloud->points.at(i).x);
+    points(1, i) = double(surfel_cloud->points.at(i).y);
+    points(2, i) = double(surfel_cloud->points.at(i).z);
+  }
+
+  constexpr double kEpsilon = 0.02;
+  constexpr size_t kPointSamples = 200u;
+  constexpr size_t kGridSize = 5u;
+  constexpr size_t kMvbbDiamOptLoops = 0u;
+  constexpr size_t kMvbbGridSearchOptLoops = 0u;
+  ApproxMVBB::OOBB oobb =
+      ApproxMVBB::approximateMVBB(points, kEpsilon, kPointSamples, kGridSize,
+                                  kMvbbDiamOptLoops, kMvbbGridSearchOptLoops);
+
+  ApproxMVBB::Matrix33 A_KI = oobb.m_q_KI.matrix().transpose();
+  const int size = points.cols();
+  for (unsigned int i = 0; i < size; ++i) {
+    oobb.unite(A_KI * points.col(i));
+  }
+
+  constexpr double kExpansionPercentage = 0.05;
+  oobb.expandToMinExtentRelative(kExpansionPercentage);
+
+  ApproxMVBB::Vector3 min_in_I = oobb.m_q_KI * oobb.m_minPoint;
+  ApproxMVBB::Vector3 max_in_I = oobb.m_q_KI * oobb.m_maxPoint;
+
+  *bbox_quaternion = oobb.m_q_KI.cast<float>();
+  *bbox_translation = ((min_in_I + max_in_I) / 2).cast<float>();
+  *bbox_size = ((oobb.m_maxPoint - oobb.m_minPoint).cwiseAbs()).cast<float>();
+#else
+  ROS_WARN_STREAM(
+      "Bounding box computation is not supported since ApproxMVBB is "
+      "disabled.");
+#endif
+}
+
 }  // namespace voxblox_gsm
 }  // namespace voxblox

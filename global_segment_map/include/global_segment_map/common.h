@@ -32,6 +32,15 @@ struct LabelCount {
   LabelConfidence label_confidence = 0u;
 };
 
+struct PointSurfelLabel {
+  PCL_ADD_POINT4D;
+  PCL_ADD_NORMAL4D;
+  PCL_ADD_RGB;
+  uint32_t label;
+
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
+
 struct PointSurfelSemanticInstance : public pcl::PointXYZRGB {
   PCL_ADD_POINT4D;
   PCL_ADD_RGB;
@@ -50,6 +59,10 @@ typedef AlignedVector<Label> Labels;
 typedef AlignedVector<SemanticLabel> SemanticLabels;
 
 }  // namespace voxblox
+
+POINT_CLOUD_REGISTER_POINT_STRUCT(voxblox::PointSurfelLabel,
+                                  (float, x, x)(float, y, y)(float, z, z)(
+                                      float, rgb, rgb)(uint32_t, label, label))
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(
     voxblox::PointSemanticInstanceType,
