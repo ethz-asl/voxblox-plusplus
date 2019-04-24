@@ -32,7 +32,7 @@
   <arg if="$(arg sliding_window)" name="camera_frame" default="camera0"/>
   <arg unless="$(arg sliding_window)" name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
 
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen" args="--v=3 --icp_mini_batch_size=200 --icp_refine_roll_pitch=true --icp_min_match_ratio=0.8">
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="log" args="--icp_mini_batch_size=200 --icp_refine_roll_pitch=true --icp_min_match_ratio=0.8">
     <rosparam command="load" file="$(arg gsm_node_params_name)" />
     <param name="enable_icp" value="true"/>
     <param name="keep_track_of_icp_correction" value="true"/>

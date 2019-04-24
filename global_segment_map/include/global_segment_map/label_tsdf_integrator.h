@@ -529,8 +529,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     const size_t num_icp_updates =
         icp_->runICP(*layer_, point_cloud, T_Gicp_G_ * T_G_C_init, &T_Gicp_C);
     if (num_icp_updates == 0u || num_icp_updates > 15u) {
-      LOG(ERROR) << "num_icp_updates is too high or 0: " << num_icp_updates
-                 << ", using T_G_C_init.";
+      LOG(INFO) << "num_icp_updates is too high or 0: " << num_icp_updates
+                << ", using T_G_C_init.";
       return T_G_C_init;
     }
     LOG(INFO) << "ICP refinement performed " << num_icp_updates
@@ -573,10 +573,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     VoxelMap clear_map;
 
     std::unique_ptr<ThreadSafeIndex> index_getter(
-      ThreadSafeIndexFactory::get(config_.integration_order_mode, points_C));
+        ThreadSafeIndexFactory::get(config_.integration_order_mode, points_C));
 
-    bundleRays(T_G_C, points_C, freespace_points, index_getter.get(), &voxel_map,
-               &clear_map);
+    bundleRays(T_G_C, points_C, freespace_points, index_getter.get(),
+               &voxel_map, &clear_map);
 
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
                   false, voxel_map, clear_map);
