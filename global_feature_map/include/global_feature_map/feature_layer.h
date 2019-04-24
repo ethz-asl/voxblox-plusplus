@@ -14,6 +14,12 @@
 
 namespace voxblox {
 
+enum class DeserializeAction : size_t {
+  kUpdate = 0u,
+  kMerge = 1u,
+  kReset = 2u
+};
+
 /**
  * A 3D information layer, containing blocks with a set of features inside them.
  */
@@ -204,12 +210,12 @@ class FeatureLayer {
 
   void serializeLayerAsMsg(const bool only_updated,
                            modelify_msgs::FeatureLayer* msg,
-                           const size_t& action);
+                           const DeserializeAction& action);
 
   bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg);
 
   bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg,
-                             const size_t& action);
+                             const DeserializeAction& action);
 
  protected:
   std::string getType() const;

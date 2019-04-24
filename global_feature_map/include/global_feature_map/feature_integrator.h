@@ -56,11 +56,11 @@ class FeatureIntegrator {
   inline const Config& getConfig() const { return config_; }
 
   void integrateFeatures(const Transformation& T_G_C,
-                         const std::vector<Feature3D>& features_G);
+                         const std::vector<Feature3D>& features_C);
 
  protected:
   void integrateFunction(const Transformation& T_G_C,
-                         const std::vector<Feature3D>& features_G,
+                         const std::vector<Feature3D>& features_C,
                          ThreadSafeIndex* index_getter);
 
   void allocateStorageAndGetBlockPtr(const Point& point_G,

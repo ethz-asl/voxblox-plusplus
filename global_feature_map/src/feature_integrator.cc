@@ -3,15 +3,15 @@
 namespace voxblox {
 
 void FeatureIntegrator::integrateFeatures(
-    const Transformation& T_G_C, const std::vector<Feature3D>& features_G) {
+    const Transformation& T_G_C, const std::vector<Feature3D>& features_C) {
   timing::Timer integrate_timer("integrate/features");
 
-  ThreadSafeIndex index_getter(features_G.size());
+  ThreadSafeIndex index_getter(features_C.size());
 
   std::list<std::thread> integration_threads;
   for (size_t i = 0; i < config_.integrator_threads; ++i) {
     integration_threads.emplace_back(&FeatureIntegrator::integrateFunction,
-                                     this, T_G_C, features_G, &index_getter);
+                                     this, T_G_C, features_C, &index_getter);
   }
 
   for (std::thread& thread : integration_threads) {
@@ -25,7 +25,7 @@ void FeatureIntegrator::integrateFeatures(
 }
 
 void FeatureIntegrator::integrateFunction(
-    const Transformation& T_G_C, const std::vector<Feature3D>& features_G,
+    const Transformation& T_G_C, const std::vector<Feature3D>& features_C,
     ThreadSafeIndex* index_getter) {
   DCHECK(index_getter != nullptr);
 
@@ -33,14 +33,17 @@ void FeatureIntegrator::integrateFunction(
   FeatureBlock<Feature3D>::Ptr block = nullptr;
   BlockIndex block_idx;
   while (index_getter->getNextIndex(&point_idx)) {
-    const Feature3D& feature = features_G.at(point_idx);
+    const Feature3D& feature_C = features_C.at(point_idx);
 
-    const Point& point_C = feature.keypoint;
+    const Point& point_C = feature_C.keypoint;
     const Point& origin = T_G_C.getPosition();
     const Point point_G = T_G_C * point_C;
 
+    Feature3D feature_G = feature_C;
+    feature_G.keypoint = point_G;
+
     allocateStorageAndGetBlockPtr(point_G, &block, &block_idx);
-    updateFeatureBlock(feature, &block);
+    updateFeatureBlock(feature_G, &block);
   }
 }
 
@@ -92,7 +95,6 @@ void FeatureIntegrator::updateFeatureBlock(
 }
 
 void FeatureIntegrator::updateLayerWithStoredBlocks() {
-  BlockIndex last_block_idx;
   FeatureBlock<Feature3D>::Ptr block = nullptr;
 
   for (const std::pair<const BlockIndex, FeatureBlock<Feature3D>::Ptr>&

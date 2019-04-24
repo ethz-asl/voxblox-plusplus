@@ -60,8 +60,8 @@ TEST_F(Feature3DLayerTest, testSerialization) {
 
   constexpr bool kOnlyUpdated = false;
   modelify_msgs::FeatureLayer msg;
-  constexpr size_t action = 1u;
-  feature_layer_->serializeLayerAsMsg(kOnlyUpdated, &msg, action);
+  feature_layer_->serializeLayerAsMsg(kOnlyUpdated, &msg,
+                                      DeserializeAction::kUpdate);
 
   feature_layer_deserialize_->deserializeMsgToLayer(msg);
 

@@ -63,7 +63,7 @@ std::string FeatureLayer<FeatureType>::getType() const {
 template <typename FeatureType>
 void FeatureLayer<FeatureType>::serializeLayerAsMsg(
     const bool only_updated, modelify_msgs::FeatureLayer* msg,
-    const size_t& action) {
+    const DeserializeAction& action) {
   CHECK_NOTNULL(msg);
   msg->block_size = block_size();
   msg->layer_type = getType();
@@ -100,7 +100,7 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
 
 template <typename FeatureType>
 bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
-    const modelify_msgs::FeatureLayer& msg, const size_t& action) {
+    const modelify_msgs::FeatureLayer& msg, const DeserializeAction& action) {
   if (getType().compare(msg.layer_type) != 0) {
     LOG(ERROR) << "Feature type does not match!";
     return false;
@@ -111,7 +111,7 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
     return false;
   }
 
-  if (action == 2u) {
+  if (action == DeserializeAction::kReset) {
     removeAllBlocks();
   }
 
@@ -120,7 +120,7 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
 
     // Either we want to update an existing block or there was no block there
     // before.
-    if (action == 0u || !hasBlock(index)) {
+    if (action == DeserializeAction::kUpdate || !hasBlock(index)) {
       // Create a new block if it doesn't exist yet, or get the existing one
       // at the correct block index.
       typename FeatureBlock<FeatureType>::Ptr block_ptr =
@@ -129,7 +129,7 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
       std::vector<uint32_t> data = block_msg.data;
       block_ptr->deserializeFromIntegers(data);
 
-    } else if (action == 1u) {
+    } else if (action == DeserializeAction::kMerge) {
       typename FeatureBlock<FeatureType>::Ptr old_block_ptr =
           getBlockPtrByIndex(index);
       CHECK(old_block_ptr);
@@ -145,16 +145,7 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
     }
   }
 
-  switch (action) {
-    case 2u:
-      CHECK_EQ(getNumberOfAllocatedBlocks(), msg.blocks.size());
-      break;
-    case 0u:
-      // Fall through intended.
-    case 1u:
-      CHECK_GE(getNumberOfAllocatedBlocks(), msg.blocks.size());
-      break;
-  }
+  CHECK_GE(getNumberOfAllocatedBlocks(), msg.blocks.size());
 
   return true;
 }

@@ -31,7 +31,9 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
 
   // TODO(ntonci): Currently Feature3D uses FloatingPoint type, however, if
   // this ever changes to double, conversion to uint32 will be wrong!
-  CHECK_EQ(sizeof(FloatingPoint), 4);
+  static_assert(sizeof(FloatingPoint) == 4,
+                "FloatingPoint needs to be of type float, otherwise "
+                "serialization will not work!");
 
   for (const Feature3D& feature : getFeatures()) {
     const uint32_t* bytes_1_ptr =

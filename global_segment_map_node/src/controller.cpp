@@ -451,10 +451,10 @@ void Controller::fillSegmentWithData<PointSurfelLabel>(
 void Controller::fromFeaturesMsgToFeature3D(
     const modelify_msgs::Features& features_msg, size_t* number_of_features,
     std::string* camera_frame, ros::Time* timestamp,
-    std::vector<Feature3D>* features_G) {
+    std::vector<Feature3D>* features_C) {
   CHECK_NOTNULL(camera_frame);
   CHECK_NOTNULL(timestamp);
-  CHECK_NOTNULL(features_G);
+  CHECK_NOTNULL(features_C);
 
   *number_of_features = features_msg.length;
   *camera_frame = features_msg.header.frame_id;
@@ -479,14 +479,14 @@ void Controller::fromFeaturesMsgToFeature3D(
     CHECK_EQ(feature.descriptor.cols, msg.descriptor.size())
         << "Descriptor size is wrong!";
 
-    features_G->push_back(feature);
+    features_C->push_back(feature);
   }
 
-  if (features_G->size() != *number_of_features) {
+  if (features_C->size() != *number_of_features) {
     ROS_WARN_STREAM(
         "Number of features is different from the one "
         "specified in the message: "
-        << features_G->size() << " vs. " << *number_of_features);
+        << features_C->size() << " vs. " << *number_of_features);
   }
 }
 
@@ -494,9 +494,9 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
   size_t number_of_features;
   std::string camera_frame;
   ros::Time timestamp;
-  std::vector<Feature3D> features_G;
+  std::vector<Feature3D> features_C;
   fromFeaturesMsgToFeature3D(features_msg, &number_of_features, &camera_frame,
-                             &timestamp, &features_G);
+                             &timestamp, &features_C);
 
   if (camera_frame != camera_frame_) {
     ROS_WARN_STREAM("Camera frame in the header ("
@@ -507,7 +507,7 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
 
   Transformation T_G_C;
   if (lookupTransform(camera_frame, world_frame_, timestamp, &T_G_C)) {
-    feature_integrator_->integrateFeatures(T_G_C, features_G);
+    feature_integrator_->integrateFeatures(T_G_C, features_C);
   } else {
     ROS_WARN_STREAM("Could not find the transform to "
                     << camera_frame << ", at time " << timestamp.toSec()
@@ -930,10 +930,9 @@ bool Controller::publishObjects(const bool publish_all) {
                                     &gsm_update_msg.object.label_layer);
     // TODO(ntonci): Check action and maybe change convention to be in the same
     // style as above.
-    constexpr size_t kUpdateAction = 0u;
     feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
                                       &gsm_update_msg.object.feature_layer,
-                                      kUpdateAction);
+                                      DeserializeAction::kUpdate);
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.old_labels.clear();

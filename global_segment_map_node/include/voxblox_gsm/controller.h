@@ -101,7 +101,7 @@ class Controller {
                                   size_t* number_of_features,
                                   std::string* camera_frame,
                                   ros::Time* timestamp,
-                                  std::vector<Feature3D>* features_G);
+                                  std::vector<Feature3D>* features_C);
 
   virtual void featureCallback(const modelify_msgs::Features& features_msg);
 
