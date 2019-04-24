@@ -3,9 +3,23 @@
 
 #include <cstdint>
 
+#include <pcl/point_types.h>
 #include <voxblox/core/color.h>
 #include <voxblox/core/common.h>
 #include <voxblox/core/voxel.h>
+
+struct PointSurfelLabel {
+  PCL_ADD_POINT4D;
+  PCL_ADD_NORMAL4D;
+  PCL_ADD_RGB;
+  uint32_t label;
+
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
+
+POINT_CLOUD_REGISTER_POINT_STRUCT(PointSurfelLabel,
+                                  (float, x, x)(float, y, y)(float, z, z)(
+                                      float, rgb, rgb)(uint32_t, label, label))
 
 namespace voxblox {
 
