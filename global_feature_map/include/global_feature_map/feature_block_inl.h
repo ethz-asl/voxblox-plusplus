@@ -18,7 +18,7 @@ void FeatureBlock<FeatureType>::mergeBlock(
     has_data() = true;
     updated() = true;
 
-    for (const FeatureType& other_feature : other_block.features()) {
+    for (const FeatureType& other_feature : other_block.getFeatures()) {
       features_.push_back(other_feature);
     }
   }

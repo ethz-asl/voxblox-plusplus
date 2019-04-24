@@ -108,7 +108,7 @@ void FeatureBlock<Feature3D>::deserializeFromIntegers(
 
       memcpy(&(descriptor), &bytes_d, sizeof(bytes_d));
 
-      feature.descriptor.at<double>(j) = descriptor;
+      feature.descriptor.at<double>(j) = static_cast<double>(descriptor);
     }
 
     addFeature(feature);
