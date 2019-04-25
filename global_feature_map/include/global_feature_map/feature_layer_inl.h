@@ -95,7 +95,7 @@ void FeatureLayer<FeatureType>::serializeLayerAsMsg(
 template <typename FeatureType>
 bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
     const modelify_msgs::FeatureLayer& msg) {
-  return deserializeMsgToLayer(msg, msg.action);
+  return deserializeMsgToLayer(msg, static_cast<DeserializeAction>(msg.action));
 }
 
 template <typename FeatureType>
