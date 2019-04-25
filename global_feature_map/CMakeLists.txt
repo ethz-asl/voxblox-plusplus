@@ -10,7 +10,6 @@ find_package(Boost REQUIRED COMPONENTS filesystem)
 
 cs_add_library(${PROJECT_NAME}
   src/feature_block.cc
-  src/feature_layer.cc
   src/feature_types.cc
   src/feature_integrator.cc
 )

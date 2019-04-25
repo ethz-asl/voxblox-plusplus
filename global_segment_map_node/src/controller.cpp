@@ -1,5 +1,8 @@
 // Copyright 2018 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
+// TODO(ntonci): Fix file extension. These files in global_segment_map_node have
+// cpp extension and all others have cc.
+
 #include "voxblox_gsm/controller.h"
 
 #include <cmath>
@@ -155,8 +158,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
-  feature_layer_.reset(new FeatureLayer<Feature3D>(
-      map_config_.voxel_size * map_config_.voxels_per_side));
+  const double kBlockSize =
+      map_config_.voxel_size * map_config_.voxels_per_side;
+  feature_layer_.reset(new FeatureLayer<Feature3D>(kBlockSize));
 
   // Determine TSDF integrator parameters.
   LabelTsdfIntegrator::Config integrator_config;
@@ -445,48 +449,6 @@ void Controller::fillSegmentWithData<PointSurfelLabel>(
               point_cloud.points[i].b, point_cloud.points[i].a));
 
     segment->labels_.push_back(point_cloud.points[i].label);
-  }
-}
-
-void Controller::fromFeaturesMsgToFeature3D(
-    const modelify_msgs::Features& features_msg, size_t* number_of_features,
-    std::string* camera_frame, ros::Time* timestamp,
-    std::vector<Feature3D>* features_C) {
-  CHECK_NOTNULL(camera_frame);
-  CHECK_NOTNULL(timestamp);
-  CHECK_NOTNULL(features_C);
-
-  *number_of_features = features_msg.length;
-  *camera_frame = features_msg.header.frame_id;
-  *timestamp = features_msg.header.stamp;
-
-  for (const modelify_msgs::Feature& msg : features_msg.features) {
-    Feature3D feature;
-
-    feature.keypoint << msg.x, msg.y, msg.z;
-    feature.keypoint_scale = msg.scale;
-    feature.keypoint_response = msg.response;
-    feature.keypoint_angle = msg.angle;
-
-    // TODO(ntonci): This should depend on the descriptor, currently it assumes
-    // SIFT. Template!
-    constexpr size_t kRows = 1;
-    constexpr size_t kCols = 128;
-    feature.descriptor = cv::Mat(kRows, kCols, CV_64FC1);
-    memcpy(feature.descriptor.data, msg.descriptor.data(),
-           msg.descriptor.size() * sizeof(double));
-
-    CHECK_EQ(feature.descriptor.cols, msg.descriptor.size())
-        << "Descriptor size is wrong!";
-
-    features_C->push_back(feature);
-  }
-
-  if (features_C->size() != *number_of_features) {
-    ROS_WARN_STREAM(
-        "Number of features is different from the one "
-        "specified in the message: "
-        << features_C->size() << " vs. " << *number_of_features);
   }
 }
 

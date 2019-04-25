@@ -97,12 +97,6 @@ class Controller {
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
       Segment* segment);
 
-  void fromFeaturesMsgToFeature3D(const modelify_msgs::Features& features_msg,
-                                  size_t* number_of_features,
-                                  std::string* camera_frame,
-                                  ros::Time* timestamp,
-                                  std::vector<Feature3D>* features_C);
-
   virtual void featureCallback(const modelify_msgs::Features& features_msg);
 
   virtual void segmentPointCloudCallback(

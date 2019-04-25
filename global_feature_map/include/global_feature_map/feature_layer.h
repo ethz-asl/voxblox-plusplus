@@ -83,7 +83,7 @@ class FeatureLayer {
   }
 
   /**
-   *  Gets a block by the block index it if already exists, otherwise allocates
+   *  Gets a block by the block index if it already exists, otherwise allocates
    * a new one.
    */
   inline typename FeatureBlockType::Ptr allocateBlockPtrByIndex(
@@ -107,7 +107,7 @@ class FeatureLayer {
   }
 
   /**
-   * Gets a block by the coordinates it if already exists,
+   * Gets a block by the coordinates if it already exists,
    * otherwise allocates a new one.
    */
   inline typename FeatureBlockType::Ptr allocateBlockPtrByCoordinates(

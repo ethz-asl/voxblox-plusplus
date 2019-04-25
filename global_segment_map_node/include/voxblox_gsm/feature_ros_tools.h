@@ -1,8 +1,13 @@
 #ifndef VOXBLOX_GSM_FEATURE_ROS_TOOLS_H
 #define VOXBLOX_GSM_FEATURE_ROS_TOOLS_H
+// TODO(ntonci): These include guards have wrong format.
+// TODO(ntonci): We should probably rename this package.
+// TODO(ntonci): We should probably rename the repo.
 
 #include <algorithm>
 
+#include <modelify_msgs/Features.h>
+#include <ros/ros.h>
 #include <std_msgs/ColorRGBA.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
@@ -10,25 +15,13 @@
 
 #include <global_feature_map/feature_block.h>
 #include <global_feature_map/feature_layer.h>
+#include <global_feature_map/feature_types.h>
 
 namespace voxblox {
 namespace voxblox_gsm {
 
-inline std_msgs::ColorRGBA getColorFromBlockFeatures(
-    const double max_number_of_features, const double number_of_features) {
-  const double ratio =
-      2 * std::min(1.0, number_of_features / max_number_of_features);
-  const double r = std::max(0.0, ratio - 1.0);
-  const double b = std::max(0.0, 1.0 - ratio);
-
-  std_msgs::ColorRGBA color_msg;
-  color_msg.r = r;
-  color_msg.g = 1.0 - b - r;
-  color_msg.b = b;
-  color_msg.a = 0.2;
-
-  return color_msg;
-}
+std_msgs::ColorRGBA getColorFromBlockFeatures(
+    const double max_number_of_features, const double number_of_features);
 
 template <typename FeatureType>
 void createOccupancyBlocksFromFeatureLayer(
@@ -66,6 +59,11 @@ void createOccupancyBlocksFromFeatureLayer(
   }
   marker_array->markers.push_back(block_marker);
 }
+
+void fromFeaturesMsgToFeature3D(const modelify_msgs::Features& features_msg,
+                                size_t* number_of_features,
+                                std::string* camera_frame, ros::Time* timestamp,
+                                std::vector<Feature3D>* features_C);
 
 }  // namespace voxblox_gsm
 }  // namespace voxblox

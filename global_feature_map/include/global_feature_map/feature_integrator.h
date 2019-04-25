@@ -1,5 +1,5 @@
-#ifndef VOXBLOX_GSM_GLOBAL_FEATURE_MAP_FEATURE_INTEGRATOR_H_
-#define VOXBLOX_GSM_GLOBAL_FEATURE_MAP_FEATURE_INTEGRATOR_H_
+#ifndef GLOBAL_FEATURE_MAP_FEATURE_INTEGRATOR_H_
+#define GLOBAL_FEATURE_MAP_FEATURE_INTEGRATOR_H_
 
 #include <mutex>
 #include <thread>
@@ -30,7 +30,8 @@ class FeatureIntegrator {
     size_t integrator_threads = std::thread::hardware_concurrency();
 
     // Number of features to keep, if set to 0, all features are stored and
-    // sorting is not performed.
+    // sorting is not performed. Otherwise, features are sorted by quality and
+    // top number_of_features_to_keep are kept.
     size_t number_of_features_to_keep = 0u;
   };
 
@@ -84,4 +85,4 @@ class FeatureIntegrator {
 
 }  // namespace voxblox
 
-#endif  // VOXBLOX_GSM_GLOBAL_FEATURE_MAP_FEATURE_INTEGRATOR_H_
+#endif  // GLOBAL_FEATURE_MAP_FEATURE_INTEGRATOR_H_

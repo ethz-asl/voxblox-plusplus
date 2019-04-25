@@ -80,8 +80,6 @@ void FeatureIntegrator::allocateStorageAndGetBlockPtr(
       *last_block = insert_status.first->second;
     }
   }
-
-  (*last_block)->updated() = true;
 }
 
 void FeatureIntegrator::updateFeatureBlock(
@@ -92,6 +90,7 @@ void FeatureIntegrator::updateFeatureBlock(
 
   (*block)->addFeature(feature_G);
   (*block)->set_has_data(true);
+  (*block)->updated() = true;
 }
 
 void FeatureIntegrator::updateLayerWithStoredBlocks() {
