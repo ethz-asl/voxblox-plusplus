@@ -391,6 +391,10 @@ LabelVoxel* LabelTsdfIntegrator::allocateStorageAndGetLabelVoxelPtr(
   const BlockIndex block_idx =
       getBlockIndexFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_inv_);
 
+  // TODO(margaritaG): citing Marius: this logic makes sure that if you already
+  // have the right block pointer you don't need to go looking for it again, so
+  // in order to make this logic effective you need to move the block ptr and
+  // block idx outside of the while loop in the function calling this.
   if ((block_idx != *last_block_idx) || (*last_block == nullptr)) {
     *last_block = label_layer_->getBlockPtrByIndex(block_idx);
     *last_block_idx = block_idx;
