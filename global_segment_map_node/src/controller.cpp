@@ -130,6 +130,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
       received_first_message_(false),
+      received_first_feature_(false),
       compute_and_publish_bbox_(false),
       publish_feature_blocks_marker_(false),
       use_label_propagation_(true) {
@@ -453,12 +454,18 @@ void Controller::fillSegmentWithData<PointSurfelLabel>(
 }
 
 void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
-  size_t number_of_features;
+  size_t descriptor_size;
   std::string camera_frame;
   ros::Time timestamp;
   std::vector<Feature3D> features_C;
-  fromFeaturesMsgToFeature3D(features_msg, &number_of_features, &camera_frame,
+
+  fromFeaturesMsgToFeature3D(features_msg, &descriptor_size, &camera_frame,
                              &timestamp, &features_C);
+
+  if (!received_first_feature_ && features_C.size() > 0) {
+    received_first_feature_ = true;
+    feature_layer_->setDescriptorSize(descriptor_size);
+  }
 
   if (camera_frame != camera_frame_) {
     ROS_WARN_STREAM("Camera frame in the header ("

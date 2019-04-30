@@ -39,23 +39,29 @@ TEST_F(Feature3DLayerTest, testFeatureInsert) {
 TEST_F(Feature3DLayerTest, testSerialization) {
   BlockIndex block_index(-15, 20, 3);
 
+  const size_t kDescriptorSize = 128u;
+
   FeatureBlock<Feature3D>::Ptr test_block =
       feature_layer_->allocateBlockPtrByIndex(block_index);
   CHECK(test_block);
+
+  feature_layer_->setDescriptorSize(kDescriptorSize);
 
   Feature3D test_feature_a;
   test_feature_a.keypoint << 1.1, 1.1, 1.1;
   test_feature_a.keypoint_scale = 11.1;
   test_feature_a.keypoint_response = 111.1;
   test_feature_a.keypoint_angle = 1.1;
-  test_feature_a.descriptor = cv::Mat(1, 128, CV_64FC1, cv::Scalar(1.11));
+  test_feature_a.descriptor =
+      cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(1.11));
   test_block->addFeature(test_feature_a);
   Feature3D test_feature_b;
   test_feature_b.keypoint << 2.2, 2.2, 2.2;
   test_feature_b.keypoint_scale = 22.2;
   test_feature_b.keypoint_response = 222.2;
   test_feature_b.keypoint_angle = 2.2;
-  test_feature_b.descriptor = cv::Mat(1, 128, CV_64FC1, cv::Scalar(2.22));
+  test_feature_b.descriptor =
+      cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(2.22));
   test_block->addFeature(test_feature_b);
 
   constexpr bool kOnlyUpdated = false;
@@ -63,6 +69,78 @@ TEST_F(Feature3DLayerTest, testSerialization) {
   feature_layer_->serializeLayerAsMsg(kOnlyUpdated, &msg,
                                       DeserializeAction::kUpdate);
 
+  feature_layer_deserialize_->setDescriptorSize(kDescriptorSize);
+  feature_layer_deserialize_->deserializeMsgToLayer(msg);
+
+  FeatureBlock<Feature3D>::Ptr test_block_deserialize =
+      feature_layer_deserialize_->getBlockPtrByIndex(block_index);
+  std::vector<Feature3D>& features_deserialize =
+      test_block_deserialize->getFeatures();
+  Feature3D test_feature_a_deserialize = features_deserialize.at(0);
+  Feature3D test_feature_b_deserialize = features_deserialize.at(1);
+
+  constexpr double kErrorThreshold = 1e-5;
+  EXPECT_EQ(feature_layer_->block_size(),
+            feature_layer_deserialize_->block_size());
+  EXPECT_EQ(feature_layer_->getNumberOfAllocatedBlocks(),
+            feature_layer_deserialize_->getNumberOfAllocatedBlocks());
+  EXPECT_EQ(test_block->numFeatures(), test_block_deserialize->numFeatures());
+  EXPECT_EQ(test_feature_a.keypoint, test_feature_a_deserialize.keypoint);
+  EXPECT_EQ(test_feature_a.keypoint_scale,
+            test_feature_a_deserialize.keypoint_scale);
+  EXPECT_EQ(test_feature_a.keypoint_response,
+            test_feature_a_deserialize.keypoint_response);
+  EXPECT_EQ(test_feature_a.keypoint_angle,
+            test_feature_a_deserialize.keypoint_angle);
+  EXPECT_LT(cv::sum(test_feature_a.descriptor -
+                    test_feature_a_deserialize.descriptor)[0],
+            kErrorThreshold);
+  EXPECT_EQ(test_feature_b.keypoint, test_feature_b_deserialize.keypoint);
+  EXPECT_EQ(test_feature_b.keypoint_scale,
+            test_feature_b_deserialize.keypoint_scale);
+  EXPECT_EQ(test_feature_b.keypoint_response,
+            test_feature_b_deserialize.keypoint_response);
+  EXPECT_EQ(test_feature_b.keypoint_angle,
+            test_feature_b_deserialize.keypoint_angle);
+  EXPECT_LT(cv::sum(test_feature_b.descriptor -
+                    test_feature_b_deserialize.descriptor)[0],
+            kErrorThreshold);
+}
+
+TEST_F(Feature3DLayerTest, testSerializationLargerDescriptor) {
+  BlockIndex block_index(-15, 20, 3);
+
+  const size_t kDescriptorSize = 256u;
+
+  FeatureBlock<Feature3D>::Ptr test_block =
+      feature_layer_->allocateBlockPtrByIndex(block_index);
+  CHECK(test_block);
+
+  feature_layer_->setDescriptorSize(kDescriptorSize);
+
+  Feature3D test_feature_a;
+  test_feature_a.keypoint << 1.1, 1.1, 1.1;
+  test_feature_a.keypoint_scale = 11.1;
+  test_feature_a.keypoint_response = 111.1;
+  test_feature_a.keypoint_angle = 1.1;
+  test_feature_a.descriptor =
+      cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(1.11));
+  test_block->addFeature(test_feature_a);
+  Feature3D test_feature_b;
+  test_feature_b.keypoint << 2.2, 2.2, 2.2;
+  test_feature_b.keypoint_scale = 22.2;
+  test_feature_b.keypoint_response = 222.2;
+  test_feature_b.keypoint_angle = 2.2;
+  test_feature_b.descriptor =
+      cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(2.22));
+  test_block->addFeature(test_feature_b);
+
+  constexpr bool kOnlyUpdated = false;
+  modelify_msgs::FeatureLayer msg;
+  feature_layer_->serializeLayerAsMsg(kOnlyUpdated, &msg,
+                                      DeserializeAction::kUpdate);
+
+  feature_layer_deserialize_->setDescriptorSize(kDescriptorSize);
   feature_layer_deserialize_->deserializeMsgToLayer(msg);
 
   FeatureBlock<Feature3D>::Ptr test_block_deserialize =

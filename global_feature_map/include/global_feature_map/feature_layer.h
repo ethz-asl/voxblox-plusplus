@@ -38,6 +38,12 @@ class FeatureLayer {
   explicit FeatureLayer(FloatingPoint block_size) : block_size_(block_size) {
     CHECK_GT(block_size_, 0.0f);
     block_size_inv_ = 1.0 / block_size_;
+    setDescriptorSize(0);
+  }
+  explicit FeatureLayer(FloatingPoint block_size, size_t descriptor_size)
+      : block_size_(block_size), feature_descriptor_size_(descriptor_size) {
+    CHECK_GT(block_size_, 0.0f);
+    block_size_inv_ = 1.0 / block_size_;
   }
 
   /// Deep copy constructor.
@@ -213,15 +219,18 @@ class FeatureLayer {
                            const DeserializeAction& action);
 
   bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg);
-
   bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg,
                              const DeserializeAction& action);
+
+  void setDescriptorSize(const size_t size) { feature_descriptor_size_ = size; }
+  size_t getDescriptorSize() { return feature_descriptor_size_; }
 
  protected:
   std::string getType() const;
 
   FloatingPoint block_size_;
   FloatingPoint block_size_inv_;
+  size_t feature_descriptor_size_;
 
   FeatureBlockHashMap block_map_;
 };

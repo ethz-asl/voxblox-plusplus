@@ -61,7 +61,7 @@ void createOccupancyBlocksFromFeatureLayer(
 }
 
 void fromFeaturesMsgToFeature3D(const modelify_msgs::Features& features_msg,
-                                size_t* number_of_features,
+                                size_t* descriptor_size,
                                 std::string* camera_frame, ros::Time* timestamp,
                                 std::vector<Feature3D>* features_C);
 

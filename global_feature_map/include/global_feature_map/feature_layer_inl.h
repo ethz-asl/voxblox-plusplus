@@ -64,6 +64,10 @@ template <typename FeatureType>
 void FeatureLayer<FeatureType>::serializeLayerAsMsg(
     const bool only_updated, modelify_msgs::FeatureLayer* msg,
     const DeserializeAction& action) {
+  CHECK_GT(getDescriptorSize(), 0u)
+      << "You need to set the descriptor size before you can serialize the "
+         "layer! You can do this either directly in the constructor of the "
+         "layer or during feature callback.";
   CHECK_NOTNULL(msg);
   msg->block_size = block_size();
   msg->layer_type = getType();
@@ -85,7 +89,7 @@ void FeatureLayer<FeatureType>::serializeLayerAsMsg(
     block_msg.z_index = index.z();
 
     std::vector<uint32_t> data;
-    getBlockByIndex(index).serializeToIntegers(&data);
+    getBlockByIndex(index).serializeToIntegers(getDescriptorSize(), &data);
 
     block_msg.data = data;
     msg->blocks.push_back(block_msg);
@@ -101,6 +105,11 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
 template <typename FeatureType>
 bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
     const modelify_msgs::FeatureLayer& msg, const DeserializeAction& action) {
+  CHECK_GT(getDescriptorSize(), 0u)
+      << "You need to set the descriptor size before you can serialize the "
+         "layer! You can do this either directly in the constructor of the "
+         "layer or during feature callback.";
+
   if (getType().compare(msg.layer_type) != 0) {
     LOG(ERROR) << "Feature type does not match!";
     return false;
@@ -127,7 +136,7 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
           allocateBlockPtrByIndex(index);
 
       std::vector<uint32_t> data = block_msg.data;
-      block_ptr->deserializeFromIntegers(data);
+      block_ptr->deserializeFromIntegers(getDescriptorSize(), data);
 
     } else if (action == DeserializeAction::kMerge) {
       typename FeatureBlock<FeatureType>::Ptr old_block_ptr =
@@ -139,7 +148,7 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
                                         old_block_ptr->origin()));
 
       std::vector<uint32_t> data = block_msg.data;
-      new_block_ptr->deserializeFromIntegers(data);
+      new_block_ptr->deserializeFromIntegers(getDescriptorSize(), data);
 
       old_block_ptr->mergeBlock(*new_block_ptr);
     }

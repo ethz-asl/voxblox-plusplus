@@ -7,7 +7,7 @@ namespace voxblox {
 
 template <>
 void FeatureBlock<Feature3D>::serializeToIntegers(
-    std::vector<uint32_t>* data) const {
+    const size_t descriptor_size, std::vector<uint32_t>* data) const {
   CHECK_NOTNULL(data);
 
   //          Type            |  Bytes
@@ -22,12 +22,10 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
 
   const size_t number_of_features = numFeatures();
 
-  constexpr size_t kFeatureBlockSizeWithoutDescriptor = 6u;
-  // TODO(ntonci): Template on descirptor type.
-  constexpr size_t kDescriptorSize = 128u;
+  const size_t kFeature3DSize = descriptor_size + 6u;
+
   data->clear();
-  data->reserve(number_of_features *
-                (kFeatureBlockSizeWithoutDescriptor + kDescriptorSize));
+  data->reserve(number_of_features * kFeature3DSize);
 
   // TODO(ntonci): Currently Feature3D uses FloatingPoint type, however, if
   // this ever changes to double, conversion to uint32 will be wrong!
@@ -56,7 +54,7 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
     data->push_back(*bytes_6_ptr);
 
     // TODO(ntonci): Template on descriptor type.
-    for (size_t i = 0u; i < kDescriptorSize; ++i) {
+    for (size_t i = 0u; i < descriptor_size; ++i) {
       // TODO(ntonci): Casting double to float, loosing precision. Check
       // significance.
       FloatingPoint descriptor_value =
@@ -66,19 +64,15 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
       data->push_back(*bytes_d_ptr);
     }
   }
-  CHECK_EQ(data->size(),
-           number_of_features *
-               (kFeatureBlockSizeWithoutDescriptor + kDescriptorSize));
+  CHECK_EQ(data->size(), number_of_features * kFeature3DSize);
 }
 
 template <>
 void FeatureBlock<Feature3D>::deserializeFromIntegers(
-    const std::vector<uint32_t>& data) {
+    const size_t descriptor_size, const std::vector<uint32_t>& data) {
   CHECK_EQ(numFeatures(), 0u);
 
-  // TODO(ntonci): Template on descirptor type.
-  constexpr size_t kFeature3DSize = 134u;
-  constexpr size_t kDescriptorSize = 128u;
+  const size_t kFeature3DSize = descriptor_size + 6u;
 
   const size_t num_data_packets = data.size();
   CHECK_EQ(num_data_packets % kFeature3DSize, 0);
@@ -102,9 +96,9 @@ void FeatureBlock<Feature3D>::deserializeFromIntegers(
     memcpy(&feature.keypoint_response, &bytes_5, sizeof(bytes_5));
     memcpy(&feature.keypoint_angle, &bytes_6, sizeof(bytes_6));
 
-    feature.descriptor = cv::Mat(1u, kDescriptorSize, CV_64FC1);
+    feature.descriptor = cv::Mat(1u, descriptor_size, CV_64FC1);
 
-    for (size_t j = 0u; j < kDescriptorSize; ++j) {
+    for (size_t j = 0u; j < descriptor_size; ++j) {
       float descriptor;
       const uint32_t bytes_d = data[data_idx + 6u + j];
 

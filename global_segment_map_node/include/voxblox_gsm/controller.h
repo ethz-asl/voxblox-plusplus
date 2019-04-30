@@ -178,6 +178,8 @@ class Controller {
 
   std::shared_ptr<LabelTsdfMap> map_;
   std::shared_ptr<LabelTsdfIntegrator> integrator_;
+
+  bool received_first_feature_;
   std::shared_ptr<FeatureLayer<Feature3D>> feature_layer_;
   std::shared_ptr<FeatureIntegrator> feature_integrator_;
 

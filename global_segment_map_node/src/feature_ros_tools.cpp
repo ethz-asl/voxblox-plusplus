@@ -20,14 +20,14 @@ std_msgs::ColorRGBA getColorFromBlockFeatures(
 }
 
 void fromFeaturesMsgToFeature3D(const modelify_msgs::Features& features_msg,
-                                size_t* number_of_features,
+                                size_t* descriptor_size,
                                 std::string* camera_frame, ros::Time* timestamp,
                                 std::vector<Feature3D>* features_C) {
   CHECK_NOTNULL(camera_frame);
   CHECK_NOTNULL(timestamp);
   CHECK_NOTNULL(features_C);
 
-  *number_of_features = features_msg.length;
+  *descriptor_size = features_msg.descriptor_length;
   *camera_frame = features_msg.header.frame_id;
   *timestamp = features_msg.header.stamp;
 
@@ -39,11 +39,10 @@ void fromFeaturesMsgToFeature3D(const modelify_msgs::Features& features_msg,
     feature.keypoint_response = msg.response;
     feature.keypoint_angle = msg.angle;
 
-    // TODO(ntonci): This should depend on the descriptor, currently it assumes
-    // SIFT. Template!
+    // TODO(ntonci): Check if float values are properly stored in double
+    // container.
     constexpr size_t kRows = 1;
-    constexpr size_t kCols = 128;
-    feature.descriptor = cv::Mat(kRows, kCols, CV_64FC1);
+    feature.descriptor = cv::Mat(kRows, *descriptor_size, CV_64FC1);
     memcpy(feature.descriptor.data, msg.descriptor.data(),
            msg.descriptor.size() * sizeof(double));
 
@@ -51,13 +50,6 @@ void fromFeaturesMsgToFeature3D(const modelify_msgs::Features& features_msg,
         << "Descriptor size is wrong!";
 
     features_C->push_back(feature);
-  }
-
-  if (features_C->size() != *number_of_features) {
-    ROS_WARN_STREAM(
-        "Number of features is different from the one "
-        "specified in the message: "
-        << features_C->size() << " vs. " << *number_of_features);
   }
 }
 

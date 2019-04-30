@@ -77,9 +77,11 @@ class FeatureBlock {
 
   inline std::mutex& getMutex() { return block_mutex_; }
 
-  void serializeToIntegers(std::vector<uint32_t>* data) const;
+  void serializeToIntegers(const size_t descriptor_size,
+                           std::vector<uint32_t>* data) const;
 
-  void deserializeFromIntegers(const std::vector<uint32_t>& data);
+  void deserializeFromIntegers(const size_t descriptor_size,
+                               const std::vector<uint32_t>& data);
 
  protected:
   std::vector<FeatureType> features_;
