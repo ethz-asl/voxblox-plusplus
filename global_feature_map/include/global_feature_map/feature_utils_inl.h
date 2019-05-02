@@ -1,6 +1,7 @@
 #ifndef GLOBAL_FEATURE_MAP_FEATURE_UTILS_INL_H_
 #define GLOBAL_FEATURE_MAP_FEATURE_UTILS_INL_H_
 
+#include <fstream>
 #include <memory>
 #include <string>
 #include <utility>
@@ -8,6 +9,8 @@
 #include <glog/logging.h>
 #include <voxblox/core/common.h>
 
+#include "./Block.pb.h"
+#include "./Layer.pb.h"
 #include "global_feature_map/feature_utils.h"
 
 namespace voxblox {
@@ -120,6 +123,236 @@ void transformFeatureLayer(const FeatureLayer<FeatureType>& layer_in,
   layer_in.getFeatures(&features);
 
   feature_integrator.integrateFeatures(T_out_in, features);
+}
+
+template <typename FeatureType>
+bool LoadFeatureBlocksFromFile(
+    const std::string& file_path,
+    typename FeatureLayer<FeatureType>::FeatureBlockMergingStrategy strategy,
+    bool multiple_layer_support, FeatureLayer<FeatureType>* layer_ptr) {
+  CHECK_NOTNULL(layer_ptr);
+  CHECK(!file_path.empty());
+
+  // Open and check the file
+  std::fstream proto_file;
+  proto_file.open(file_path, std::fstream::in);
+  if (!proto_file.is_open()) {
+    LOG(ERROR) << "Could not open protobuf file to load layer: " << file_path;
+    return false;
+  }
+
+  // Byte offset result, used to keep track where we are in the file if
+  // necessary.
+  uint32_t tmp_byte_offset = 0;
+
+  bool layer_found = false;
+
+  do {
+    // Get number of messages
+    uint32_t num_protos;
+    if (!utils::readProtoMsgCountToStream(&proto_file, &num_protos,
+                                          &tmp_byte_offset)) {
+      LOG(ERROR) << "Could not read number of messages.";
+      return false;
+    }
+
+    if (num_protos == 0u) {
+      LOG(WARNING) << "Empty protobuf file!";
+      return false;
+    }
+
+    // Get header and check if it is compatible with existing layer.
+    FeatureLayerProto layer_proto;
+    if (!utils::readProtoMsgFromStream(&proto_file, &layer_proto,
+                                       &tmp_byte_offset)) {
+      LOG(ERROR) << "Could not read layer protobuf message.";
+      return false;
+    }
+
+    if (layer_ptr->isCompatible(layer_proto)) {
+      layer_found = true;
+    } else if (!multiple_layer_support) {
+      LOG(ERROR)
+          << "The layer information read from file is not compatible with "
+             "the current layer!";
+      return false;
+    } else {
+      // Figure out how much offset to jump forward by. This is the number of
+      // blocks * the block size... Actually maybe we just read them in? This
+      // is probably easiest. Then if there's corrupted blocks, we abort.
+      // We just don't add these to the layer.
+      const size_t num_blocks = num_protos - 1;
+      for (uint32_t block_idx = 0u; block_idx < num_blocks; ++block_idx) {
+        FeatureBlockProto block_proto;
+        if (!utils::readProtoMsgFromStream(&proto_file, &block_proto,
+                                           &tmp_byte_offset)) {
+          LOG(ERROR) << "Could not read block protobuf message number "
+                     << block_idx;
+          return false;
+        }
+      }
+      continue;
+    }
+
+    // Read all blocks and add them to the layer.
+    const size_t num_blocks = num_protos - 1;
+    if (!LoadFeatureBlocksFromStream(num_blocks, strategy, &proto_file,
+                                     layer_ptr, &tmp_byte_offset)) {
+      return false;
+    }
+  } while (multiple_layer_support && !layer_found && !proto_file.eof());
+  return layer_found;
+}
+
+template <typename FeatureType>
+bool LoadFeatureBlocksFromFile(
+    const std::string& file_path,
+    typename FeatureLayer<FeatureType>::BlockMergingStrategy strategy,
+    FeatureLayer<FeatureType>* layer_ptr) {
+  constexpr bool multiple_layer_support = false;
+  return LoadBlocksFromFile(file_path, strategy, multiple_layer_support,
+                            layer_ptr);
+}
+
+template <typename FeatureType>
+bool LoadFeatureBlocksFromStream(
+    const size_t num_blocks,
+    typename FeatureLayer<FeatureType>::FeatureBlockMergingStrategy strategy,
+    std::fstream* proto_file_ptr, FeatureLayer<FeatureType>* layer_ptr,
+    uint32_t* tmp_byte_offset_ptr) {
+  CHECK_NOTNULL(proto_file_ptr);
+  CHECK_NOTNULL(layer_ptr);
+  CHECK_NOTNULL(tmp_byte_offset_ptr);
+  // Read all blocks and add them to the layer.
+  for (uint32_t block_idx = 0u; block_idx < num_blocks; ++block_idx) {
+    FeatureBlockProto block_proto;
+    if (!utils::readProtoMsgFromStream(proto_file_ptr, &block_proto,
+                                       tmp_byte_offset_ptr)) {
+      LOG(ERROR) << "Could not read block protobuf message number "
+                 << block_idx;
+      return false;
+    }
+
+    if (!layer_ptr->addBlockFromProto(block_proto, strategy)) {
+      LOG(ERROR) << "Could not add the block protobuf message to the layer!";
+      return false;
+    }
+  }
+  return true;
+}
+
+template <typename FeatureType>
+bool LoadFeatureLayer(const std::string& file_path,
+                      const bool multiple_layer_support,
+                      typename FeatureLayer<FeatureType>::Ptr* layer_ptr) {
+  CHECK_NOTNULL(layer_ptr);
+  CHECK(!file_path.empty());
+
+  // Open and check the file
+  std::fstream proto_file;
+  proto_file.open(file_path, std::fstream::in);
+  if (!proto_file.is_open()) {
+    LOG(ERROR) << "Could not open protobuf file to load layer: " << file_path;
+    return false;
+  }
+
+  // Byte offset result, used to keep track where we are in the file if
+  // necessary.
+  uint32_t tmp_byte_offset = 0;
+
+  bool layer_found = false;
+
+  do {
+    // Get number of messages
+    uint32_t num_protos;
+    if (!utils::readProtoMsgCountToStream(&proto_file, &num_protos,
+                                          &tmp_byte_offset)) {
+      LOG(ERROR) << "Could not read number of messages.";
+      return false;
+    }
+
+    if (num_protos == 0u) {
+      LOG(WARNING) << "Empty protobuf file!";
+      return false;
+    }
+
+    // Get header and check if it is compatible with existing layer.
+    FeatureLayerProto layer_proto;
+    if (!utils::readProtoMsgFromStream(&proto_file, &layer_proto,
+                                       &tmp_byte_offset)) {
+      LOG(ERROR) << "Could not read layer protobuf message.";
+      return false;
+    }
+
+    if (layer_proto.block_size() <= 0.0f) {
+      LOG(ERROR)
+          << "Invalid parameter in layer protobuf message. Check the format.";
+      return false;
+    }
+
+    if (getFeatureType<FeatureType>().compare(layer_proto.type()) == 0) {
+      layer_found = true;
+    } else if (!multiple_layer_support) {
+      LOG(ERROR)
+          << "The layer information read from file is not compatible with "
+             "the current layer!";
+      return false;
+    } else {
+      // Figure out how much offset to jump forward by. This is the number of
+      // blocks * the block size... Actually maybe we just read them in? This
+      // is probably easiest. Then if there's corrupted blocks, we abort.
+      // We just don't add these to the layer.
+      const size_t num_blocks = num_protos - 1;
+      for (uint32_t block_idx = 0u; block_idx < num_blocks; ++block_idx) {
+        FeatureBlockProto block_proto;
+        if (!utils::readProtoMsgFromStream(&proto_file, &block_proto,
+                                           &tmp_byte_offset)) {
+          LOG(ERROR) << "Could not read block protobuf message number "
+                     << block_idx;
+          return false;
+        }
+      }
+      continue;
+    }
+
+    *layer_ptr = aligned_shared<FeatureLayer<FeatureType> >(layer_proto);
+    CHECK(*layer_ptr);
+
+    // Read all blocks and add them to the layer.
+    const size_t num_blocks = num_protos - 1;
+    if (!LoadFeatureBlocksFromStream(
+            num_blocks,
+            FeatureLayer<FeatureType>::FeatureBlockMergingStrategy::kProhibit,
+            &proto_file, (*layer_ptr).get(), &tmp_byte_offset)) {
+      return false;
+    }
+  } while (multiple_layer_support && !layer_found && !proto_file.eof());
+  return layer_found;
+}
+
+template <typename FeatureType>
+bool LoadFeatureLayer(const std::string& file_path,
+                      typename FeatureLayer<FeatureType>::Ptr* layer_ptr) {
+  constexpr bool multiple_layer_support = false;
+  return LoadFeatureLayer<FeatureType>(file_path, multiple_layer_support,
+                                       layer_ptr);
+}
+
+template <typename FeatureType>
+bool SaveFeatureLayer(const FeatureLayer<FeatureType>& layer,
+                      const std::string& file_path, bool clear_file) {
+  CHECK(!file_path.empty());
+  return layer.saveToFile(file_path, clear_file);
+}
+
+template <typename FeatureType>
+bool SaveFeatureLayerSubset(const FeatureLayer<FeatureType>& layer,
+                            const std::string& file_path,
+                            const BlockIndexList& blocks_to_include,
+                            bool include_all_blocks) {
+  CHECK(!file_path.empty());
+  return layer.saveSubsetToFile(file_path, blocks_to_include,
+                                include_all_blocks);
 }
 
 }  // namespace voxblox

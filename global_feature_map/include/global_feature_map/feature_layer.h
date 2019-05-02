@@ -10,6 +10,8 @@
 #include <voxblox/core/block_hash.h>
 #include <voxblox/core/common.h>
 
+#include "./FeatureBlock.pb.h"
+#include "./FeatureLayer.pb.h"
 #include "global_feature_map/feature_block.h"
 
 namespace voxblox {
@@ -18,6 +20,13 @@ enum class DeserializeAction : size_t {
   kUpdate = 0u,
   kMerge = 1u,
   kReset = 2u
+};
+
+enum class FeatureBlockMergingStrategy {
+  kProhibit,
+  kReplace,
+  kDiscard,
+  kMerge
 };
 
 /**
@@ -234,6 +243,11 @@ class FeatureLayer {
 
   size_t getMemorySize() const;
 
+  inline void setDescriptorSize(const size_t size) {
+    feature_descriptor_size_ = size;
+  }
+  inline size_t getDescriptorSize() { return feature_descriptor_size_; }
+
   void serializeLayerAsMsg(const bool only_updated,
                            const DeserializeAction& action,
                            modelify_msgs::FeatureLayer* msg);
@@ -242,8 +256,19 @@ class FeatureLayer {
   bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg,
                              const DeserializeAction& action);
 
-  void setDescriptorSize(const size_t size) { feature_descriptor_size_ = size; }
-  size_t getDescriptorSize() { return feature_descriptor_size_; }
+  // Serialization tools.
+  void getProto(FeatureLayerProto* proto) const;
+  bool isCompatible(const FeatureLayerProto& layer_proto) const;
+  bool isCompatible(const FeatureBlockProto& layer_proto) const;
+  bool saveToFile(const std::string& file_path, bool clear_file = true) const;
+  bool saveSubsetToFile(const std::string& file_path,
+                        BlockIndexList blocks_to_include,
+                        bool include_all_blocks, bool clear_file = true) const;
+  bool saveBlocksToStream(bool include_all_blocks,
+                          BlockIndexList blocks_to_include,
+                          std::fstream* outfile_ptr) const;
+  bool addBlockFromProto(const FeatureBlockProto& block_proto,
+                         FeatureBlockMergingStrategy strategy);
 
  protected:
   std::string getType() const;

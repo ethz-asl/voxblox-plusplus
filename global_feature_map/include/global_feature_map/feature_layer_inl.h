@@ -15,6 +15,8 @@
 #include <voxblox/core/block.h>
 #include <voxblox/utils/protobuf_utils.h>
 
+#include "./FeatureBlock.pb.h"
+#include "./FeatureLayer.pb.h"
 #include "global_feature_map/feature_types.h"
 
 namespace voxblox {
@@ -156,6 +158,199 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
 
   CHECK_GE(getNumberOfAllocatedBlocks(), msg.blocks.size());
 
+  return true;
+}
+
+template <typename FeatureType>
+void FeatureLayer<FeatureType>::getProto(FeatureLayerProto* proto) const {
+  CHECK_NOTNULL(proto);
+
+  proto->set_block_size(block_size_);
+  proto->set_type(getType());
+}
+
+template <typename FeatureType>
+bool FeatureLayer<FeatureType>::isCompatible(
+    const FeatureLayerProto& layer_proto) const {
+  bool compatible = true;
+  compatible &= (std::fabs(layer_proto.block_size() - block_size_) <
+                 std::numeric_limits<FloatingPoint>::epsilon());
+  compatible &= (getType().compare(layer_proto.type()) == 0);
+
+  if (!compatible) {
+    LOG(WARNING) << "Block size of the loaded map is: "
+                 << layer_proto.block_size()
+                 << " but the current map is: " << block_size_
+                 << " check passed? "
+                 << (std::fabs(layer_proto.block_size() - block_size_) <
+                     std::numeric_limits<FloatingPoint>::epsilon())
+                 << "\nFeatureLayer type of the loaded map is: " << getType()
+                 << " but the current map is: " << layer_proto.type()
+                 << " check passed? "
+                 << (getType().compare(layer_proto.type()) == 0)
+                 << "\nAre the maps using the same floating-point type? "
+                 << (layer_proto.block_size() == block_size_) << std::endl;
+  }
+  return compatible;
+}
+
+template <typename FeatureType>
+bool FeatureLayer<FeatureType>::isCompatible(
+    const FeatureBlockProto& block_proto) const {
+  bool compatible = true;
+  compatible &= (std::fabs(block_proto.block_size() - block_size_) <
+                 std::numeric_limits<FloatingPoint>::epsilon());
+  return compatible;
+}
+
+template <typename FeatureType>
+bool FeatureLayer<FeatureType>::saveToFile(const std::string& file_path,
+                                           bool clear_file) const {
+  constexpr bool kIncludeAllBlocks = true;
+  return saveSubsetToFile(file_path, BlockIndexList(), kIncludeAllBlocks,
+                          clear_file);
+}
+
+template <typename FeatureType>
+bool FeatureLayer<FeatureType>::saveSubsetToFile(
+    const std::string& file_path, BlockIndexList blocks_to_include,
+    bool include_all_blocks, bool clear_file) const {
+  CHECK(!file_path.empty());
+
+  std::fstream outfile;
+  // Will APPEND to the current file in case outputting multiple layers on the
+  // same file, depending on the flag.
+  std::ios_base::openmode file_flags = std::fstream::out | std::fstream::binary;
+  if (!clear_file) {
+    file_flags |= std::fstream::app | std::fstream::ate;
+  } else {
+    file_flags |= std::fstream::trunc;
+  }
+  outfile.open(file_path, file_flags);
+  if (!outfile.is_open()) {
+    LOG(ERROR) << "Could not open file for writing: " << file_path;
+    return false;
+  }
+
+  // Only serialize the blocks if there are any.
+  // Count the number of blocks that need to be serialized.
+  size_t num_blocks_to_write = 0u;
+  if ((include_all_blocks && !block_map_.empty()) ||
+      !blocks_to_include.empty()) {
+    for (const FeatureBlockMapPair& pair : block_map_) {
+      bool write_block_to_file = include_all_blocks;
+
+      if (!write_block_to_file) {
+        BlockIndexList::const_iterator it = std::find(
+            blocks_to_include.begin(), blocks_to_include.end(), pair.first);
+        if (it != blocks_to_include.end()) {
+          ++num_blocks_to_write;
+        }
+      } else {
+        ++num_blocks_to_write;
+      }
+    }
+  }
+  if (include_all_blocks) {
+    CHECK_EQ(num_blocks_to_write, block_map_.size());
+  } else {
+    CHECK_LE(num_blocks_to_write, block_map_.size());
+    CHECK_LE(num_blocks_to_write, blocks_to_include.size());
+  }
+
+  // Write the total number of messages to the beginning of this file.
+  // One layer header and then all the block maps
+  const uint32_t num_messages = 1u + num_blocks_to_write;
+  if (!utils::writeProtoMsgCountToStream(num_messages, &outfile)) {
+    LOG(ERROR) << "Could not write message number to file.";
+    outfile.close();
+    return false;
+  }
+
+  // Write out the layer header.
+  FeatureLayerProto proto_layer;
+  getProto(&proto_layer);
+  if (!utils::writeProtoMsgToStream(proto_layer, &outfile)) {
+    LOG(ERROR) << "Could not write layer header message.";
+    outfile.close();
+    return false;
+  }
+
+  // Serialize blocks.
+  saveBlocksToStream(include_all_blocks, blocks_to_include, &outfile);
+
+  outfile.close();
+  return true;
+}
+
+template <typename FeatureType>
+bool FeatureLayer<FeatureType>::saveBlocksToStream(
+    bool include_all_blocks, BlockIndexList blocks_to_include,
+    std::fstream* outfile_ptr) const {
+  CHECK_NOTNULL(outfile_ptr);
+  for (const FeatureBlockMapPair& pair : block_map_) {
+    bool write_block_to_file = include_all_blocks;
+    if (!write_block_to_file) {
+      BlockIndexList::const_iterator it = std::find(
+          blocks_to_include.begin(), blocks_to_include.end(), pair.first);
+      if (it != blocks_to_include.end()) {
+        write_block_to_file = true;
+      }
+    }
+    if (write_block_to_file) {
+      FeatureBlockProto block_proto;
+      pair.second->getProto(&block_proto);
+
+      if (!utils::writeProtoMsgToStream(block_proto, outfile_ptr)) {
+        LOG(ERROR) << "Could not write block message.";
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+template <typename FeatureType>
+bool FeatureLayer<FeatureType>::addBlockFromProto(
+    const FeatureBlockProto& block_proto,
+    FeatureBlockMergingStrategy strategy) {
+  if (isCompatible(block_proto)) {
+    typename FeatureBlockType::Ptr block_ptr(new FeatureBlockType(block_proto));
+    const BlockIndex block_index = getGridIndexFromOriginPoint<BlockIndex>(
+        block_ptr->origin(), block_size_inv_);
+    switch (strategy) {
+      case FeatureBlockMergingStrategy::kProhibit:
+        CHECK_EQ(block_map_.count(block_index), 0u)
+            << "Block collision at index: " << block_index;
+        block_map_[block_index] = block_ptr;
+        break;
+      case FeatureBlockMergingStrategy::kReplace:
+        block_map_[block_index] = block_ptr;
+        break;
+      case FeatureBlockMergingStrategy::kDiscard:
+        block_map_.insert(std::make_pair(block_index, block_ptr));
+        break;
+      case FeatureBlockMergingStrategy::kMerge: {
+        typename FeatureBlockHashMap::iterator it =
+            block_map_.find(block_index);
+        if (it == block_map_.end()) {
+          block_map_[block_index] = block_ptr;
+        } else {
+          it->second->mergeBlock(*block_ptr);
+        }
+      } break;
+      default:
+        LOG(FATAL) << "Unknown FeatureBlockMergingStrategy: "
+                   << static_cast<int>(strategy);
+        return false;
+    }
+    // Mark that this block has been updated.
+    block_map_[block_index]->updated() = true;
+  } else {
+    LOG(ERROR)
+        << "The blocks from this protobuf are not compatible with this layer!";
+    return false;
+  }
   return true;
 }
 
