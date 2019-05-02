@@ -10,6 +10,7 @@
 #include <global_feature_map/feature_integrator.h>
 #include <global_feature_map/feature_layer.h>
 #include <global_feature_map/feature_types.h>
+#include <global_feature_map/feature_utils.h>
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_tsdf_mesh_integrator.h>

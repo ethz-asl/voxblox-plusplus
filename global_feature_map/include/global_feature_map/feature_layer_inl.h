@@ -62,8 +62,8 @@ std::string FeatureLayer<FeatureType>::getType() const {
 
 template <typename FeatureType>
 void FeatureLayer<FeatureType>::serializeLayerAsMsg(
-    const bool only_updated, modelify_msgs::FeatureLayer* msg,
-    const DeserializeAction& action) {
+    const bool only_updated, const DeserializeAction& action,
+    modelify_msgs::FeatureLayer* msg) {
   CHECK_GT(getDescriptorSize(), 0u)
       << "You need to set the descriptor size before you can serialize the "
          "layer! You can do this either directly in the constructor of the "

@@ -66,8 +66,8 @@ TEST_F(Feature3DLayerTest, testSerialization) {
 
   constexpr bool kOnlyUpdated = false;
   modelify_msgs::FeatureLayer msg;
-  feature_layer_->serializeLayerAsMsg(kOnlyUpdated, &msg,
-                                      DeserializeAction::kUpdate);
+  feature_layer_->serializeLayerAsMsg(kOnlyUpdated, DeserializeAction::kUpdate,
+                                      &msg);
 
   feature_layer_deserialize_->setDescriptorSize(kDescriptorSize);
   feature_layer_deserialize_->deserializeMsgToLayer(msg);
@@ -137,8 +137,8 @@ TEST_F(Feature3DLayerTest, testSerializationLargerDescriptor) {
 
   constexpr bool kOnlyUpdated = false;
   modelify_msgs::FeatureLayer msg;
-  feature_layer_->serializeLayerAsMsg(kOnlyUpdated, &msg,
-                                      DeserializeAction::kUpdate);
+  feature_layer_->serializeLayerAsMsg(kOnlyUpdated, DeserializeAction::kUpdate,
+                                      &msg);
 
   feature_layer_deserialize_->setDescriptorSize(kDescriptorSize);
   feature_layer_deserialize_->deserializeMsgToLayer(msg);

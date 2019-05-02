@@ -131,7 +131,8 @@ class FeatureLayer {
     return getGridIndexFromPoint<BlockIndex>(coords, block_size_inv_);
   }
 
-  typename FeatureBlockType::Ptr allocateNewBlock(const BlockIndex& index) {
+  inline typename FeatureBlockType::Ptr allocateNewBlock(
+      const BlockIndex& index) {
     auto insert_status = block_map_.emplace(
         index,
         std::make_shared<FeatureBlockType>(
@@ -161,14 +162,15 @@ class FeatureLayer {
     DCHECK(insert_status.first->second);
   }
 
-  void removeBlock(const BlockIndex& index) { block_map_.erase(index); }
-  void removeAllBlocks() { block_map_.clear(); }
+  inline void removeBlock(const BlockIndex& index) { block_map_.erase(index); }
+  inline void removeAllBlocks() { block_map_.clear(); }
 
-  void removeBlockByCoordinates(const Point& coords) {
+  inline void removeBlockByCoordinates(const Point& coords) {
     block_map_.erase(computeBlockIndexFromCoordinates(coords));
   }
 
-  void removeDistantBlocks(const Point& center, const double max_distance) {
+  inline void removeDistantBlocks(const Point& center,
+                                  const double max_distance) {
     AlignedVector<BlockIndex> needs_erasing;
     for (const std::pair<const BlockIndex, typename FeatureBlockType::Ptr>& kv :
          block_map_) {
@@ -182,7 +184,7 @@ class FeatureLayer {
     }
   }
 
-  void getAllAllocatedBlocks(BlockIndexList* blocks) const {
+  inline void getAllAllocatedBlocks(BlockIndexList* blocks) const {
     CHECK_NOTNULL(blocks);
     blocks->clear();
     blocks->reserve(block_map_.size());
@@ -192,7 +194,7 @@ class FeatureLayer {
     }
   }
 
-  void getAllUpdatedBlocks(BlockIndexList* blocks) const {
+  inline void getAllUpdatedBlocks(BlockIndexList* blocks) const {
     CHECK_NOTNULL(blocks);
     blocks->clear();
     for (const std::pair<const BlockIndex, typename FeatureBlockType::Ptr>& kv :
@@ -203,20 +205,38 @@ class FeatureLayer {
     }
   }
 
-  size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
+  inline size_t getNumberOfAllocatedBlocks() const { return block_map_.size(); }
 
-  bool hasBlock(const BlockIndex& block_index) const {
+  inline bool hasBlock(const BlockIndex& block_index) const {
     return block_map_.count(block_index) > 0;
   }
 
-  FloatingPoint block_size() const { return block_size_; }
-  FloatingPoint block_size_inv() const { return block_size_inv_; }
+  inline FloatingPoint block_size() const { return block_size_; }
+  inline FloatingPoint block_size_inv() const { return block_size_inv_; }
+
+  inline void getFeatures(std::vector<FeatureType>* features) const {
+    CHECK_NOTNULL(features);
+
+    BlockIndexList block_list;
+    getAllAllocatedBlocks(&block_list);
+
+    for (const BlockIndex& block_idx : block_list) {
+      const typename FeatureBlock<FeatureType>::ConstPtr block =
+          getBlockPtrByIndex(block_idx);
+      CHECK_NOTNULL(block);
+
+      const std::vector<FeatureType>& block_features = block->getFeatures();
+
+      features->insert(features->end(), block_features.begin(),
+                       block_features.end());
+    }
+  }
 
   size_t getMemorySize() const;
 
   void serializeLayerAsMsg(const bool only_updated,
-                           modelify_msgs::FeatureLayer* msg,
-                           const DeserializeAction& action);
+                           const DeserializeAction& action,
+                           modelify_msgs::FeatureLayer* msg);
 
   bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg);
   bool deserializeMsgToLayer(const modelify_msgs::FeatureLayer& msg,
@@ -237,6 +257,6 @@ class FeatureLayer {
 
 }  // namespace voxblox
 
-#include "global_feature_map/feature_layer_inl.h"
-
 #endif  // GLOBAL_FEATURE_MAP_FEATURE_LAYER_H_
+
+#include "global_feature_map/feature_layer_inl.h"

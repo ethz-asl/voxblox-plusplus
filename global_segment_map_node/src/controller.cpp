@@ -871,6 +871,11 @@ bool Controller::publishObjects(const bool publish_all) {
                                            &origin_shifted_label_layer_W);
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
 
+    Point origin_shifted_feature_layer_W;
+    centerBlocksOfFeatureLayer<Feature3D>(&feature_layer,
+                                          &origin_shifted_feature_layer_W);
+    CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_feature_layer_W);
+
     // Extract surfel cloud from layer.
     MeshIntegratorConfig mesh_config;
     node_handle_private_->param<float>("mesh_config/min_weight",
@@ -900,8 +905,8 @@ bool Controller::publishObjects(const bool publish_all) {
     // TODO(ntonci): Check action and maybe change convention to be in the same
     // style as above.
     feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
-                                      &gsm_update_msg.object.feature_layer,
-                                      DeserializeAction::kUpdate);
+                                      DeserializeAction::kUpdate,
+                                      &gsm_update_msg.object.feature_layer);
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.old_labels.clear();

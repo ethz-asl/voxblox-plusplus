@@ -71,6 +71,12 @@ class FeatureBlock {
 
   inline size_t numFeatures() const { return features_.size(); }
 
+  inline void shiftFeatures(const Point& shift) {
+    for (FeatureType& feature : features_) {
+      feature.keypoint -= shift;
+    }
+  }
+
   void mergeBlock(const FeatureBlock<FeatureType>& other_block);
 
   size_t getMemorySize() const;
@@ -104,6 +110,6 @@ class FeatureBlock {
 
 }  // namespace voxblox
 
-#include "global_feature_map/feature_block_inl.h"
-
 #endif  // GLOBAL_FEATURE_MAP_FEATURE_BLOCK_H_
+
+#include "global_feature_map/feature_block_inl.h"
