@@ -15,7 +15,6 @@ cs_add_library(${PROJECT_NAME}
   src/label_merge_integrator.cc
   src/label_tsdf_integrator.cc
   src/utils/icp_utils.cc
-  src/utils/label_utils.cc
   src/utils/semantic_color_map.cc
   src/utils/visualizer.cc
   src/label_tsdf_map.cc

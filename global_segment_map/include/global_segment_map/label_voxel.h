@@ -10,7 +10,7 @@ namespace voxblox {
 struct LabelVoxel {
   Label label = 0u;
   LabelConfidence label_confidence = 0u;
-  LabelCount label_count[3];
+  LabelCount label_count[35];
 };
 
 namespace voxel_types {

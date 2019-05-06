@@ -1,5 +1,6 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "map"
+enable_icp: false
 
 voxblox:
   voxel_size: 0.02
@@ -22,8 +23,9 @@ semantic_instance_segmentation:
 
 meshing:
   visualize: false
-  update_mesh_every_n_sec: 0.0
+  update_mesh_every_n_sec: 1.0
   mesh_color_scheme: "geometric_instance_label"
   publish_segment_mesh: false
-  publish_scene_mesh: false
+  publish_scene_mesh: true
   mesh_filename: "gsm_mobmi_mesh.ply"
+  publish_pointclouds: true

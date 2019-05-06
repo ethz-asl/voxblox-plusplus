@@ -117,19 +117,6 @@ class Controller {
 
   bool extractSegmentsCallback(std_srvs::Empty::Request& request,
                                std_srvs::Empty::Response& response);
-  /**
-   * Extracts separate tsdf and label layers from the gsm, for every given
-   * label.
-   * @param labels of segments to extract
-   * @param label_layers_map output map
-   * @param labels_list_is_complete true if the gsm does not contain other
-   * labels. false if \labels is only a subset of all labels contained by the
-   * gsm.
-   */
-  virtual void extractSegmentLayers(
-      const std::vector<Label>& labels,
-      std::unordered_map<Label, LayerPair>* label_layers_map,
-      bool labels_list_is_complete = false);
 
   bool extractInstancesCallback(std_srvs::Empty::Request& request,
                                 std_srvs::Empty::Response& response);

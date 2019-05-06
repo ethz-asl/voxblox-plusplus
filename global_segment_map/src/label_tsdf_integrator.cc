@@ -35,7 +35,7 @@ Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
 
   const size_t num_icp_updates =
       icp_->runICP(*layer_, point_cloud, T_G_G_icp_ * T_G_C_init, &T_G_C_icp);
-  if (num_icp_updates == 0u || num_icp_updates > 500u) {
+  if (num_icp_updates == 0u || num_icp_updates > 800u) {
     LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
                << num_icp_updates << ", using T_G_C_init.";
     return T_G_C_init;

@@ -12,9 +12,9 @@
 #include <vector>
 
 #include <geometry_msgs/TransformStamped.h>
+#include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/file_utils.h>
-#include <global_segment_map/utils/label_utils.h>
 #include <global_segment_map/utils/visualization.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
@@ -436,7 +436,7 @@ void Controller::advertisePublishSceneService(
 void Controller::advertiseTsdfSliceTopic(ros::Publisher* tsdf_slice_pub) {
   *tsdf_slice_pub =
       node_handle_private_->advertise<pcl::PointCloud<pcl::PointXYZI>>(
-          "tsdf_slice", 1, true);
+          "tsdf_slice", 10, true);
 
   tsdf_slice_pub_ = tsdf_slice_pub;
 }
@@ -560,7 +560,7 @@ void Controller::segmentPointCloudCallback(
 
     constexpr bool kIsFreespacePointcloud = false;
 
-    start = ros::WallTime::now();
+    ros::WallTime start = ros::WallTime::now();
     timing::Timer integrate_timer("integrate_frame_pointclouds");
 
     {
@@ -1195,7 +1195,7 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     if (publish_scene_mesh_) {
       timing::Timer publish_mesh_timer("mesh/publish");
       voxblox_msgs::Mesh mesh_msg;
-      generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
+      generateVoxbloxMeshMsg(mesh_merged_layer_, ColorMode::kColor, &mesh_msg);
       mesh_msg.header.frame_id = world_frame_;
       scene_mesh_pub_->publish(mesh_msg);
       publish_mesh_timer.Stop();
@@ -1206,7 +1206,7 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       publishLabelTsdf();
     }
   }
-}  // namespace voxblox_gsm
+}
 
 bool Controller::noNewUpdatesReceived() const {
   if (received_first_message_ && no_update_timeout_ != 0.0) {
