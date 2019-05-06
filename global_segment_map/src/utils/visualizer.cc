@@ -43,15 +43,14 @@ void Visualizer::visualizeMesh() {
     //                           0.279138, -0.0487525, 0.828238, -0.558252);
     // viewer->setCameraClipDistances(1.35139, 6.41007);
     // scenenn231
-    // visualizer->setCameraPosition(-1.41162, 6.28602, -0.300336,
-    // -1.49346,
-    //                                  0.117437, 0.0843885, 0.0165199,
-    //                                  -0.0624571, -0.997911);
-    // visualizer->setCameraClipDistances(1.79126, 8.86051);
-    visualizer->setCameraPosition(-9.26672, -7.73843, 22.3946, -12.9445,
-                                  -8.20767, -5.76437, -0.395892, 0.917575,
-                                  0.0364161);
-    visualizer->setCameraClipDistances(16.4938, 31.2009);
+    visualizer->setCameraPosition(-1.41162, 6.28602, -0.300336, -1.49346,
+                                  0.117437, 0.0843885, 0.0165199, -0.0624571,
+                                  -0.997911);
+    visualizer->setCameraClipDistances(1.79126, 8.86051);
+    // visualizer->setCameraPosition(-9.26672, -7.73843, 22.3946, -12.9445,
+    //                               -8.20767, -5.76437, -0.395892, 0.917575,
+    //                               0.0364161);
+    // visualizer->setCameraClipDistances(16.4938, 31.2009);
 
     visualizer->setSize(1898, 1301);
     visualizer->setPosition(646, 801);
@@ -66,9 +65,8 @@ void Visualizer::visualizeMesh() {
     }
     meshes.clear();
     meshes.resize(n_visualizers);
-    {
-      std::lock_guard<std::mutex> updatedMeshLock(*updated_mesh_mutex_ptr_);
 
+    if (updated_mesh_mutex_ptr_->try_lock()) {
       if (*updated_mesh_) {
         for (int index = 0; index < pcl_visualizers.size(); index++) {
           mesh_layers_[index]->getMesh(&meshes[index]);
@@ -77,6 +75,7 @@ void Visualizer::visualizeMesh() {
         *updated_mesh_ = false;
       }
     }
+    updated_mesh_mutex_ptr_->unlock();
 
     if (refresh) {
       for (int index = 0; index < pcl_visualizers.size(); index++) {

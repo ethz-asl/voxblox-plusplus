@@ -4,15 +4,15 @@ namespace voxblox {
 
 LabelTsdfIntegrator::LabelTsdfIntegrator(
     const Config& tsdf_config, const LabelTsdfConfig& label_tsdf_config,
-    Layer<TsdfVoxel>* tsdf_layer, Layer<LabelVoxel>* label_layer,
-    Label* highest_label, InstanceLabel* highest_instance)
-    : MergedTsdfIntegrator(tsdf_config, CHECK_NOTNULL(tsdf_layer)),
+    LabelTsdfMap* map)
+    : MergedTsdfIntegrator(tsdf_config, CHECK_NOTNULL(map->getTsdfLayerPtr())),
       label_tsdf_config_(label_tsdf_config),
-      label_layer_(CHECK_NOTNULL(label_layer)),
-      highest_label_(CHECK_NOTNULL(highest_label)),
-      highest_instance_(CHECK_NOTNULL(highest_instance)) {
-  CHECK(label_layer_);
-}
+      label_layer_(CHECK_NOTNULL(map->getLabelLayerPtr())),
+      label_count_map_ptr_(map->getLabelCountPtr()),
+      highest_label_ptr_(CHECK_NOTNULL(map->getHighestLabelPtr())),
+      highest_instance_ptr_(CHECK_NOTNULL(map->getHighestInstancePtr())),
+      instance_label_fusion_ptr_(map->getInstanceLabelFusionPtr()),
+      semantic_label_fusion_ptr_(map->getSemanticLabelFusionPtr()) {}
 
 void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(
     Label label, int label_points_count, int segment_points_count,
@@ -313,7 +313,7 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
          segment_it != labelled_segments.end(); ++segment_it) {
       Label label = (*segment_it)->label_;
       if ((*segment_it)->points_C_.size() > 0) {
-        instance_label_fusion_.increaseLabelFramesCount(label);
+        instance_label_fusion_ptr_->increaseLabelFramesCount(label);
       }
 
       // Loop through all the segments.
@@ -323,37 +323,37 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
             (*segment_it)->instance_label_);
         if (global_instance_it != current_to_global_instance_map_.end()) {
           // If current frame instance maps to a global instance, use it.
-          instance_label_fusion_.increaseLabelInstanceCount(
+          instance_label_fusion_ptr_->increaseLabelInstanceCount(
               label, global_instance_it->second);
         } else {
           // Current frame instance doesn't map to any global instance.
           // Get the global instance with max count.
           InstanceLabel instance_label =
-              instance_label_fusion_.getLabelInstance(label,
-                                                      assigned_instances);
+              instance_label_fusion_ptr_->getLabelInstance(label,
+                                                           assigned_instances);
 
           if (instance_label != 0u) {
             current_to_global_instance_map_.emplace(
                 (*segment_it)->instance_label_, instance_label);
-            instance_label_fusion_.increaseLabelInstanceCount(label,
-                                                              instance_label);
+            instance_label_fusion_ptr_->increaseLabelInstanceCount(
+                label, instance_label);
             assigned_instances.emplace(instance_label);
           } else {
             // Create new global instance.
             InstanceLabel fresh_instance = getFreshInstance();
             current_to_global_instance_map_.emplace(
                 (*segment_it)->instance_label_, fresh_instance);
-            instance_label_fusion_.increaseLabelInstanceCount(label,
-                                                              fresh_instance);
+            instance_label_fusion_ptr_->increaseLabelInstanceCount(
+                label, fresh_instance);
           }
         }
-        semantic_label_fusion_.increaseLabelClassCount(
+        semantic_label_fusion_ptr_->increaseLabelClassCount(
             label, (*segment_it)->semantic_label_);
       } else {
         // It's a segment with no instance prediction in the current frame.
         // Get the global instance it maps to, and set it as assigned.
         InstanceLabel instance_label =
-            instance_label_fusion_.getLabelInstance(label);
+            instance_label_fusion_ptr_->getLabelInstance(label);
         // TODO(grinvalm) : also pass assigned instances here?
         if (instance_label != 0u) {
           assigned_instances.emplace(instance_label);
@@ -368,16 +368,16 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
 
 // Increase or decrease the voxel count for a label.
 void LabelTsdfIntegrator::changeLabelCount(const Label label, int count) {
-  auto label_count_it = labels_count_map_.find(label);
-  if (label_count_it != labels_count_map_.end()) {
+  auto label_count_it = label_count_map_ptr_->find(label);
+  if (label_count_it != label_count_map_ptr_->end()) {
     label_count_it->second = label_count_it->second + count;
     if (label_count_it->second <= 0) {
-      labels_count_map_.erase(label_count_it);
+      label_count_map_ptr_->erase(label_count_it);
     }
   } else {
     if (label != 0u) {
       DCHECK(count > 0);
-      labels_count_map_.insert(std::make_pair(label, count));
+      label_count_map_ptr_->insert(std::make_pair(label, count));
     }
   }
 }
@@ -478,8 +478,8 @@ void LabelTsdfIntegrator::updateLabelVoxel(const Point& point_G,
       changeLabelCount(previous_label, -1);
     }
 
-    if (*highest_label_ < new_label) {
-      *highest_label_ = new_label;
+    if (*highest_label_ptr_ < new_label) {
+      *highest_label_ptr_ = new_label;
     }
   }
 }
@@ -884,22 +884,6 @@ void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
       merge_timer.Stop();
     }
   }
-}
-
-// Get the list of all labels
-// for which the voxel count is greater than 0.
-std::vector<Label> LabelTsdfIntegrator::getLabelsList() {
-  std::vector<Label> labels;
-  int count_unused_labels = 0;
-  for (std::pair<Label, int> label_count_pair : labels_count_map_) {
-    if (label_count_pair.second > 0) {
-      labels.push_back(label_count_pair.first);
-    } else {
-      count_unused_labels++;
-    }
-  }
-  LOG(ERROR) << "Unused labels count: " << count_unused_labels;
-  return labels;
 }
 
 }  // namespace voxblox

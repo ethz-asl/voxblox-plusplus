@@ -30,8 +30,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       const MeshIntegratorConfig& config, Layer<TsdfVoxel>* tsdf_layer,
       Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
       std::set<SemanticLabel>& all_semantic_labels,
-      const utils::InstanceLabelFusion* instance_label_fusion = nullptr,
-      const utils::SemanticLabelFusion* semantic_label_fusion = nullptr,
+      const InstanceLabelFusion* instance_label_fusion = nullptr,
+      const SemanticLabelFusion* semantic_label_fusion = nullptr,
       ColorScheme color_scheme = LabelColor, bool* remesh = nullptr,
       SemanticColorMap::SemanticColor semantic_color_mode =
           SemanticColorMap::kCoco)
@@ -53,8 +53,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       const MeshIntegratorConfig& config, const Layer<TsdfVoxel>& tsdf_layer,
       const Layer<LabelVoxel>& label_layer, MeshLayer* mesh_layer,
       std::set<SemanticLabel>& all_semantic_labels,
-      const utils::InstanceLabelFusion* instance_label_fusion = nullptr,
-      const utils::SemanticLabelFusion* semantic_label_fusion = nullptr,
+      const InstanceLabelFusion* instance_label_fusion = nullptr,
+      const SemanticLabelFusion* semantic_label_fusion = nullptr,
       ColorScheme color_scheme = LabelColor, bool* remesh = nullptr,
       SemanticColorMap::SemanticColor semantic_color_mode =
           SemanticColorMap::kCoco)
@@ -149,8 +149,10 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   // TODO(margaritaG): handle this remeshing!!
 
   InstanceLabel getLabelInstance(const Label& label) {
-    InstanceLabel instance_label =
-        instance_label_fusion_ptr_->getLabelInstance(label);
+    float kFramesCountThresholdFactor = 0.1f;
+
+    InstanceLabel instance_label = instance_label_fusion_ptr_->getLabelInstance(
+        label, kFramesCountThresholdFactor);
 
     // TODO(grinvalm): here the condition was if (instance_count.second >
     //             0.1f * (float)(frames_count - instance_count.second))
@@ -353,8 +355,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   std::map<Label, Color> label_color_map_;
   std::map<SemanticLabel, Color> instance_color_map_;
 
-  const utils::InstanceLabelFusion* instance_label_fusion_ptr_;
-  const utils::SemanticLabelFusion* semantic_label_fusion_ptr_;
+  const InstanceLabelFusion* instance_label_fusion_ptr_;
+  const SemanticLabelFusion* semantic_label_fusion_ptr_;
 
   // const std::map<Label, std::map<SemanticLabel, int>>*
   // label_class_count_ptr_; const std::map<Label, std::map<SemanticLabel,

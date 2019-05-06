@@ -35,11 +35,12 @@ int main(int argc, char** argv) {
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
+  ros::Publisher segment_gsm_update_publisher;
+  ros::Publisher scene_gsm_update_publisher;
+
   if (controller->publish_gsm_updates_) {
-    ros::Publisher segment_gsm_update_publisher;
     controller->advertiseSegmentGsmUpdateTopic(&segment_gsm_update_publisher);
 
-    ros::Publisher scene_gsm_update_publisher;
     controller->advertiseSceneGsmUpdateTopic(&scene_gsm_update_publisher);
   }
 
@@ -69,6 +70,11 @@ int main(int argc, char** argv) {
 
   ros::ServiceServer extract_segments_srv;
   controller->advertiseExtractSegmentsService(&extract_segments_srv);
+
+  ros::ServiceServer extract_instances_srv;
+  if (controller->enable_semantic_instance_segmentation_) {
+    controller->advertiseExtractInstancesService(&extract_instances_srv);
+  }
 
   // Spinner that uses a number of threads equal to the number of cores.
   ros::AsyncSpinner spinner(0);

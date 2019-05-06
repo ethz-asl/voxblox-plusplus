@@ -1,10 +1,9 @@
 #include "global_segment_map/label_fusion.h"
 
 namespace voxblox {
-namespace utils {
 
 void InstanceLabelFusion::increaseLabelInstanceCount(
-    const Label& label, const SemanticLabel& instance_label) {
+    const Label& label, const InstanceLabel& instance_label) {
   auto label_it = label_instance_count_.find(label);
   if (label_it != label_instance_count_.end()) {
     auto instance_it = label_it->second.find(instance_label);
@@ -14,7 +13,7 @@ void InstanceLabelFusion::increaseLabelInstanceCount(
       label_it->second.emplace(instance_label, 1);
     }
   } else {
-    SLMap instance_count;
+    std::map<InstanceLabel, int> instance_count;
     instance_count.emplace(instance_label, 1);
     label_instance_count_.emplace(label, instance_count);
   }
@@ -47,6 +46,12 @@ void InstanceLabelFusion::increaseLabelFramesCount(const Label& label) {
 InstanceLabel InstanceLabelFusion::getLabelInstance(
     const Label& label,
     const std::set<InstanceLabel>& assigned_instances) const {
+  return getLabelInstance(label, 0.0f, assigned_instances);
+}
+
+InstanceLabel InstanceLabelFusion::getLabelInstance(
+    const Label& label, const float count_threshold_factor,
+    const std::set<InstanceLabel>& assigned_instances) const {
   InstanceLabel instance_label = 0u;
   int max_count = 0;
   auto label_it = label_instance_count_.find(label);
@@ -61,7 +66,8 @@ InstanceLabel InstanceLabelFusion::getLabelInstance(
           frames_count = label_count_it->second;
         }
         if (instance_count.second >
-            0.0 * (float)(frames_count - instance_count.second)) {
+            count_threshold_factor *
+                (float)(frames_count - instance_count.second)) {
           instance_label = instance_count.first;
           max_count = instance_count.second;
         }
@@ -115,5 +121,4 @@ SemanticLabel SemanticLabelFusion::getSemanticLabel(const Label& label) const {
   return semantic_label;
 }
 
-}  // namespace utils
 }  // namespace voxblox

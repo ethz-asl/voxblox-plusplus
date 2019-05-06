@@ -132,10 +132,11 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       received_first_message_(false),
       updated_mesh_(false),
       need_full_remesh_(false),
+      enable_semantic_instance_segmentation_(true),
       compute_and_publish_bbox_(false),
       use_label_propagation_(true) {
   CHECK_NOTNULL(node_handle_private_);
-  node_handle_private_->param<std::string>("world_frame_id", camera_frame_,
+  node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
   node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
                                            camera_frame_);
@@ -227,26 +228,26 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config_.enable_semantic_instance_segmentation,
       label_tsdf_integrator_config_.enable_semantic_instance_segmentation);
 
+  enable_semantic_instance_segmentation_ =
+      label_tsdf_integrator_config_.enable_semantic_instance_segmentation;
+
   node_handle_private_->param<int>(
       "object_database/max_segment_age",
       label_tsdf_integrator_config_.max_segment_age,
       label_tsdf_integrator_config_.max_segment_age);
 
   integrator_.reset(new LabelTsdfIntegrator(
-      tsdf_integrator_config_, label_tsdf_integrator_config_,
-      map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      map_->getHighestLabelPtr(), map_->getHighestInstancePtr()));
+      tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
 
   mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
 
   mesh_label_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
       mesh_label_layer_.get(), all_semantic_labels_,
-      integrator_->getInstanceLabelFusionPtr(),
-      integrator_->getSemanticLabelFusionPtr(), MeshLabelIntegrator::LabelColor,
-      &need_full_remesh_));
+      map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
+      MeshLabelIntegrator::LabelColor, &need_full_remesh_));
 
-  if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+  if (enable_semantic_instance_segmentation_) {
     mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
@@ -254,20 +255,17 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
         mesh_semantic_layer_.get(), all_semantic_labels_,
-        integrator_->getInstanceLabelFusionPtr(),
-        integrator_->getSemanticLabelFusionPtr(),
+        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
         MeshLabelIntegrator::SemanticColor, &need_full_remesh_));
     mesh_instance_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
         mesh_instance_layer_.get(), all_semantic_labels_,
-        integrator_->getInstanceLabelFusionPtr(),
-        integrator_->getSemanticLabelFusionPtr(),
+        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
         MeshLabelIntegrator::InstanceColor, &need_full_remesh_));
     mesh_merged_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
         mesh_merged_layer_.get(), all_semantic_labels_,
-        integrator_->getInstanceLabelFusionPtr(),
-        integrator_->getSemanticLabelFusionPtr(),
+        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
         MeshLabelIntegrator::GeometricInstanceColor, &need_full_remesh_));
   }
 
@@ -278,7 +276,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     std::vector<std::shared_ptr<MeshLayer>> mesh_layers;
     mesh_layers.push_back(mesh_label_layer_);
 
-    if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+    if (enable_semantic_instance_segmentation_) {
       mesh_layers.push_back(mesh_merged_layer_);
       mesh_layers.push_back(mesh_semantic_layer_);
       mesh_layers.push_back(mesh_instance_layer_);
@@ -441,6 +439,13 @@ void Controller::advertiseExtractSegmentsService(
       "extract_segments", &Controller::extractSegmentsCallback, this);
 }
 
+void Controller::advertiseExtractInstancesService(
+    ros::ServiceServer* extract_instances_srv) {
+  CHECK_NOTNULL(extract_instances_srv);
+  *extract_instances_srv = node_handle_private_->advertiseService(
+      "extract_instances", &Controller::extractInstancesCallback, this);
+}
+
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Message timestamps are used to detect when all
@@ -543,7 +548,7 @@ void Controller::segmentPointCloudCallback(
     timing::Timer ptcloud_timer("ptcloud_preprocess");
 
     Segment* segment;
-    if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+    if (enable_semantic_instance_segmentation_) {
       pcl::PointCloud<voxblox::PointSemanticInstanceType>
           point_cloud_semantic_instance;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_semantic_instance);
@@ -647,13 +652,13 @@ bool Controller::generateMeshCallback(
 bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
                                          std_srvs::Empty::Response& response) {
   // Get list of all labels in the map.
-  std::vector<Label> labels = integrator_->getLabelsList();
+  Labels labels = map_->getLabelList();
   static constexpr bool kConnectedMesh = false;
 
   std::unordered_map<Label, LayerPair> label_to_layers;
   // Extract the TSDF and label layers corresponding to a segment.
-  constexpr bool kLabelsListIsComplete = true;
-  extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
+  constexpr bool kLabelsListIsComplete = false;
+  map_->extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
 
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
@@ -663,90 +668,60 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
     const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
     const Layer<LabelVoxel>& segment_label_layer = it->second.second;
 
-    voxblox::Mesh segment_mesh;
-    if (convertLabelTsdfLayersToMesh(segment_tsdf_layer, segment_label_layer,
-                                     &segment_mesh, kConnectedMesh)) {
-      CHECK_EQ(voxblox::file_utils::makePath("gsm_segments", 0777), 0);
+    CHECK_EQ(voxblox::file_utils::makePath("gsm_segments", 0777), 0);
 
-      std::string mesh_filename = "gsm_segments/gsm_segment_mesh_label_" +
-                                  std::to_string(label) + ".ply";
+    std::string mesh_filename =
+        "gsm_segments/gsm_segment_mesh_label_" + std::to_string(label) + ".ply";
 
-      bool success = outputMeshAsPly(mesh_filename, segment_mesh);
-      if (success) {
-        ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
-      } else {
-        ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
-      }
+    bool success = voxblox::io::outputLayerAsPly(
+        segment_tsdf_layer, mesh_filename,
+        voxblox::io::PlyOutputTypes::kSdfIsosurface);
+
+    if (success) {
+      ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
+    } else {
+      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
     }
   }
   return true;
 }
 
-void Controller::extractSegmentLayers(
-    const std::vector<Label>& labels,
-    std::unordered_map<Label, LayerPair>* label_layers_map,
-    bool labels_list_is_complete) {
-  CHECK(label_layers_map);
+bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
+                                          std_srvs::Empty::Response& response) {
+  // Get list of all instances in the map.
+  InstanceLabels instance_labels = map_->getInstanceList();
+  static constexpr bool kConnectedMesh = false;
 
-  // Map a label to its corresponding TSDF and label layers.
-  Layer<TsdfVoxel> tsdf_layer_empty(map_config_.voxel_size,
-                                    map_config_.voxels_per_side);
-  Layer<LabelVoxel> label_layer_empty(map_config_.voxel_size,
-                                      map_config_.voxels_per_side);
-  for (const Label& label : labels) {
-    label_layers_map->emplace(
-        label, std::make_pair(tsdf_layer_empty, label_layer_empty));
-  }
+  std::unordered_map<InstanceLabel, LayerPair> instance_label_to_layers;
+  // Extract the TSDF and label layers corresponding to a segment.
+  constexpr bool kLabelsListIsComplete = true;
+  map_->extractInstanceLayers(instance_labels, &instance_label_to_layers);
 
-  BlockIndexList all_label_blocks;
-  map_->getTsdfLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
+  for (InstanceLabel instance_label : instance_labels) {
+    auto it = instance_label_to_layers.find(instance_label);
+    CHECK(it != instance_label_to_layers.end())
+        << "Layers for instance label " << instance_label
+        << " could not be extracted.";
 
-  for (const BlockIndex& block_index : all_label_blocks) {
-    Block<TsdfVoxel>::Ptr global_tsdf_block =
-        map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
-    Block<LabelVoxel>::Ptr global_label_block =
-        map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
+    const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+    const Layer<LabelVoxel>& segment_label_layer = it->second.second;
 
-    const size_t vps = global_label_block->voxels_per_side();
-    for (size_t i = 0; i < vps * vps * vps; ++i) {
-      const LabelVoxel& global_label_voxel =
-          global_label_block->getVoxelByLinearIndex(i);
+    CHECK_EQ(voxblox::file_utils::makePath("gsm_instances", 0777), 0);
 
-      if (global_label_voxel.label == 0u) {
-        continue;
-      }
+    std::string mesh_filename = "gsm_instances/gsm_segment_mesh_label_" +
+                                std::to_string(instance_label) + ".ply";
 
-      auto it = label_layers_map->find(global_label_voxel.label);
-      if (it == label_layers_map->end()) {
-        if (labels_list_is_complete) {
-          LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
-                     << global_label_voxel.label
-                     << " which is not in the given "
-                        "list of labels to retrieve.";
-        }
-        continue;
-      }
+    bool success = voxblox::io::outputLayerAsPly(
+        segment_tsdf_layer, mesh_filename,
+        voxblox::io::PlyOutputTypes::kSdfIsosurface);
 
-      Layer<TsdfVoxel>& tsdf_layer = it->second.first;
-      Layer<LabelVoxel>& label_layer = it->second.second;
-
-      Block<TsdfVoxel>::Ptr tsdf_block =
-          tsdf_layer.allocateBlockPtrByIndex(block_index);
-      Block<LabelVoxel>::Ptr label_block =
-          label_layer.allocateBlockPtrByIndex(block_index);
-      CHECK(tsdf_block);
-      CHECK(label_block);
-
-      TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
-      LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
-
-      const TsdfVoxel& global_tsdf_voxel =
-          global_tsdf_block->getVoxelByLinearIndex(i);
-
-      tsdf_voxel = global_tsdf_voxel;
-      label_voxel = global_label_voxel;
+    if (success) {
+      ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
+    } else {
+      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
     }
   }
+  return true;
 }
 
 bool Controller::lookupTransform(const std::string& from_frame,
@@ -789,7 +764,7 @@ bool Controller::publishObjects(const bool publish_all) {
 
   std::unordered_map<Label, LayerPair> label_to_layers;
   ros::Time start = ros::Time::now();
-  extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
+  map_->extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
   LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";
@@ -850,7 +825,7 @@ bool Controller::publishObjects(const bool publish_all) {
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.object.semantic_label =
-        integrator_->getSemanticLabelFusionPtr()->getSemanticLabel(label);
+        map_->getSemanticLabelFusionPtr()->getSemanticLabel(label);
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
     transform.translation.x = origin_shifted_tsdf_layer_W[0];
@@ -1003,7 +978,7 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
       constexpr bool clear_updated_flag = true;
       mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
                                            clear_updated_flag);
-      if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+      if (enable_semantic_instance_segmentation_) {
         all_semantic_labels_.clear();
         mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
                                                 clear_updated_flag);
@@ -1022,7 +997,7 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
       mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
                                            clear_updated_flag);
 
-      if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+      if (enable_semantic_instance_segmentation_) {
         mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
                                                 clear_updated_flag);
         mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
@@ -1049,7 +1024,7 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     timing::Timer output_mesh_timer("mesh/output");
     bool success = outputMeshLayerAsPly("label_" + mesh_filename_, false,
                                         *mesh_label_layer_);
-    if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+    if (enable_semantic_instance_segmentation_) {
       success &= outputMeshLayerAsPly("semantic_" + mesh_filename_, false,
                                       *mesh_semantic_layer_);
       success &= outputMeshLayerAsPly("instance_" + mesh_filename_, false,
@@ -1082,7 +1057,7 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     updated_mesh_ |= mesh_label_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
 
-    if (label_tsdf_integrator_config_.enable_semantic_instance_segmentation) {
+    if (enable_semantic_instance_segmentation_) {
       updated_mesh_ |= mesh_merged_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
 
@@ -1123,7 +1098,7 @@ void Controller::getLabelsToPublish(const bool get_all,
                                     std::vector<Label>* labels) {
   CHECK_NOTNULL(labels);
   if (get_all) {
-    *labels = integrator_->getLabelsList();
+    *labels = map_->getLabelList();
     ROS_INFO("Publishing all segments");
   } else {
     *labels = segment_labels_to_publish_;
