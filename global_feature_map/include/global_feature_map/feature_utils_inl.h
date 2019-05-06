@@ -11,7 +11,6 @@
 
 #include "./Block.pb.h"
 #include "./Layer.pb.h"
-#include "global_feature_map/feature_utils.h"
 
 namespace voxblox {
 
@@ -31,6 +30,9 @@ void centerBlocksOfFeatureLayer(FeatureLayer<FeatureType>* layer,
 
   // Round to nearest block index to centroid.
   centroid /= layer->block_size();
+  // TODO(ntonci): Somethin is weird here, however, will not change anything
+  // since then it will no longer give the same result as the one for tsdf
+  // layer.
   const BlockIndex index_centroid =
       (centroid + 0.5 * Point::Ones()).cast<IndexElement>();
 
@@ -76,7 +78,8 @@ template <typename FeatureType>
 void mergeFeatureLayerAintoFeatureLayerB(
     const FeatureLayer<FeatureType>& layer_A, const Transformation& T_B_A,
     FeatureLayer<FeatureType>* layer_B) {
-  FeatureLayer<FeatureType> layer_A_transformed(layer_B->block_size());
+  FeatureLayer<FeatureType> layer_A_transformed(layer_B->block_size(),
+                                                layer_B->getDescriptorSize());
 
   transformFeatureLayer(layer_A, T_B_A, &layer_A_transformed);
 
@@ -126,10 +129,10 @@ void transformFeatureLayer(const FeatureLayer<FeatureType>& layer_in,
 }
 
 template <typename FeatureType>
-bool LoadFeatureBlocksFromFile(
-    const std::string& file_path,
-    typename FeatureLayer<FeatureType>::FeatureBlockMergingStrategy strategy,
-    bool multiple_layer_support, FeatureLayer<FeatureType>* layer_ptr) {
+bool loadFeatureBlocksFromFile(const std::string& file_path,
+                               FeatureBlockMergingStrategy strategy,
+                               bool multiple_layer_support,
+                               FeatureLayer<FeatureType>* layer_ptr) {
   CHECK_NOTNULL(layer_ptr);
   CHECK(!file_path.empty());
 
@@ -196,7 +199,7 @@ bool LoadFeatureBlocksFromFile(
 
     // Read all blocks and add them to the layer.
     const size_t num_blocks = num_protos - 1;
-    if (!LoadFeatureBlocksFromStream(num_blocks, strategy, &proto_file,
+    if (!loadFeatureBlocksFromStream(num_blocks, strategy, &proto_file,
                                      layer_ptr, &tmp_byte_offset)) {
       return false;
     }
@@ -205,21 +208,20 @@ bool LoadFeatureBlocksFromFile(
 }
 
 template <typename FeatureType>
-bool LoadFeatureBlocksFromFile(
-    const std::string& file_path,
-    typename FeatureLayer<FeatureType>::BlockMergingStrategy strategy,
-    FeatureLayer<FeatureType>* layer_ptr) {
+bool loadFeatureBlocksFromFile(const std::string& file_path,
+                               FeatureBlockMergingStrategy strategy,
+                               FeatureLayer<FeatureType>* layer_ptr) {
   constexpr bool multiple_layer_support = false;
   return LoadBlocksFromFile(file_path, strategy, multiple_layer_support,
                             layer_ptr);
 }
 
 template <typename FeatureType>
-bool LoadFeatureBlocksFromStream(
-    const size_t num_blocks,
-    typename FeatureLayer<FeatureType>::FeatureBlockMergingStrategy strategy,
-    std::fstream* proto_file_ptr, FeatureLayer<FeatureType>* layer_ptr,
-    uint32_t* tmp_byte_offset_ptr) {
+bool loadFeatureBlocksFromStream(const size_t num_blocks,
+                                 FeatureBlockMergingStrategy strategy,
+                                 std::fstream* proto_file_ptr,
+                                 FeatureLayer<FeatureType>* layer_ptr,
+                                 uint32_t* tmp_byte_offset_ptr) {
   CHECK_NOTNULL(proto_file_ptr);
   CHECK_NOTNULL(layer_ptr);
   CHECK_NOTNULL(tmp_byte_offset_ptr);
@@ -242,7 +244,7 @@ bool LoadFeatureBlocksFromStream(
 }
 
 template <typename FeatureType>
-bool LoadFeatureLayer(const std::string& file_path,
+bool loadFeatureLayer(const std::string& file_path,
                       const bool multiple_layer_support,
                       typename FeatureLayer<FeatureType>::Ptr* layer_ptr) {
   CHECK_NOTNULL(layer_ptr);
@@ -320,10 +322,9 @@ bool LoadFeatureLayer(const std::string& file_path,
 
     // Read all blocks and add them to the layer.
     const size_t num_blocks = num_protos - 1;
-    if (!LoadFeatureBlocksFromStream(
-            num_blocks,
-            FeatureLayer<FeatureType>::FeatureBlockMergingStrategy::kProhibit,
-            &proto_file, (*layer_ptr).get(), &tmp_byte_offset)) {
+    if (!loadFeatureBlocksFromStream(
+            num_blocks, FeatureBlockMergingStrategy::kProhibit, &proto_file,
+            (*layer_ptr).get(), &tmp_byte_offset)) {
       return false;
     }
   } while (multiple_layer_support && !layer_found && !proto_file.eof());
@@ -331,22 +332,22 @@ bool LoadFeatureLayer(const std::string& file_path,
 }
 
 template <typename FeatureType>
-bool LoadFeatureLayer(const std::string& file_path,
+bool loadFeatureLayer(const std::string& file_path,
                       typename FeatureLayer<FeatureType>::Ptr* layer_ptr) {
   constexpr bool multiple_layer_support = false;
-  return LoadFeatureLayer<FeatureType>(file_path, multiple_layer_support,
+  return loadFeatureLayer<FeatureType>(file_path, multiple_layer_support,
                                        layer_ptr);
 }
 
 template <typename FeatureType>
-bool SaveFeatureLayer(const FeatureLayer<FeatureType>& layer,
+bool saveFeatureLayer(const FeatureLayer<FeatureType>& layer,
                       const std::string& file_path, bool clear_file) {
   CHECK(!file_path.empty());
   return layer.saveToFile(file_path, clear_file);
 }
 
 template <typename FeatureType>
-bool SaveFeatureLayerSubset(const FeatureLayer<FeatureType>& layer,
+bool saveFeatureLayerSubset(const FeatureLayer<FeatureType>& layer,
                             const std::string& file_path,
                             const BlockIndexList& blocks_to_include,
                             bool include_all_blocks) {

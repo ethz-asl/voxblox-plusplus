@@ -9,5 +9,5 @@ message FeatureBlockProto {
 
   optional bool has_data = 5;
 
-  repeated uint32 voxel_data = 6;
+  repeated uint32 feature_data = 6;
 }

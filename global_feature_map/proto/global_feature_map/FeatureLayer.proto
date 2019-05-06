@@ -3,6 +3,7 @@ package voxblox;
 message FeatureLayerProto {
   optional double block_size = 1;
 
-  // See voxblox::voxel_type
-  optional string type = 2;
+  optional double feature_descriptor_size = 2;
+
+  optional string type = 3;
 }

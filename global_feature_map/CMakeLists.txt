@@ -45,7 +45,7 @@ cs_add_library(${PROJECT_NAME}
 catkin_add_gtest(test_feature_layer
   test/test_feature_map.cc
 )
-target_link_libraries(test_feature_layer ${PROJECT_NAME})
+target_link_libraries(test_feature_layer ${PROJECT_NAME} ${PROJECT_NAME}_proto)
 
 cs_install()
 cs_export(INCLUDE_DIRS include ${CMAKE_CURRENT_BINARY_DIR}

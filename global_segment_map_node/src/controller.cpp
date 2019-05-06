@@ -871,6 +871,7 @@ bool Controller::publishObjects(const bool publish_all) {
                                            &origin_shifted_label_layer_W);
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
 
+    // TODO(ntonci): Check that this is centered the same way as tsdf.
     Point origin_shifted_feature_layer_W;
     centerBlocksOfFeatureLayer<Feature3D>(&feature_layer,
                                           &origin_shifted_feature_layer_W);

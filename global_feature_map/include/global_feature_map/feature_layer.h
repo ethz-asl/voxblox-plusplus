@@ -47,13 +47,16 @@ class FeatureLayer {
   explicit FeatureLayer(FloatingPoint block_size) : block_size_(block_size) {
     CHECK_GT(block_size_, 0.0f);
     block_size_inv_ = 1.0 / block_size_;
-    setDescriptorSize(0);
+    LOG(WARNING) << "Descriptor size was not provided, setting it to 0!";
+    feature_descriptor_size_ = 0u;
   }
   explicit FeatureLayer(FloatingPoint block_size, size_t descriptor_size)
       : block_size_(block_size), feature_descriptor_size_(descriptor_size) {
     CHECK_GT(block_size_, 0.0f);
     block_size_inv_ = 1.0 / block_size_;
   }
+
+  explicit FeatureLayer(const FeatureLayerProto& proto);
 
   /// Deep copy constructor.
   explicit FeatureLayer(const FeatureLayer& other);
@@ -246,7 +249,7 @@ class FeatureLayer {
   inline void setDescriptorSize(const size_t size) {
     feature_descriptor_size_ = size;
   }
-  inline size_t getDescriptorSize() { return feature_descriptor_size_; }
+  inline size_t getDescriptorSize() const { return feature_descriptor_size_; }
 
   void serializeLayerAsMsg(const bool only_updated,
                            const DeserializeAction& action,

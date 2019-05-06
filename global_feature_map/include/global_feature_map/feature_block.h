@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <voxblox/core/common.h>
+#include "./FeatureBlock.pb.h"
 
 namespace voxblox {
 
@@ -29,6 +30,9 @@ class FeatureBlock {
     CHECK_GT(block_size_, 0.f);
     block_size_inv_ = 1.0 / block_size_;
   }
+
+  explicit FeatureBlock(const FeatureBlockProto& proto,
+                        const size_t descriptor_size);
 
   ~FeatureBlock() {}
 
@@ -67,6 +71,7 @@ class FeatureBlock {
   }
   inline void addFeature(const FeatureType& feature) {
     features_.push_back(feature);
+    set_has_data(true);
   }
 
   inline size_t numFeatures() const { return features_.size(); }
@@ -88,6 +93,8 @@ class FeatureBlock {
 
   void deserializeFromIntegers(const size_t descriptor_size,
                                const std::vector<uint32_t>& data);
+
+  void getProto(const size_t descriptor_size, FeatureBlockProto* proto) const;
 
  protected:
   std::vector<FeatureType> features_;

@@ -22,6 +22,19 @@
 namespace voxblox {
 
 template <typename FeatureType>
+FeatureLayer<FeatureType>::FeatureLayer(const FeatureLayerProto& proto)
+    : block_size_(proto.block_size()),
+      feature_descriptor_size_(proto.feature_descriptor_size()) {
+  CHECK_EQ(getType().compare(proto.type()), 0)
+      << "Incorrect feature type, proto type: " << proto.type()
+      << " layer type: " << getType();
+
+  // Derived config parameter.
+  CHECK_GT(block_size_, 0.0);
+  block_size_inv_ = 1.0 / block_size_;
+}
+
+template <typename FeatureType>
 FeatureLayer<FeatureType>::FeatureLayer(const FeatureLayer& other) {
   block_size_ = other.block_size_;
   block_size_inv_ = other.block_size_inv_;
@@ -47,13 +60,12 @@ size_t FeatureLayer<FeatureType>::getMemorySize() const {
   // Calculate size of members
   size += sizeof(block_size_);
   size += sizeof(block_size_inv_);
+  size += sizeof(feature_descriptor_size_);
 
-  // Calculate size of blocks
-  size_t num_blocks = getNumberOfAllocatedBlocks();
-  if (num_blocks > 0u) {
-    typename FeatureBlock<FeatureType>::Ptr block = block_map_.begin()->second;
-    size += num_blocks * block->getMemorySize();
+  for (const FeatureBlockMapPair& entry : block_map_) {
+    size += entry.second->getMemorySize();
   }
+
   return size;
 }
 
@@ -72,6 +84,7 @@ void FeatureLayer<FeatureType>::serializeLayerAsMsg(
          "layer or during feature callback.";
   CHECK_NOTNULL(msg);
   msg->block_size = block_size();
+  msg->feature_descriptor_size = getDescriptorSize();
   msg->layer_type = getType();
 
   BlockIndexList block_list;
@@ -107,6 +120,8 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
 template <typename FeatureType>
 bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
     const modelify_msgs::FeatureLayer& msg, const DeserializeAction& action) {
+  // TODO(ntonci): Maybe this check is not required in case you just want
+  // keypoints without descriptors.
   CHECK_GT(getDescriptorSize(), 0u)
       << "You need to set the descriptor size before you can serialize the "
          "layer! You can do this either directly in the constructor of the "
@@ -119,6 +134,11 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
 
   if (msg.block_size != block_size()) {
     LOG(ERROR) << "Sizes don't match!";
+    return false;
+  }
+
+  if (msg.feature_descriptor_size != getDescriptorSize()) {
+    LOG(ERROR) << "Descriptor sizes don't match!";
     return false;
   }
 
@@ -166,6 +186,7 @@ void FeatureLayer<FeatureType>::getProto(FeatureLayerProto* proto) const {
   CHECK_NOTNULL(proto);
 
   proto->set_block_size(block_size_);
+  proto->set_feature_descriptor_size(feature_descriptor_size_);
   proto->set_type(getType());
 }
 
@@ -175,6 +196,8 @@ bool FeatureLayer<FeatureType>::isCompatible(
   bool compatible = true;
   compatible &= (std::fabs(layer_proto.block_size() - block_size_) <
                  std::numeric_limits<FloatingPoint>::epsilon());
+  compatible &= ((layer_proto.feature_descriptor_size() -
+                  feature_descriptor_size_) == 0u);
   compatible &= (getType().compare(layer_proto.type()) == 0);
 
   if (!compatible) {
@@ -184,6 +207,12 @@ bool FeatureLayer<FeatureType>::isCompatible(
                  << " check passed? "
                  << (std::fabs(layer_proto.block_size() - block_size_) <
                      std::numeric_limits<FloatingPoint>::epsilon())
+                 << "Descriptor size of the loaded map is: "
+                 << layer_proto.feature_descriptor_size()
+                 << " but the current map is: " << feature_descriptor_size_
+                 << " check passed? "
+                 << ((layer_proto.feature_descriptor_size() -
+                      feature_descriptor_size_) == 0u)
                  << "\nFeatureLayer type of the loaded map is: " << getType()
                  << " but the current map is: " << layer_proto.type()
                  << " check passed? "
@@ -299,7 +328,7 @@ bool FeatureLayer<FeatureType>::saveBlocksToStream(
     }
     if (write_block_to_file) {
       FeatureBlockProto block_proto;
-      pair.second->getProto(&block_proto);
+      pair.second->getProto(feature_descriptor_size_, &block_proto);
 
       if (!utils::writeProtoMsgToStream(block_proto, outfile_ptr)) {
         LOG(ERROR) << "Could not write block message.";
@@ -315,7 +344,8 @@ bool FeatureLayer<FeatureType>::addBlockFromProto(
     const FeatureBlockProto& block_proto,
     FeatureBlockMergingStrategy strategy) {
   if (isCompatible(block_proto)) {
-    typename FeatureBlockType::Ptr block_ptr(new FeatureBlockType(block_proto));
+    typename FeatureBlockType::Ptr block_ptr(
+        new FeatureBlockType(block_proto, feature_descriptor_size_));
     const BlockIndex block_index = getGridIndexFromOriginPoint<BlockIndex>(
         block_ptr->origin(), block_size_inv_);
     switch (strategy) {

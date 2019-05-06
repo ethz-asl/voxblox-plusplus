@@ -6,6 +6,21 @@ void FeatureIntegrator::integrateFeatures(
     const Transformation& T_G_C, const std::vector<Feature3D>& features_C) {
   timing::Timer integrate_timer("integrate/features");
 
+  if (features_C.size() > 0u) {
+    if (!features_C.at(0).descriptor.empty()) {
+      const size_t current_descriptor_size = layer_->getDescriptorSize();
+      if (current_descriptor_size == 0u) {
+        layer_->setDescriptorSize(features_C.at(0).descriptor.cols);
+      } else {
+        CHECK_EQ(features_C.at(0).descriptor.cols, current_descriptor_size)
+            << "Integrating featues with descriptors of different size than "
+               "the ones already in the layer!";
+      }
+    } else {
+      LOG(WARNING) << "Integrating features without descriptors.";
+    }
+  }
+
   ThreadSafeIndex index_getter(features_C.size());
 
   std::list<std::thread> integration_threads;
