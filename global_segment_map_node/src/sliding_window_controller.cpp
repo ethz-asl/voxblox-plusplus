@@ -23,7 +23,7 @@ SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
 void SlidingWindowController::removeSegmentsOutsideOfRadius(
     const float radius, const Point& center) {
   removed_segments_.clear();
-  std::vector<Label> all_labels = integrator_->getLabelsList();
+  std::vector<Label> all_labels = map_->getLabelList();
   label_to_layers_.clear();
   constexpr bool kLabelsListIsComlete = true;
   extractSegmentLayers(all_labels, &label_to_layers_, kLabelsListIsComlete);
@@ -67,8 +67,8 @@ void SlidingWindowController::extractSegmentLayers(
   if (!label_to_layers_.empty()) {
     *label_layers_map = label_to_layers_;
   } else {
-    Controller::extractSegmentLayers(labels, label_layers_map,
-                                     labels_list_is_complete);
+    map_->extractSegmentLayers(labels, label_layers_map,
+                               labels_list_is_complete);
   }
 }
 

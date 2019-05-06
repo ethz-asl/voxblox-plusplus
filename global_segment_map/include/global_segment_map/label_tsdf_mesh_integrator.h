@@ -30,8 +30,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       const MeshIntegratorConfig& config, Layer<TsdfVoxel>* tsdf_layer,
       Layer<LabelVoxel>* label_layer, MeshLayer* mesh_layer,
       std::set<SemanticLabel>& all_semantic_labels,
-      const utils::InstanceLabelFusion* instance_label_fusion = nullptr,
-      const utils::SemanticLabelFusion* semantic_label_fusion = nullptr,
+      const InstanceLabelFusion* instance_label_fusion = nullptr,
+      const SemanticLabelFusion* semantic_label_fusion = nullptr,
       ColorScheme color_scheme = LabelColor, bool* remesh = nullptr,
       SemanticColorMap::SemanticColor semantic_color_mode =
           SemanticColorMap::kCoco)
@@ -53,8 +53,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       const MeshIntegratorConfig& config, const Layer<TsdfVoxel>& tsdf_layer,
       const Layer<LabelVoxel>& label_layer, MeshLayer* mesh_layer,
       std::set<SemanticLabel>& all_semantic_labels,
-      const utils::InstanceLabelFusion* instance_label_fusion = nullptr,
-      const utils::SemanticLabelFusion* semantic_label_fusion = nullptr,
+      const InstanceLabelFusion* instance_label_fusion = nullptr,
+      const SemanticLabelFusion* semantic_label_fusion = nullptr,
       ColorScheme color_scheme = LabelColor, bool* remesh = nullptr,
       SemanticColorMap::SemanticColor semantic_color_mode =
           SemanticColorMap::kCoco)
@@ -148,38 +148,25 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
   // TODO(margaritaG): handle this remeshing!!
 
-  // SemanticLabel getLabelInstance(const Label& label) {
-  //   SemanticLabel instance_label = 0u;
-  //   int max_count = 0;
-  //   auto label_it = label_instance_count_ptr_->find(label);
-  //   if (label_it != label_instance_count_ptr_->end()) {
-  //     for (auto const& instance_count : label_it->second) {
-  //       if (instance_count.second > max_count && instance_count.first != 0u)
-  //       {
-  //         int frames_count = 0;
-  //         auto label_count_it = label_frames_count_ptr_->find(label);
-  //         if (label_count_it != label_frames_count_ptr_->end()) {
-  //           frames_count = label_count_it->second;
-  //         }
-  //         if (instance_count.second >
-  //             0.1f * (float)(frames_count - instance_count.second)) {
-  //           instance_label = instance_count.first;
-  //           max_count = instance_count.second;
-  //         }
-  //       }
-  //     }
-  //   } else {
-  //     // LOG(ERROR) << "No semantic class for label?";
-  //   }
-  //   auto prev_instance_it = label_instance_map_.find(label);
-  //   if (prev_instance_it != label_instance_map_.end()) {
-  //     if (prev_instance_it->second != instance_label) {
-  //       *remesh_ptr_ = true;
-  //     }
-  //   }
-  //   label_instance_map_[label] = instance_label;
-  //   return instance_label;
-  // }
+  InstanceLabel getLabelInstance(const Label& label) {
+    float kFramesCountThresholdFactor = 0.1f;
+
+    InstanceLabel instance_label = instance_label_fusion_ptr_->getLabelInstance(
+        label, kFramesCountThresholdFactor);
+
+    // TODO(grinvalm): here the condition was if (instance_count.second >
+    //             0.1f * (float)(frames_count - instance_count.second))
+    // Check if this changes anything in the performance.
+
+    auto prev_instance_it = label_instance_map_.find(label);
+    if (prev_instance_it != label_instance_map_.end()) {
+      if (prev_instance_it->second != instance_label) {
+        *remesh_ptr_ = true;
+      }
+    }
+    label_instance_map_[label] = instance_label;
+    return instance_label;
+  }
 
   Color getColorFromLabel(const Label& label) {
     Color color;
@@ -289,8 +276,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         } else if (color_scheme_ == LabelColor) {
           color = getColorFromLabel(voxel.label);
         } else if (color_scheme_ == SemanticColor) {
-          InstanceLabel instance_label =
-              instance_label_fusion_ptr_->getLabelInstance(voxel.label);
+          InstanceLabel instance_label = getLabelInstance(voxel.label);
           SemanticLabel semantic_label = 0u;
           if (instance_label != 0u) {
             semantic_label =
@@ -300,8 +286,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           // color = getColorFromInstanceLabel(semantic_label);
           color = getColorFromSemanticLabel(semantic_label);
         } else if (color_scheme_ == InstanceColor) {
-          InstanceLabel instance_label =
-              instance_label_fusion_ptr_->getLabelInstance(voxel.label);
+          InstanceLabel instance_label = getLabelInstance(voxel.label);
           if (instance_label == 0u) {
             // LOG(ERROR) << "Label 0";
           } else {
@@ -309,8 +294,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           }
           color = getColorFromInstanceLabel(instance_label);
         } else if (color_scheme_ == GeometricInstanceColor) {
-          InstanceLabel instance_label =
-              instance_label_fusion_ptr_->getLabelInstance(voxel.label);
+          InstanceLabel instance_label = getLabelInstance(voxel.label);
           if (instance_label == 0u) {
             color = getColorFromLabel(voxel.label);
           } else {
@@ -331,8 +315,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
         } else if (color_scheme_ == LabelColor) {
           color = getColorFromLabel(voxel.label);
         } else if (color_scheme_ == SemanticColor) {
-          InstanceLabel instance_label =
-              instance_label_fusion_ptr_->getLabelInstance(voxel.label);
+          InstanceLabel instance_label = getLabelInstance(voxel.label);
           SemanticLabel semantic_label = 0u;
           if (instance_label != 0u) {
             semantic_label =
@@ -342,12 +325,10 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
           // color = getColorFromInstanceLabel(semantic_label);
           color = getColorFromSemanticLabel(semantic_label);
         } else if (color_scheme_ == InstanceColor) {
-          InstanceLabel instance_label =
-              instance_label_fusion_ptr_->getLabelInstance(voxel.label);
+          InstanceLabel instance_label = getLabelInstance(voxel.label);
           color = getColorFromInstanceLabel(instance_label);
         } else if (color_scheme_ == GeometricInstanceColor) {
-          InstanceLabel instance_label =
-              instance_label_fusion_ptr_->getLabelInstance(voxel.label);
+          InstanceLabel instance_label = getLabelInstance(voxel.label);
           if (instance_label == 0u) {
             color = getColorFromLabel(voxel.label);
           } else {
@@ -374,8 +355,8 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   std::map<Label, Color> label_color_map_;
   std::map<SemanticLabel, Color> instance_color_map_;
 
-  const utils::InstanceLabelFusion* instance_label_fusion_ptr_;
-  const utils::SemanticLabelFusion* semantic_label_fusion_ptr_;
+  const InstanceLabelFusion* instance_label_fusion_ptr_;
+  const SemanticLabelFusion* semantic_label_fusion_ptr_;
 
   // const std::map<Label, std::map<SemanticLabel, int>>*
   // label_class_count_ptr_; const std::map<Label, std::map<SemanticLabel,
@@ -386,7 +367,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   // This parameter is used if no valid remesh_ptr is provided to the class at
   // construction time.
   bool remesh_ = false;
-  std::map<Label, SemanticLabel> label_instance_map_;
+  std::map<Label, InstanceLabel> label_instance_map_;
 
   SemanticColorMap color_map_;
 };

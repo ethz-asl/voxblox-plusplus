@@ -6,7 +6,6 @@
 #include "global_segment_map/common.h"
 
 namespace voxblox {
-namespace utils {
 
 class InstanceLabelFusion {
  public:
@@ -22,9 +21,14 @@ class InstanceLabelFusion {
       const Label& label, const std::set<InstanceLabel>& assigned_instances =
                               std::set<InstanceLabel>()) const;
 
+  InstanceLabel getLabelInstance(
+      const Label& label, const float count_threshold_factor,
+      const std::set<InstanceLabel>& assigned_instances =
+          std::set<InstanceLabel>()) const;
+
  protected:
-  LSLMap label_instance_count_;
-  LMap label_frames_count_;
+  std::map<Label, std::map<InstanceLabel, int>> label_instance_count_;
+  std::map<Label, int> label_frames_count_;
 };
 
 class SemanticLabelFusion {
@@ -39,7 +43,6 @@ class SemanticLabelFusion {
   LSLMap label_class_count_;
 };
 
-}  // namespace utils
 }  // namespace voxblox
 
 #endif  // GLOBAL_SEGMENT_MAP_LABEL_FUSION_H_

@@ -13,8 +13,12 @@ namespace voxblox {
 // GSM custom types.
 typedef uint16_t Label;
 typedef uint16_t LabelConfidence;
+typedef uint16_t InstanceLabel;
 typedef uint8_t SemanticLabel;
-typedef uint8_t InstanceLabel;
+
+typedef std::vector<Label> Labels;
+typedef std::vector<SemanticLabel> SemanticLabels;
+typedef std::vector<InstanceLabel> InstanceLabels;
 
 typedef std::map<Label, int> LMap;
 typedef std::map<Label, int>::iterator LMapIt;
@@ -32,30 +36,40 @@ struct LabelCount {
   LabelConfidence label_confidence = 0u;
 };
 
-struct PointSurfelSemanticInstance : public pcl::PointXYZRGB {
+struct PointSurfelLabel {
+  PCL_ADD_POINT4D;
+  PCL_ADD_NORMAL4D;
+  PCL_ADD_RGB;
+  uint32_t label;
+
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
+
+struct PointSurfelSemanticInstance {
   PCL_ADD_POINT4D;
   PCL_ADD_RGB;
   // TODO(margaritaG): Fix field names to:
-  SemanticLabel label;     // semantic_label
-  InstanceLabel instance;  // instance_label
+  SemanticLabel label;  // semantic_label
+  uint8_t instance;     // instance_label
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 
 typedef pcl::PointXYZRGB PointType;
+typedef PointSurfelLabel PointLabelType;
 typedef PointSurfelSemanticInstance PointSemanticInstanceType;
 
-// Pointcloud types for external interface.
-typedef AlignedVector<Label> Labels;
-typedef AlignedVector<SemanticLabel> SemanticLabels;
-
 }  // namespace voxblox
+
+POINT_CLOUD_REGISTER_POINT_STRUCT(voxblox::PointSurfelLabel,
+                                  (float, x, x)(float, y, y)(float, z, z)(
+                                      float, rgb, rgb)(uint32_t, label, label))
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(
     voxblox::PointSemanticInstanceType,
     (float, x, x)(float, y, y)(float, z, z)(float, rgb, rgb)(
         voxblox::SemanticLabel, label,
-        label)(voxblox::InstanceLabel, instance,
+        label)(uint8_t, instance,
                instance))  // TODO(margaritaG): Fix field names
 
 #endif  // GLOBAL_SEGMENT_MAP_COMMON_H_

@@ -9,16 +9,16 @@
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_tsdf_mesh_integrator.h>
+#include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/visualizer.h>
 #include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
-#include <pcl/io/vtk_lib_io.h>
-#include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_srvs/Empty.h>
 #include <std_srvs/SetBool.h>
 #include <tf/transform_listener.h>
+#include <tf2_ros/transform_broadcaster.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
 
@@ -59,6 +59,8 @@ class Controller {
 
   void advertiseLabelTsdfTopic(ros::Publisher* label_tsdf_pub);
 
+  void advertiseBboxTopic(ros::Publisher* bbox_pub);
+
   void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
   void validateMergedObjectService(
@@ -66,14 +68,11 @@ class Controller {
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
-  // void advertiseGenerateSemanticMeshService(
-  //     ros::ServiceServer* generate_semantic_mesh_srv);
-  //
-  // void advertiseGenerateInstanceMeshService(
-  //     ros::ServiceServer* generate_instance_mesh_srv);
-
   void advertiseExtractSegmentsService(
       ros::ServiceServer* extract_segments_srv);
+
+  void advertiseExtractInstancesService(
+      ros::ServiceServer* extract_instances_srv);
 
   void dynamicReconfigureCallback(gsm_node::InteractiveSliderConfig& config,
                                   uint32_t level);
@@ -88,11 +87,17 @@ class Controller {
 
   bool noNewUpdatesReceived() const;
 
+  bool enable_semantic_instance_segmentation_;
+
   bool publish_gsm_updates_;
 
   bool publish_scene_mesh_;
   bool publish_segment_mesh_;
   bool publish_pointclouds_;
+
+  bool compute_and_publish_bbox_;
+
+  bool use_label_propagation_;
 
   double no_update_timeout_;
 
@@ -126,6 +131,9 @@ class Controller {
       std::unordered_map<Label, LayerPair>* label_layers_map,
       bool labels_list_is_complete = false);
 
+  bool extractInstancesCallback(std_srvs::Empty::Request& request,
+                                std_srvs::Empty::Response& response);
+
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
                        Transformation* transform);
@@ -140,9 +148,15 @@ class Controller {
   virtual void getLabelsToPublish(const bool get_all,
                                   std::vector<Label>* labels);
 
+  void computeAlignedBoundingBox(
+      const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
+      Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
+      Eigen::Vector3f* bbox_size);
+
   ros::NodeHandle* node_handle_private_;
 
   tf::TransformListener tf_listener_;
+  tf2_ros::TransformBroadcaster tf_broadcaster_;
   ros::Time last_segment_msg_timestamp_;
   size_t integrated_frames_count_;
 
@@ -180,7 +194,7 @@ class Controller {
   std::shared_ptr<MeshLayer> mesh_semantic_layer_;
   std::shared_ptr<MeshLayer> mesh_instance_layer_;
   std::shared_ptr<MeshLayer> mesh_merged_layer_;
-  std::shared_ptr<MeshLabelIntegrator> mesh_integrator_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_label_integrator_;
   std::shared_ptr<MeshLabelIntegrator> mesh_semantic_integrator_;
   std::shared_ptr<MeshLabelIntegrator> mesh_instance_integrator_;
   std::shared_ptr<MeshLabelIntegrator> mesh_merged_integrator_;
@@ -200,6 +214,7 @@ class Controller {
   std::vector<Label> segment_labels_to_publish_;
   std::map<Label, std::set<Label>> merges_to_publish_;
   std::set<Label> all_published_segments_;
+  ros::Publisher* bbox_pub_;
 
   // Pose tracking.
   bool enable_icp_;
@@ -208,7 +223,9 @@ class Controller {
   Visualizer* visualizer_;
   std::mutex updated_mesh_mutex_;
   bool updated_mesh_;
+  bool need_full_remesh_;
 };
+
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 

@@ -11,29 +11,13 @@
 #include <voxblox/integrator/integrator_utils.h>
 #include <voxblox/integrator/tsdf_integrator.h>
 #include <voxblox/utils/timing.h>
-
 #include "global_segment_map/common.h"
 #include "global_segment_map/label_fusion.h"
 #include "global_segment_map/label_tsdf_map.h"
+#include "global_segment_map/segment.h"
 #include "global_segment_map/utils/icp_utils.h"
 
 namespace voxblox {
-
-class Segment {
- public:
-  Segment(pcl::PointCloud<voxblox::PointType> point_cloud,
-          Transformation T_G_C);
-
-  Segment(pcl::PointCloud<voxblox::PointSemanticInstanceType> point_cloud,
-          Transformation T_G_C);
-
-  voxblox::Transformation T_G_C_;
-  voxblox::Pointcloud points_C_;
-  voxblox::Colors colors_;
-  voxblox::Label label_;
-  voxblox::SemanticLabel semantic_label_;
-  voxblox::InstanceLabel instance_label_;
-};
 
 class LabelTsdfIntegrator : public MergedTsdfIntegrator {
  public:
@@ -76,9 +60,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   LabelTsdfIntegrator(const Config& tsdf_config,
                       const LabelTsdfConfig& label_tsdf_config,
-                      Layer<TsdfVoxel>* tsdf_layer,
-                      Layer<LabelVoxel>* label_layer, Label* highest_label,
-                      InstanceLabel* highest_instance);
+                      LabelTsdfMap* map);
 
   // Pose tracking.
   Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
@@ -103,18 +85,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // Segment merging.
   // Not thread safe.
   void mergeLabels(LLSet* merges_to_publish);
-
-  // Get the list of all labels
-  // for which the voxel count is greater than 0.
-  std::vector<Label> getLabelsList();
-
-  inline utils::InstanceLabelFusion* getInstanceLabelFusionPtr() {
-    return &instance_label_fusion_;
-  }
-
-  inline utils::SemanticLabelFusion* getSemanticLabelFusionPtr() {
-    return &semantic_label_fusion_;
-  }
 
   // Object database.
   void getLabelsToPublish(
@@ -219,13 +189,14 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   bool getNextMerge(Label* new_label, Label* old_label);
 
   Label getFreshLabel() {
-    CHECK_LT(*highest_label_, std::numeric_limits<unsigned short>::max());
-    return ++(*highest_label_);
+    CHECK_LT(*highest_label_ptr_, std::numeric_limits<unsigned short>::max());
+    return ++(*highest_label_ptr_);
   }
 
   InstanceLabel getFreshInstance() {
-    CHECK_LT(*highest_instance_, std::numeric_limits<unsigned char>::max());
-    return ++(*highest_instance_);
+    CHECK_LT(*highest_instance_ptr_,
+             std::numeric_limits<unsigned short>::max());
+    return ++(*highest_instance_ptr_);
   }
 
   // Label layer.
@@ -251,8 +222,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // (num_threads / (2^n)). For 8 threads and 12 bits this gives 0.2%.
   ApproxHashArray<12, std::mutex, GlobalIndex, LongIndexHash> mutexes_;
 
-  Label* highest_label_;
-  LMap labels_count_map_;
+  Label* highest_label_ptr_;
+  LMap* label_count_map_ptr_;
   std::mutex updated_labels_mutex_;
   std::set<Label> updated_labels_;
 
@@ -260,9 +231,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   LLMap pairwise_confidence_;
 
   // Semantic instance-aware segmentation.
-  utils::SemanticLabelFusion semantic_label_fusion_;
-  utils::InstanceLabelFusion instance_label_fusion_;
-  InstanceLabel* highest_instance_;
+  InstanceLabelFusion* instance_label_fusion_ptr_;
+  SemanticLabelFusion* semantic_label_fusion_ptr_;
+  InstanceLabel* highest_instance_ptr_;
   std::map<SemanticLabel, SemanticLabel> current_to_global_instance_map_;
 
   // Object database.

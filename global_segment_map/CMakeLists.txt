@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 2.8.3)
 project(global_segment_map)
 
 add_definitions(-std=c++14)
-add_definitions(-fext-numeric-literals)
+if (NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+  add_definitions(-fext-numeric-literals)
+endif()
 
 find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
@@ -16,6 +18,8 @@ cs_add_library(${PROJECT_NAME}
   src/utils/label_utils.cc
   src/utils/semantic_color_map.cc
   src/utils/visualizer.cc
+  src/label_tsdf_map.cc
+  src/segment.cc
 )
 
 cs_install()

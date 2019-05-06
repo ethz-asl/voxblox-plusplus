@@ -37,11 +37,12 @@ int main(int argc, char** argv) {
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
+  ros::Publisher segment_gsm_update_publisher;
+  ros::Publisher scene_gsm_update_publisher;
+
   if (controller->publish_gsm_updates_) {
-    ros::Publisher segment_gsm_update_publisher;
     controller->advertiseSegmentGsmUpdateTopic(&segment_gsm_update_publisher);
 
-    ros::Publisher scene_gsm_update_publisher;
     controller->advertiseSceneGsmUpdateTopic(&scene_gsm_update_publisher);
   }
 
@@ -65,6 +66,11 @@ int main(int argc, char** argv) {
     controller->advertiseLabelTsdfTopic(&label_tsdf_publisher);
   }
 
+  ros::Publisher bbox_pub;
+  if (controller->compute_and_publish_bbox_) {
+    controller->advertiseBboxTopic(&bbox_pub);
+  }
+
   ros::ServiceServer publish_scene_srv;
   controller->advertisePublishSceneService(&publish_scene_srv);
 
@@ -86,6 +92,11 @@ int main(int argc, char** argv) {
       std::bind(&voxblox::voxblox_gsm::Controller::dynamicReconfigureCallback,
                 controller, std::placeholders::_1, std::placeholders::_2);
   reconfigure_server.setCallback(dynamic_reconfigure_function);
+
+  ros::ServiceServer extract_instances_srv;
+  if (controller->enable_semantic_instance_segmentation_) {
+    controller->advertiseExtractInstancesService(&extract_instances_srv);
+  }
 
   // Spinner that uses a number of threads equal to the number of cores.
   ros::AsyncSpinner spinner(0);
