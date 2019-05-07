@@ -20,6 +20,7 @@
 #include <pcl_conversions/pcl_conversions.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+#include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
@@ -123,7 +124,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       // Increased time limit for lookup in the past of tf messages
       // to give some slack to the pipeline and not lose any messages.
       integrated_frames_count_(0u),
-      tf_listener_(ros::Duration(100)),
+      tf_listener_(ros::Duration(500)),
       world_frame_("world"),
       camera_frame_(""),
       no_update_timeout_(0.0),
@@ -142,7 +143,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
                                            camera_frame_);
 
   // Determine map parameters.
-  map_config_.voxel_size = 0.01f;
+  map_config_.voxel_size = 0.02f;
   map_config_.voxels_per_side = 8u;
 
   // Workaround for OS X on mac mini not having specializations for float
@@ -168,7 +169,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_config.voxel_carving_enabled = false;
   integrator_config.allow_clear = true;
   FloatingPoint truncation_distance_factor = 5.0f;
-  integrator_config.max_ray_length_m = 2.5f;
+  // integrator_config.max_ray_length_m = 2.5f;
+  integrator_config.max_ray_length_m = 4.0f;
 
   node_handle_private_->param<bool>("voxel_carving_enabled",
                                     integrator_config.voxel_carving_enabled,
@@ -217,6 +219,14 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       "object_flushing_age_threshold",
       label_tsdf_integrator_config.object_flushing_age_threshold,
       label_tsdf_integrator_config.object_flushing_age_threshold);
+
+  node_handle_private_->param<bool>("enable_icp",
+                                    label_tsdf_integrator_config.enable_icp,
+                                    label_tsdf_integrator_config.enable_icp);
+  node_handle_private_->param<bool>(
+      "keep_track_of_icp_correction",
+      label_tsdf_integrator_config.keep_track_of_icp_correction,
+      label_tsdf_integrator_config.keep_track_of_icp_correction);
 
   integrator_.reset(new LabelTsdfIntegrator(
       integrator_config, label_tsdf_integrator_config, map_->getTsdfLayerPtr(),
@@ -507,58 +517,79 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
              segment_point_cloud_msg->header.stamp.toSec());
-
+    ros::WallTime start;
+    ros::WallTime end;
     if (use_label_propagation_) {
-      ros::WallTime start = ros::WallTime::now();
+      start = ros::WallTime::now();
 
       integrator_->decideLabelPointClouds(&segments_to_integrate_,
                                           &segment_label_candidates,
                                           &segment_merge_candidates_);
 
-      ros::WallTime end = ros::WallTime::now();
+      end = ros::WallTime::now();
       ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
                segments_to_integrate_.size(), (end - start).toSec());
     }
 
     constexpr bool kIsFreespacePointcloud = false;
 
-    ros::WallTime start = ros::WallTime::now();
-
-    for (const auto& segment : segments_to_integrate_) {
-      integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                       segment->colors_, segment->labels_,
-                                       kIsFreespacePointcloud);
-    }
-
-    ros::WallTime end = ros::WallTime::now();
-    ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
-             segments_to_integrate_.size(), (end - start).toSec());
-
     start = ros::WallTime::now();
+    if (segments_to_integrate_.size() > 0) {
+      Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+      Pointcloud point_cloud_all_segments_t;
+      for (const auto& segment : segments_to_integrate_) {
+        // Concatenate point clouds. (NOTE(ff): We should probably just use the
+        // original cloud here instead.)
+        Pointcloud::iterator it = point_cloud_all_segments_t.end();
+        point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
+                                          segment->points_C_.end());
+      }
 
-    integrator_->mergeLabels(&merges_to_publish_);
-    integrator_->getLabelsToPublish(&segment_labels_to_publish_);
+      Transformation T_Gicp_C = T_G_C;
+      LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_config =
+          integrator_->getLabelTsdfConfig();
+      if (label_tsdf_config.enable_icp) {
+        T_Gicp_C =
+            integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
+      }
 
-    end = ros::WallTime::now();
-    ROS_INFO(
-        "Finished merging segments and fetching the ones to publish in %f "
-        "seconds.",
-        (end - start).toSec());
-    start = ros::WallTime::now();
+      for (const auto& segment : segments_to_integrate_) {
+        segment->T_G_C_ = T_Gicp_C;
+        integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                         segment->colors_, segment->labels_,
+                                         kIsFreespacePointcloud);
+      }
 
-    segment_merge_candidates_.clear();
-    segment_label_candidates.clear();
-    for (Segment* segment : segments_to_integrate_) {
-      delete segment;
-    }
-    segments_to_integrate_.clear();
+      end = ros::WallTime::now();
+      ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
+               segments_to_integrate_.size(), (end - start).toSec());
 
-    end = ros::WallTime::now();
-    ROS_INFO("Cleared candidates and memory in %f seconds.",
-             (end - start).toSec());
+      start = ros::WallTime::now();
 
-    if (publish_gsm_updates_ && publishObjects()) {
-      publishScene();
+      integrator_->mergeLabels(&merges_to_publish_);
+      integrator_->getLabelsToPublish(&segment_labels_to_publish_);
+
+      end = ros::WallTime::now();
+      ROS_INFO(
+          "Finished merging segments and fetching the ones to publish in %f "
+          "seconds.",
+          (end - start).toSec());
+      start = ros::WallTime::now();
+
+      segment_merge_candidates_.clear();
+      segment_label_candidates.clear();
+      for (Segment* segment : segments_to_integrate_) {
+        delete segment;
+      }
+      segments_to_integrate_.clear();
+
+      end = ros::WallTime::now();
+      ROS_INFO("Cleared candidates and memory in %f seconds.",
+               (end - start).toSec());
+
+      if (publish_gsm_updates_ && publishObjects()) {
+        publishScene();
+      }
     }
   }
   received_first_message_ = true;

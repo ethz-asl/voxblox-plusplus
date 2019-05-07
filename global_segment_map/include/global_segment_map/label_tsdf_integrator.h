@@ -2,12 +2,17 @@
 #define GLOBAL_SEGMENT_MAP_LABEL_TSDF_INTEGRATOR_H_
 
 #include <algorithm>
+#include <limits>
 #include <list>
 #include <map>
+#include <memory>
+#include <set>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include <glog/logging.h>
+#include <voxblox/alignment/icp.h>
 #include <voxblox/core/layer.h>
 #include <voxblox/core/voxel.h>
 #include <voxblox/integrator/integrator_utils.h>
@@ -15,6 +20,7 @@
 #include <voxblox/utils/timing.h>
 #include <boost/math/distributions/lognormal.hpp>
 
+#include "global_segment_map/icp_utils.h"
 #include "global_segment_map/label_tsdf_map.h"
 #include "global_segment_map/label_voxel.h"
 
@@ -59,11 +65,19 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // objects are published.
     int object_flushing_age_threshold = 3;
 
+    // Mode of the ThreadSafeIndex, determines the integration order of the
+    // rays. Options: "mixed", "sorted"
+    std::string integration_order_mode = "mixed";
+
     // Distance-based log-normal distribution of label confidence weights.
     bool enable_confidence_weight_dropoff = false;
     float lognormal_weight_mean = 0.0f;
     float lognormal_weight_sigma = 1.8f;
     float lognormal_weight_offset = 0.7f;
+
+    // ICP params.
+    bool enable_icp = true;
+    bool keep_track_of_icp_correction = true;
   };
 
   LabelTsdfIntegrator(const Config& config,
@@ -73,8 +87,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       : MergedTsdfIntegrator(config, CHECK_NOTNULL(tsdf_layer)),
         label_tsdf_config_(label_tsdf_config),
         label_layer_(CHECK_NOTNULL(label_layer)),
-        highest_label_(CHECK_NOTNULL(highest_label)) {
+        highest_label_(CHECK_NOTNULL(highest_label)),
+        icp_(new ICP(getICPConfigFromGflags())) {
     CHECK(label_layer_);
+    T_Gicp_G_.setIdentity();
   }
 
   inline void checkForSegmentLabelMergeCandidate(
@@ -497,6 +513,49 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
+  Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
+                                     const Pointcloud& point_cloud) {
+    // TODO(ff): We should actually check here how many blocks are in the
+    // camera frustum.
+    if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
+      return T_G_C_init;
+    }
+    Transformation T_Gicp_C;
+    timing::Timer icp_timer("icp");
+    if (!label_tsdf_config_.keep_track_of_icp_correction) {
+      T_Gicp_G_.setIdentity();
+    }
+
+    const size_t num_icp_updates =
+        icp_->runICP(*layer_, point_cloud, T_Gicp_G_ * T_G_C_init, &T_Gicp_C);
+    if (num_icp_updates == 0u || num_icp_updates > 15u) {
+      LOG(INFO) << "num_icp_updates is too high or 0: " << num_icp_updates
+                << ", using T_G_C_init.";
+      return T_G_C_init;
+    }
+    LOG(INFO) << "ICP refinement performed " << num_icp_updates
+              << " successful update steps.";
+    T_Gicp_G_ = T_Gicp_C * T_G_C_init.inverse();
+
+    if (!label_tsdf_config_.keep_track_of_icp_correction) {
+      VLOG(3) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
+    } else {
+      VLOG(3) << "ICP refinement for this pointcloud: T_Gicp_G: " << T_Gicp_G_;
+    }
+
+    if (!icp_->refiningRollPitch()) {
+      // its already removed internally but small floating point errors can
+      // build up if accumulating transforms
+      Transformation::Vector6 vec_T_Gicp_G = T_Gicp_G_.log();
+      vec_T_Gicp_G[3] = 0.0;
+      vec_T_Gicp_G[4] = 0.0;
+      T_Gicp_G_ = Transformation::exp(vec_T_Gicp_G);
+    }
+
+    icp_timer.Stop();
+    return T_Gicp_C;
+  }
+
   void integratePointCloud(const Transformation& T_G_C,
                            const Pointcloud& points_C, const Colors& colors,
                            const Labels& labels, const bool freespace_points) {
@@ -513,10 +572,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // cleared.
     VoxelMap clear_map;
 
-    ThreadSafeIndex index_getter(points_C.size());
+    std::unique_ptr<ThreadSafeIndex> index_getter(
+        ThreadSafeIndexFactory::get(config_.integration_order_mode, points_C));
 
-    bundleRays(T_G_C, points_C, freespace_points, &index_getter, &voxel_map,
-               &clear_map);
+    bundleRays(T_G_C, points_C, freespace_points, index_getter.get(),
+               &voxel_map, &clear_map);
 
     integrateRays(T_G_C, points_C, colors, labels, config_.enable_anti_grazing,
                   false, voxel_map, clear_map);
@@ -750,9 +810,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
   }
 
-  LMap* getLabelsAgeMapPtr() {
-    return &labels_to_publish_;
-  }
+  LMap* getLabelsAgeMapPtr() { return &labels_to_publish_; }
 
   void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label,
                                   int count) {
@@ -904,6 +962,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     }
     return labels;
   }
+  LabelTsdfConfig getLabelTsdfConfig() const { return label_tsdf_config_; }
 
  protected:
   LabelTsdfConfig label_tsdf_config_;
@@ -919,6 +978,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Pairwise confidence merging.
   LLMap pairwise_confidence_;
+
+  // ICP variables.
+  std::shared_ptr<ICP> icp_;
+  Transformation T_Gicp_G_;
 
   // We need to prevent simultaneous access to the voxels in the map. We
   // could
