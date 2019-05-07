@@ -21,7 +21,7 @@ void FeatureIntegrator::integrateFeatures(
     }
   }
 
-  ThreadSafeIndex index_getter(features_C.size());
+  MixedThreadSafeIndex index_getter(features_C.size());
 
   std::list<std::thread> integration_threads;
   for (size_t i = 0; i < config_.integrator_threads; ++i) {
