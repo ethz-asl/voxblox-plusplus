@@ -55,7 +55,7 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
 
     // TODO(ntonci): Template on descriptor type.
     for (size_t i = 0u; i < descriptor_size; ++i) {
-      // TODO(ntonci): Casting double to float, loosing precision. Check
+      // TODO(ntonci): Casting double to float, losing precision. Check
       // significance.
       FloatingPoint descriptor_value =
           static_cast<FloatingPoint>(feature.descriptor.at<double>(i));
