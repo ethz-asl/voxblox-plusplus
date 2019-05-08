@@ -79,6 +79,11 @@ template <typename FeatureType>
 void FeatureLayer<FeatureType>::serializeLayerAsMsg(
     const bool only_updated, const DeserializeAction& action,
     modelify_msgs::FeatureLayer* msg) {
+  if (getDescriptorSize() == 0u) {
+    // TODO(ff): Fix this (remove and fix in appropriate place).
+    setDescriptorSize(128u);
+    LOG(ERROR) << "No descriptor sizewas set, setting it to 128";
+  }
   CHECK_GT(getDescriptorSize(), 0u)
       << "You need to set the descriptor size before you can serialize the "
          "layer! You can do this either directly in the constructor of the "
@@ -121,6 +126,10 @@ bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
 template <typename FeatureType>
 bool FeatureLayer<FeatureType>::deserializeMsgToLayer(
     const modelify_msgs::FeatureLayer& msg, const DeserializeAction& action) {
+  if (getDescriptorSize() == 0u) {
+    // TODO(ff): Fix this (remove and fix in appropriate place).
+    setDescriptorSize(128u);
+  }
   // TODO(ntonci): Maybe this check is not required in case you just want
   // keypoints without descriptors.
   CHECK_GT(getDescriptorSize(), 0u)

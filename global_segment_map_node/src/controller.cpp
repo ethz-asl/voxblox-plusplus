@@ -475,6 +475,8 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
   if (!received_first_feature_ && features_C.size() > 0) {
     received_first_feature_ = true;
     feature_layer_->setDescriptorSize(descriptor_size);
+    LOG(ERROR) << "Received first feature, setting descriptor size to "
+               << descriptor_size;
   }
 
   if (camera_frame != camera_frame_) {
