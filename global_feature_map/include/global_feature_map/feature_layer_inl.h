@@ -38,6 +38,7 @@ template <typename FeatureType>
 FeatureLayer<FeatureType>::FeatureLayer(const FeatureLayer& other) {
   block_size_ = other.block_size_;
   block_size_inv_ = other.block_size_inv_;
+  feature_descriptor_size_ = other.feature_descriptor_size_;
 
   for (const typename FeatureBlockHashMap::value_type& key_value_pair :
        other.block_map_) {
