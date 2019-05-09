@@ -761,7 +761,7 @@ void Controller::extractSegmentLayers(
                                       map_config_.voxels_per_side);
   FeatureLayer<Feature3D> feature_layer_empty(
       map_config_.voxel_size * map_config_.voxels_per_side,
-      feature_layer.getDescriptorSize());
+      feature_layer_->getDescriptorSize());
 
   for (const Label& label : labels) {
     label_layers_map->emplace(
