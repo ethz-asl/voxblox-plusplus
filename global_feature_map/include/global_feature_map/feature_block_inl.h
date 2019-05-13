@@ -26,6 +26,22 @@ FeatureBlock<FeatureType>::FeatureBlock(const FeatureBlockProto& proto,
 }
 
 template <typename FeatureType>
+cv::Mat FeatureBlock<FeatureType>::getDescriptors() {
+  size_t descriptor_size = 0u;
+  if (features_.size() > 0) {
+    descriptor_size = features_.at(0).descriptor.cols;
+  } else {
+    return cv::Mat(0, 0, CV_32FC1);
+  }
+
+  cv::Mat descriptors(features_.size(), descriptor_size, CV_32FC1);
+  for (size_t i = 0u; i < features_.size(); ++i) {
+    features_.at(i).descriptor.copyTo(descriptors.row(i));
+  }
+  return descriptors;
+}
+
+template <typename FeatureType>
 void FeatureBlock<FeatureType>::mergeBlock(
     const FeatureBlock<FeatureType>& other_block) {
   CHECK_EQ(other_block.block_size(), block_size());

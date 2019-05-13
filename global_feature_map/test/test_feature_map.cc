@@ -18,6 +18,7 @@ class FeatureLayerTest : public ::testing::Test {
     feature_layer_deserialize_.reset(new FeatureLayer<FeatureType>(kBlockSize));
     second_feature_layer_.reset(new FeatureLayer<FeatureType>(kBlockSize));
 
+    integrator_config_.match_descriptors_to_reject_duplicates = false;
     feature_integrator_.reset(
         new FeatureIntegrator(integrator_config_, feature_layer_.get()));
     second_feature_integrator_.reset(
@@ -154,7 +155,7 @@ TEST_F(Feature3DLayerTest, testSerialization) {
   test_feature_a.keypoint_response = 111.1;
   test_feature_a.keypoint_angle = 1.1;
   test_feature_a.descriptor =
-      cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(1.11));
+      cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(1.11));
   test_block->addFeature(test_feature_a);
   Feature3D test_feature_b;
   test_feature_b.keypoint << 2.2, 2.2, 2.2;
@@ -162,7 +163,7 @@ TEST_F(Feature3DLayerTest, testSerialization) {
   test_feature_b.keypoint_response = 222.2;
   test_feature_b.keypoint_angle = 2.2;
   test_feature_b.descriptor =
-      cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(2.22));
+      cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(2.22));
   test_block->addFeature(test_feature_b);
 
   constexpr bool kOnlyUpdated = false;
@@ -224,7 +225,7 @@ TEST_F(Feature3DLayerTest, testSerializationLargerDescriptor) {
   test_feature_a.keypoint_response = 111.1;
   test_feature_a.keypoint_angle = 1.1;
   test_feature_a.descriptor =
-      cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(1.11));
+      cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(1.11));
   test_block->addFeature(test_feature_a);
   Feature3D test_feature_b;
   test_feature_b.keypoint << 2.2, 2.2, 2.2;
@@ -232,7 +233,7 @@ TEST_F(Feature3DLayerTest, testSerializationLargerDescriptor) {
   test_feature_b.keypoint_response = 222.2;
   test_feature_b.keypoint_angle = 2.2;
   test_feature_b.descriptor =
-      cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(2.22));
+      cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(2.22));
   test_block->addFeature(test_feature_b);
 
   constexpr bool kOnlyUpdated = false;
@@ -371,22 +372,22 @@ TEST_F(Feature3DLayerTest, testUtilsFunctionality) {
   feature.keypoint_response = 1.0;
   feature.keypoint_angle = 1.0;
   feature.keypoint = Point(0.255, 0.155, 0.001);
-  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(1));
+  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(1));
   features.push_back(feature);
   feature.keypoint = Point(0.455, 0.355, 0.001);
-  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(2));
+  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(2));
   features.push_back(feature);
   feature.keypoint = Point(0.475, 0.375, 0.001);
-  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(3));
+  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(3));
   features.push_back(feature);
   feature.keypoint = Point(0.655, 0.155, 0.001);
-  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(4));
+  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(4));
   features.push_back(feature);
   feature.keypoint = Point(0.675, 0.175, 0.001);
-  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(5));
+  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(5));
   features.push_back(feature);
   feature.keypoint = Point(0.625, 0.125, 0.001);
-  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_64FC1, cv::Scalar(6));
+  feature.descriptor = cv::Mat(1, kDescriptorSize, CV_32FC1, cv::Scalar(6));
   features.push_back(feature);
 
   Eigen::Matrix<FloatingPoint, 4, 4> T_C0;

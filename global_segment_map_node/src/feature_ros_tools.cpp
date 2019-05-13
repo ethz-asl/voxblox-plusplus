@@ -39,12 +39,10 @@ void fromFeaturesMsgToFeature3D(const modelify_msgs::Features& features_msg,
     feature.keypoint_response = msg.response;
     feature.keypoint_angle = msg.angle;
 
-    // TODO(ntonci): Check if float values are properly stored in double
-    // container.
     constexpr size_t kRows = 1;
-    feature.descriptor = cv::Mat(kRows, *descriptor_size, CV_64FC1);
+    feature.descriptor = cv::Mat(kRows, *descriptor_size, CV_32FC1);
     memcpy(feature.descriptor.data, msg.descriptor.data(),
-           msg.descriptor.size() * sizeof(double));
+           msg.descriptor.size() * sizeof(float));
 
     CHECK_EQ(feature.descriptor.cols, msg.descriptor.size())
         << "Descriptor size is wrong!";

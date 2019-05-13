@@ -459,6 +459,8 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
   ros::Time timestamp;
   std::vector<Feature3D> features_C;
 
+  ros::WallTime start = ros::WallTime::now();
+
   fromFeaturesMsgToFeature3D(features_msg, &descriptor_size, &camera_frame,
                              &timestamp, &features_C);
 
@@ -492,6 +494,11 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
         *feature_layer_, world_frame_, kMaxNumberOfFeatures, &feature_blocks);
     feature_block_pub_->publish(feature_blocks);
   }
+
+  ros::WallTime end = ros::WallTime::now();
+  ROS_INFO("Integrated %lu features in %f seconds.", features_C.size(),
+           (end - start).toSec());
+  ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
 }
 
 void Controller::segmentPointCloudCallback(

@@ -36,4 +36,8 @@
     <param name="publish_pointcloud" value="true"/>
   </node>
 
+  <node pkg="tf2_ros" type="static_transform_publisher" name="base_imu_static_tf"
+    args="0 0 0 0 0 0 1 base_rgbdi_frame imu_frame"/>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="maplab_imu_base_imu_static_tf"
+    args="0 0 0 0 0 0 1 imu base_rgbdi_frame"/>
 </launch>

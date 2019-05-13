@@ -120,6 +120,7 @@ void transformFeatureLayer(const FeatureLayer<FeatureType>& layer_in,
 
   // TODO(ntonci): Make config a param.
   FeatureIntegrator::Config feature_integrator_config;
+  feature_integrator_config.match_descriptors_to_reject_duplicates = false;
   FeatureIntegrator feature_integrator(feature_integrator_config, layer_out);
 
   std::vector<FeatureType> features;
