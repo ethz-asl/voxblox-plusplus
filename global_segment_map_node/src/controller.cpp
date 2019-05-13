@@ -496,8 +496,10 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
   }
 
   ros::WallTime end = ros::WallTime::now();
-  ROS_INFO("Integrated %lu features in %f seconds.", features_C.size(),
-           (end - start).toSec());
+  ROS_INFO(
+      "Integrated %lu features in %f seconds. Total number of features: %lu.",
+      features_C.size(), (end - start).toSec(),
+      feature_layer_->getNumberOfFeatures());
   ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
 }
 

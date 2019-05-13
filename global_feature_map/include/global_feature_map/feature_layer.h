@@ -244,6 +244,21 @@ class FeatureLayer {
     }
   }
 
+  inline size_t getNumberOfFeatures() const {
+    BlockIndexList block_list;
+    getAllAllocatedBlocks(&block_list);
+
+    size_t number_of_features = 0u;
+    for (const BlockIndex& block_idx : block_list) {
+      const typename FeatureBlock<FeatureType>::ConstPtr block =
+          getBlockPtrByIndex(block_idx);
+      CHECK_NOTNULL(block);
+
+      number_of_features += block->numFeatures();
+    }
+    return number_of_features;
+  }
+
   size_t getMemorySize() const;
 
   inline void setDescriptorSize(const size_t size) {
