@@ -918,6 +918,9 @@ bool Controller::publishObjects(const bool publish_all) {
     feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
                                       DeserializeAction::kUpdate,
                                       &gsm_update_msg.object.feature_layer);
+    LOG(INFO) << "Extracted segment with " << surfel_cloud->points.size()
+              << " points and " << feature_layer.getNumberOfFeatures()
+              << " features.";
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.old_labels.clear();

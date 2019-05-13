@@ -16,12 +16,11 @@
     <param name="dilate_depth_image" value="true"/>
   </node>
 
-  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
+  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/sliding_window_monstah.yaml"/>
   <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
     <rosparam command="load" file="$(arg gsm_node_params_name)"/>
-    <param name="world_frame_id" value="map"/>
-    <param name="camera_frame_id" value="camera0"/>
     <param name="publish_feature_blocks_marker" value="true"/>
+    <param name="compute_and_publish_bbox" value="false"/>
   </node>
 
   <node name="rgbd_feature_node" pkg="modelify_ros" type="rgbd_feature_node" output="screen">
