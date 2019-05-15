@@ -8,8 +8,8 @@
 #include <geometry_msgs/Transform.h>
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
-#include <global_segment_map/label_tsdf_mesh_integrator.h>
 #include <global_segment_map/label_voxel.h>
+#include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
 #include <global_segment_map/utils/visualizer.h>
 #include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
@@ -29,13 +29,6 @@ typedef std::pair<Layer<TsdfVoxel>, Layer<LabelVoxel>> LayerPair;
 
 class Controller {
  public:
-  enum ColorScheme {
-    LabelColor = 1,
-    SemanticLabelColor = 2,
-    InstanceColor = 3,
-    ConfidenceColor = 4
-  };
-
   Controller(ros::NodeHandle* node_handle);
 
   ~Controller();
@@ -147,6 +140,7 @@ class Controller {
   std::shared_ptr<LabelTsdfIntegrator> integrator_;
 
   MeshIntegratorConfig mesh_config_;
+  MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config_;
   ros::Timer update_mesh_timer_;
   ros::Publisher* scene_mesh_pub_;
   ros::Publisher* segment_mesh_pub_;

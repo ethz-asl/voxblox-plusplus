@@ -11,9 +11,9 @@
 #include <voxblox/integrator/tsdf_integrator.h>
 #include <voxblox/utils/timing.h>
 #include "global_segment_map/common.h"
-#include "global_segment_map/label_fusion.h"
 #include "global_segment_map/label_tsdf_map.h"
 #include "global_segment_map/segment.h"
+#include "global_segment_map/semantic_instance_label_fusion.h"
 
 namespace voxblox {
 
@@ -222,8 +222,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   LLMap pairwise_confidence_;
 
   // Semantic instance-aware segmentation.
-  InstanceLabelFusion* instance_label_fusion_ptr_;
-  SemanticLabelFusion* semantic_label_fusion_ptr_;
+  SemanticInstanceLabelFusion* semantic_instance_label_fusion_ptr_;
   InstanceLabel* highest_instance_ptr_;
   std::map<SemanticLabel, SemanticLabel> current_to_global_instance_map_;
 

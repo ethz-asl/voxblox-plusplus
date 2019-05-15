@@ -13,7 +13,9 @@ Visualizer::Visualizer(
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
 void Visualizer::visualizeMesh() {
+  // uint8_t n_visualizers = 1u;
   uint8_t n_visualizers = mesh_layers_.size();
+
   std::vector<std::shared_ptr<pcl::visualization::PCLVisualizer>>
       pcl_visualizers;
   std::vector<voxblox::Mesh> meshes;
@@ -27,7 +29,7 @@ void Visualizer::visualizeMesh() {
 
   bool refresh = false;
 
-  for (int index = 0; index < mesh_layers_.size(); ++index) {
+  for (int index = 0; index < n_visualizers; ++index) {
     // PCLVisualizer class can NOT be used across multiple threads, thus need to
     // create instances of it in the same thread they will be used in.
     std::shared_ptr<pcl::visualization::PCLVisualizer> visualizer =
@@ -68,7 +70,7 @@ void Visualizer::visualizeMesh() {
 
     if (updated_mesh_mutex_ptr_->try_lock()) {
       if (*updated_mesh_) {
-        for (int index = 0; index < pcl_visualizers.size(); index++) {
+        for (int index = 0; index < n_visualizers; index++) {
           mesh_layers_[index]->getMesh(&meshes[index]);
         }
         refresh = true;
@@ -78,14 +80,14 @@ void Visualizer::visualizeMesh() {
     updated_mesh_mutex_ptr_->unlock();
 
     if (refresh) {
-      for (int index = 0; index < pcl_visualizers.size(); index++) {
+      for (int index = 0; index < n_visualizers; index++) {
         pointclouds[index].points.clear();
       }
 
       pcl::PCLPointCloud2 pcl_pc;
       std::vector<pcl::Vertices> polygons;
 
-      for (int index = 0; index < pcl_visualizers.size(); index++) {
+      for (int index = 0; index < n_visualizers; index++) {
         size_t vert_idx = 0;
         for (const Point& vert : meshes[index].vertices) {
           pcl::PointXYZRGBA point;
@@ -116,7 +118,7 @@ void Visualizer::visualizeMesh() {
         polygon_meshes[index].polygons = polygons;
       }
 
-      for (int index = 0; index < pcl_visualizers.size(); index++) {
+      for (int index = 0; index < n_visualizers; index++) {
         pcl_visualizers[index]->removePolygonMesh("meshes");
         if (!pcl_visualizers[index]->updatePolygonMesh(polygon_meshes[index],
                                                        "meshes")) {

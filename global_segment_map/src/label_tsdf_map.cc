@@ -23,8 +23,9 @@ InstanceLabels LabelTsdfMap::getInstanceList() {
   float kFramesCountThresholdFactor = 0.1f;
 
   for (Label label : labels) {
-    InstanceLabel instance_label = instance_label_fusion_.getLabelInstance(
-        label, kFramesCountThresholdFactor);
+    InstanceLabel instance_label =
+        semantic_instance_label_fusion_.getInstanceLabel(
+            label, kFramesCountThresholdFactor);
     if (instance_label != 0u) {
       instance_labels_set.emplace(instance_label);
     }
@@ -135,8 +136,9 @@ void LabelTsdfMap::extractInstanceLayers(
         continue;
       }
       float kFramesCountThresholdFactor = 0.1f;
-      InstanceLabel instance_label = instance_label_fusion_.getLabelInstance(
-          global_label_voxel.label, kFramesCountThresholdFactor);
+      InstanceLabel instance_label =
+          semantic_instance_label_fusion_.getInstanceLabel(
+              global_label_voxel.label, kFramesCountThresholdFactor);
 
       if (instance_label == 0u) {
         continue;

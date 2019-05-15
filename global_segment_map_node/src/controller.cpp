@@ -192,23 +192,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     tsdf_integrator_config_.enable_anti_grazing = false;
   }
 
-  std::string mesh_color_scheme("label");
-  node_handle_private_->param<std::string>(
-      "meshing/mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
-  if (mesh_color_scheme.compare("label") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
-  } else if (mesh_color_scheme.compare("semantic_label") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
-  } else if (mesh_color_scheme.compare("instance_label") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
-  } else if (mesh_color_scheme.compare("geometric_instance_label") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
-  } else if (mesh_color_scheme.compare("confidence") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
-  } else {
-    mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
-  }
-
   // Determine label integrator parameters.
   node_handle_private_->param<bool>(
       "pairwise_confidence_merging/enable_pairwise_confidence_merging",
@@ -236,37 +219,66 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config_.max_segment_age,
       label_tsdf_integrator_config_.max_segment_age);
 
+  // TODO(margaritaG) : this is not used, remove?
+  // std::string mesh_color_scheme("label");
+  // node_handle_private_->param<std::string>(
+  //     "meshing/mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
+  // if (mesh_color_scheme.compare("label") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
+  // } else if (mesh_color_scheme.compare("semantic_label") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
+  // } else if (mesh_color_scheme.compare("instance_label") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
+  // } else if (mesh_color_scheme.compare("geometric_instance_label") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
+  // } else if (mesh_color_scheme.compare("confidence") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
+  // } else {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
+  // }
+
+  std::string class_task("coco80");
+  node_handle_private_->param<std::string>(
+      "semantic_instance_segmentation/class_task", class_task, class_task);
+  if (class_task.compare("coco80") == 0) {
+    label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask ::kCoco80;
+  } else if (class_task.compare("nyu13") == 0) {
+    label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask ::kNyu13;
+  } else {
+    label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask::kCoco80;
+  }
+
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
 
   mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
 
+  label_tsdf_mesh_config_.color_scheme =
+      MeshLabelIntegrator::ColorScheme::kLabel;
   mesh_label_integrator_.reset(new MeshLabelIntegrator(
-      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_label_layer_.get(), all_semantic_labels_,
-      map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
-      MeshLabelIntegrator::LabelColor, &need_full_remesh_));
+      mesh_config_, label_tsdf_mesh_config_, map_.get(),
+      mesh_label_layer_.get(), all_semantic_labels_, &need_full_remesh_));
 
   if (enable_semantic_instance_segmentation_) {
     mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
 
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kSemantic;
     mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-        mesh_semantic_layer_.get(), all_semantic_labels_,
-        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
-        MeshLabelIntegrator::SemanticColor, &need_full_remesh_));
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_semantic_layer_.get(), all_semantic_labels_, &need_full_remesh_));
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kInstance;
     mesh_instance_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-        mesh_instance_layer_.get(), all_semantic_labels_,
-        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
-        MeshLabelIntegrator::InstanceColor, &need_full_remesh_));
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_instance_layer_.get(), all_semantic_labels_, &need_full_remesh_));
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kMerged;
     mesh_merged_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-        mesh_merged_layer_.get(), all_semantic_labels_,
-        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
-        MeshLabelIntegrator::GeometricInstanceColor, &need_full_remesh_));
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_merged_layer_.get(), all_semantic_labels_, &need_full_remesh_));
   }
 
   // Visualization settings.
@@ -277,9 +289,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     mesh_layers.push_back(mesh_label_layer_);
 
     if (enable_semantic_instance_segmentation_) {
-      mesh_layers.push_back(mesh_merged_layer_);
-      mesh_layers.push_back(mesh_semantic_layer_);
       mesh_layers.push_back(mesh_instance_layer_);
+      mesh_layers.push_back(mesh_semantic_layer_);
+      mesh_layers.push_back(mesh_merged_layer_);
     }
     visualizer_ =
         new Visualizer(mesh_layers, &updated_mesh_, &updated_mesh_mutex_);
@@ -297,7 +309,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 #ifndef APPROXMVBB_AVAILABLE
   if (compute_and_publish_bbox_) {
     ROS_WARN_STREAM(
-        "ApproxMVBB is not available and therefore bounding box functionality "
+        "ApproxMVBB is not available and therefore bounding box "
+        "functionality "
         "is disabled.");
   }
   compute_and_publish_bbox_ = false;
@@ -825,7 +838,7 @@ bool Controller::publishObjects(const bool publish_all) {
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.object.semantic_label =
-        map_->getSemanticLabelFusionPtr()->getSemanticLabel(label);
+        map_->getSemanticInstanceLabelFusionPtr()->getSemanticLabel(label);
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
     transform.translation.x = origin_shifted_tsdf_layer_W[0];
@@ -918,11 +931,14 @@ bool Controller::publishObjects(const bool publish_all) {
       std::shared_ptr<MeshLayer> mesh_layer;
       mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
       // mesh_layer.reset(new MeshLayer(map_->block_size()));
-      MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer,
-                                          &label_layer, mesh_layer.get(),
-                                          all_semantic_labels_);
+      MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config;
+      label_tsdf_mesh_config.color_scheme =
+          MeshLabelIntegrator::ColorScheme::kColor;
+      MeshLabelIntegrator mesh_integrator(mesh_config_, label_tsdf_mesh_config,
+                                          tsdf_layer, label_layer,
+                                          mesh_layer.get());
       constexpr bool only_mesh_updated_blocks = false;
-      constexpr bool clear_updated_flag = true;
+      constexpr bool clear_updated_flag = false;
       mesh_integrator.generateMesh(only_mesh_updated_blocks,
                                    clear_updated_flag);
 
