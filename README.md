@@ -1,4 +1,4 @@
-#  Voxblox GSM
+#  Voxblox++
 
 This repository contains a framework for incrementally building volumetric object-centric maps during online scanning with a localized RGB-D camera.
 
