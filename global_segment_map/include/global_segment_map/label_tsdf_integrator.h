@@ -53,7 +53,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
     // TODO (grinvalm): maybe use a relative measure, not absolue voxel count.
     // Minimum number of label voxels count for label propagation.
-    size_t min_label_voxel_count = 20;
+    size_t min_label_voxel_count = 20u;
+    size_t max_num_icp_updates = 15u;
     // Factor determining the label propagation truncation distance.
     float label_propagation_td_factor = 1.0;
 
@@ -528,7 +529,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
     const size_t num_icp_updates =
         icp_->runICP(*layer_, point_cloud, T_Gicp_G_ * T_G_C_init, &T_Gicp_C);
-    if (num_icp_updates == 0u || num_icp_updates > 15u) {
+    if (num_icp_updates == 0u ||
+        num_icp_updates > label_tsdf_config_.max_num_icp_updates) {
       LOG(INFO) << "num_icp_updates is too high or 0: " << num_icp_updates
                 << ", using T_G_C_init.";
       return T_G_C_init;
