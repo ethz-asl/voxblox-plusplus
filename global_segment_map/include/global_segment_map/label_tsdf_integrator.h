@@ -538,9 +538,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     T_Gicp_G_ = T_Gicp_C * T_G_C_init.inverse();
 
     if (!label_tsdf_config_.keep_track_of_icp_correction) {
-      VLOG(3) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
+      LOG(INFO) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
     } else {
-      VLOG(3) << "ICP refinement for this pointcloud: T_Gicp_G: " << T_Gicp_G_;
+      LOG(INFO) << "ICP refinement for this pointcloud: T_Gicp_G: "
+                << T_Gicp_G_;
     }
 
     if (!icp_->refiningRollPitch()) {
