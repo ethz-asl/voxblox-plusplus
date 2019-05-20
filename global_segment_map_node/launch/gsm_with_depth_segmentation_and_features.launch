@@ -17,13 +17,13 @@
   </node>
 
   <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/monstah.yaml"/>
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="log">
     <rosparam command="load" file="$(arg gsm_node_params_name)"/>
     <param name="publish_feature_blocks_marker" value="true"/>
     <param name="compute_and_publish_bbox" value="false"/>
   </node>
 
-  <node name="rgbd_feature_node" pkg="modelify_ros" type="rgbd_feature_node" output="screen">
+  <node name="rgbd_feature_node" pkg="modelify_ros" type="rgbd_feature_node" output="log">
     <param name="rgb_image_sub_topic" value="$(arg rgb_topic)"/>
     <param name="depth_image_sub_topic" value="$(arg depth_registered_topic)"/>
     <param name="rgb_info_sub_topic" value="$(arg rgb_camera_info_topic)"/>

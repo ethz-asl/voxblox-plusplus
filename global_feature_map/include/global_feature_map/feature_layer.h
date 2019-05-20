@@ -47,7 +47,7 @@ class FeatureLayer {
   explicit FeatureLayer(FloatingPoint block_size) : block_size_(block_size) {
     CHECK_GT(block_size_, 0.0f);
     block_size_inv_ = 1.0 / block_size_;
-    LOG(WARNING) << "Descriptor size was not provided, setting it to 0!";
+    LOG(INFO) << "Descriptor size was not provided, setting it to 0!";
     feature_descriptor_size_ = 0u;
   }
   explicit FeatureLayer(FloatingPoint block_size, size_t descriptor_size)

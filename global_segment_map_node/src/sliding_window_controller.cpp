@@ -98,7 +98,7 @@ void SlidingWindowController::checkTfCallback() {
 }
 
 void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
-  LOG(WARNING) << "Update Window";
+  LOG(INFO) << "Update Window";
   removeSegmentsOutsideOfRadius(window_radius_, new_center);
 
   LOG(INFO) << "Publish scene";
@@ -109,7 +109,7 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
   ros::Time start = ros::Time::now();
   publishSceneCallback(req, res);
   ros::Time stop = ros::Time::now();
-  LOG(WARNING) << "Publishing took " << (stop - start).toSec() << "s";
+  LOG(INFO) << "Publishing took " << (stop - start).toSec() << "s";
 }
 
 void SlidingWindowController::publishGsmUpdate(
