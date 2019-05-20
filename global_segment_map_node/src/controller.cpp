@@ -469,6 +469,8 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
   ros::Time timestamp;
   std::vector<Feature3D> features_C;
 
+  ros::WallTime start = ros::WallTime::now();
+
   fromFeaturesMsgToFeature3D(features_msg, &descriptor_size, &camera_frame,
                              &timestamp, &features_C);
 
@@ -504,6 +506,13 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
         *feature_layer_, world_frame_, kMaxNumberOfFeatures, &feature_blocks);
     feature_block_pub_->publish(feature_blocks);
   }
+
+  ros::WallTime end = ros::WallTime::now();
+  ROS_INFO(
+      "Integrated %lu features in %f seconds. Total number of features: %lu.",
+      features_C.size(), (end - start).toSec(),
+      feature_layer_->getNumberOfFeatures());
+  ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
 }
 
 void Controller::segmentPointCloudCallback(
@@ -942,6 +951,9 @@ bool Controller::publishObjects(const bool publish_all) {
     feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
                                       DeserializeAction::kUpdate,
                                       &gsm_update_msg.object.feature_layer);
+    LOG(INFO) << "Extracted segment with " << surfel_cloud->points.size()
+              << " points and " << feature_layer.getNumberOfFeatures()
+              << " features.";
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.old_labels.clear();

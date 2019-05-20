@@ -40,8 +40,8 @@ void centerBlocksOfFeatureLayer(FeatureLayer<FeatureType>* layer,
   const FloatingPoint block_size = layer->block_size();
   *new_layer_origin = index_centroid.cast<FloatingPoint>() * block_size;
 
-  VLOG(3) << "The new origin of the coordinate frame (expressed in the old "
-          << "coordinate frame) is: " << new_layer_origin->transpose();
+  LOG(INFO) << "The new origin of the coordinate frame (expressed in the old "
+            << "coordinate frame) is: " << new_layer_origin->transpose();
 
   // Loop over all blocks and change their spatial indices.
   // The only way to do this is to remove them all, store them in a temporary
@@ -120,6 +120,7 @@ void transformFeatureLayer(const FeatureLayer<FeatureType>& layer_in,
 
   // TODO(ntonci): Make config a param.
   FeatureIntegrator::Config feature_integrator_config;
+  feature_integrator_config.match_descriptors_to_reject_duplicates = false;
   FeatureIntegrator feature_integrator(feature_integrator_config, layer_out);
 
   std::vector<FeatureType> features;

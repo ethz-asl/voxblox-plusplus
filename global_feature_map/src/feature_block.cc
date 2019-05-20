@@ -55,10 +55,7 @@ void FeatureBlock<Feature3D>::serializeToIntegers(
 
     // TODO(ntonci): Template on descriptor type.
     for (size_t i = 0u; i < descriptor_size; ++i) {
-      // TODO(ntonci): Casting double to float, losing precision. Check
-      // significance.
-      FloatingPoint descriptor_value =
-          static_cast<FloatingPoint>(feature.descriptor.at<double>(i));
+      FloatingPoint descriptor_value = feature.descriptor.at<float>(i);
       const uint32_t* bytes_d_ptr =
           reinterpret_cast<const uint32_t*>(&descriptor_value);
       data->push_back(*bytes_d_ptr);
@@ -96,15 +93,13 @@ void FeatureBlock<Feature3D>::deserializeFromIntegers(
     memcpy(&feature.keypoint_response, &bytes_5, sizeof(bytes_5));
     memcpy(&feature.keypoint_angle, &bytes_6, sizeof(bytes_6));
 
-    feature.descriptor = cv::Mat(1u, descriptor_size, CV_64FC1);
+    feature.descriptor = cv::Mat(1u, descriptor_size, CV_32FC1);
 
     for (size_t j = 0u; j < descriptor_size; ++j) {
       float descriptor;
       const uint32_t bytes_d = data[data_idx + 6u + j];
 
-      memcpy(&(descriptor), &bytes_d, sizeof(bytes_d));
-
-      feature.descriptor.at<double>(j) = static_cast<double>(descriptor);
+      memcpy(&(feature.descriptor.at<float>(j)), &bytes_d, sizeof(bytes_d));
     }
 
     addFeature(feature);

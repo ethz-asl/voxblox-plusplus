@@ -1,10 +1,13 @@
 #include "global_feature_map/feature_integrator.h"
 
+#include <opencv2/features2d.hpp>
+#include <opencv2/opencv.hpp>
+
 namespace voxblox {
 
 void FeatureIntegrator::integrateFeatures(
     const Transformation& T_G_C, const std::vector<Feature3D>& features_C) {
-  timing::Timer integrate_timer("integrate/features");
+  timing::Timer integrate_timer("integrate_features");
 
   if (features_C.size() > 0u) {
     if (!features_C.at(0).descriptor.empty()) {
@@ -34,7 +37,7 @@ void FeatureIntegrator::integrateFeatures(
   }
   integrate_timer.Stop();
 
-  timing::Timer insertion_timer("inserting_missed_blocks");
+  timing::Timer insertion_timer("inserting_missed_feature_blocks");
   updateLayerWithStoredBlocks();
   insertion_timer.Stop();
 }
@@ -103,6 +106,23 @@ void FeatureIntegrator::updateFeatureBlock(
 
   std::lock_guard<std::mutex> lock((*block)->getMutex());
 
+  if (config_.match_descriptors_to_reject_duplicates &&
+      (*block)->numFeatures() > 0u) {
+    cv::Mat block_descriptors = (*block)->getDescriptors();
+    cv::BFMatcher matcher(cv::NORM_L2);
+    std::vector<cv::DMatch> best_match;
+    matcher.match(feature_G.descriptor, block_descriptors, best_match);
+    // TODO(ntonci): Hardcoded SIFT here, fix this!
+    // SIFT Features are converted to uints for perfromance reasons, however,
+    // are not normalized then.
+    // See: opencv_contrib/blob/master/modules/xfeatures2d/src/sift.cpp#L200
+    constexpr double kSIFTScaling = 512.0;
+    if (best_match.at(0).distance <
+        config_.descriptor_l2_distance_threshold * kSIFTScaling) {
+      // Descriptor is too similar to the one contained in the block.
+      return;
+    }
+  }
   (*block)->addFeature(feature_G);
   (*block)->set_has_data(true);
   (*block)->updated() = true;

@@ -33,6 +33,9 @@ class FeatureIntegrator {
     // sorting is not performed. Otherwise, features are sorted by quality and
     // top number_of_features_to_keep are kept.
     size_t number_of_features_to_keep = 0u;
+
+    bool match_descriptors_to_reject_duplicates = true;
+    double descriptor_l2_distance_threshold = 0.3;
   };
 
   FeatureIntegrator(const Config& config, FeatureLayer<Feature3D>* layer)

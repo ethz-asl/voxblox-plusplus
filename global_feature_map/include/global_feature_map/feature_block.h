@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <voxblox/core/common.h>
+#include <opencv2/opencv.hpp>
 #include "./FeatureBlock.pb.h"
 
 namespace voxblox {
@@ -81,6 +82,8 @@ class FeatureBlock {
       feature.keypoint -= shift;
     }
   }
+
+  cv::Mat getDescriptors();
 
   void mergeBlock(const FeatureBlock<FeatureType>& other_block);
 
