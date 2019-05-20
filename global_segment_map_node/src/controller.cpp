@@ -160,7 +160,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_config.voxel_carving_enabled = false;
   integrator_config.allow_clear = true;
   FloatingPoint truncation_distance_factor = 5.0f;
-  // integrator_config.max_ray_length_m = 2.5f;
   integrator_config.max_ray_length_m = 4.0f;
 
   node_handle_private_->param<bool>("voxel_carving_enabled",
