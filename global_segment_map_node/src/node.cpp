@@ -31,6 +31,9 @@ int main(int argc, char** argv) {
     controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
   }
 
+  ros::Subscriber feature_sub;
+  controller->subscribeFeatureTopic(&feature_sub);
+
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
@@ -55,6 +58,11 @@ int main(int argc, char** argv) {
     controller->advertiseBboxTopic(&bbox_pub);
   }
 
+  ros::Publisher feature_block_pub;
+  if (controller->publish_feature_blocks_marker_) {
+    controller->advertiseFeatureBlockTopic(&feature_block_pub);
+  }
+
   ros::ServiceServer publish_scene_srv;
   controller->advertisePublishSceneService(&publish_scene_srv);
 
@@ -64,8 +72,8 @@ int main(int argc, char** argv) {
   ros::ServiceServer generate_mesh_srv;
   controller->advertiseGenerateMeshService(&generate_mesh_srv);
 
-  ros::ServiceServer extract_segments_srv;
-  controller->advertiseExtractSegmentsService(&extract_segments_srv);
+  ros::ServiceServer save_segments_as_mesh_srv;
+  controller->advertiseSaveSegmentsAsMeshService(&save_segments_as_mesh_srv);
 
   while (ros::ok() && !controller->noNewUpdatesReceived()) {
     ros::spinOnce();

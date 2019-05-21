@@ -18,4 +18,5 @@ voxel_carving_enabled: false
 max_ray_length_m: 2.5
 mesh_config:
   min_weight: 0.0001
-compute_and_publish_bbox_: false
+compute_and_publish_bbox: false
+publish_feature_blocks_marker: false

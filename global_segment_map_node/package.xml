@@ -24,7 +24,9 @@
   <depend>roscpp</depend>
   <depend>voxblox</depend>
   <depend>global_segment_map</depend>
+  <depend>global_feature_map</depend>
   <depend>voxblox_msgs</depend>
   <depend>voxblox_ros</depend>
+  <depend>opencv3_catkin</depend>
 
 </package>
