@@ -61,7 +61,7 @@ TEST_F(Feature3DLayerTest, testBlockFunctionality) {
   test_block->addFeature(test_feature);
   EXPECT_EQ(test_block->numFeatures(), 3u);
 
-  test_block->shiftFeatures(block_origin);
+  test_block->shiftBlockWithFeatures(block_origin);
   EXPECT_NEAR(
       (test_block->getFeature(0u).keypoint - Point(-0.1, 0.1, 0.1)).sum(), 0.0,
       kErrorThreshold);

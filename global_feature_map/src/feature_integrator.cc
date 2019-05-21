@@ -135,16 +135,16 @@ void FeatureIntegrator::updateLayerWithStoredBlocks() {
 
   for (const std::pair<const BlockIndex, FeatureBlock<Feature3D>::Ptr>&
            temp_block_pair : temp_block_map_) {
-    const BlockIndex block_idx = temp_block_pair.first;
+    const BlockIndex& block_idx = temp_block_pair.first;
     FeatureBlock<Feature3D>::Ptr block = temp_block_pair.second;
-    std::vector<Feature3D> features_G = block->getFeatures();
+    const std::vector<Feature3D>& features_G = block->getFeatures();
 
     FeatureBlock<Feature3D>::Ptr original_block =
         layer_->allocateBlockPtrByIndex(block_idx);
 
     // TODO(ntonci): Do the sorting here or in modelify. If done here consider
     // implementing it as mergeBlock function.
-    for (Feature3D& feature_G : features_G) {
+    for (const Feature3D& feature_G : features_G) {
       original_block->addFeature(feature_G);
     }
   }

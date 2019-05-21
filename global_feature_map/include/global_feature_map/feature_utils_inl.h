@@ -54,9 +54,7 @@ void centerBlocksOfFeatureLayer(FeatureLayer<FeatureType>* layer,
   for (const BlockIndex& block_index : block_indices) {
     typename FeatureBlock<FeatureType>::Ptr block_ptr =
         layer->getBlockPtrByIndex(block_index);
-    const Point new_origin = block_ptr->origin() - *new_layer_origin;
-    block_ptr->setOrigin(new_origin);
-    block_ptr->shiftFeatures(*new_layer_origin);
+    block_ptr->shiftBlockWithFeatures(*new_layer_origin);
 
     // Extract block and shift block index.
     temporary_map.emplace(block_index - index_centroid, block_ptr);
