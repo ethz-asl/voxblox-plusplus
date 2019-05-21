@@ -5,12 +5,15 @@
 #include <vector>
 
 #include <glog/logging.h>
+#include <voxblox/alignment/icp.h>
 #include <voxblox/core/layer.h>
 #include <voxblox/core/voxel.h>
 #include <voxblox/integrator/integrator_utils.h>
 #include <voxblox/integrator/tsdf_integrator.h>
 #include <voxblox/utils/timing.h>
+
 #include "global_segment_map/common.h"
+#include "global_segment_map/icp_utils.h"
 #include "global_segment_map/label_tsdf_map.h"
 #include "global_segment_map/segment.h"
 #include "global_segment_map/semantic_instance_label_fusion.h"
@@ -29,7 +32,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // Label propagation parameters.
     // TODO(margaritaG): maybe use a relative measure, not absolue voxel count.
     // Minimum number of label voxels count for label propagation.
-    size_t min_label_voxel_count = 20;
+    size_t min_label_voxel_count = 20u;
+    size_t max_num_icp_updates = 15u;
     // Truncation distance factor for label propagation.
     float label_propagation_td_factor = 1.0;
 
@@ -46,11 +50,19 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // objects are published.
     int max_segment_age = 3;
 
+    // Mode of the ThreadSafeIndex, determines the integration order of the
+    // rays. Options: "mixed", "sorted"
+    std::string integration_order_mode = "mixed";
+
     // Distance-based log-normal distribution of label confidence weights.
     bool enable_confidence_weight_dropoff = false;
     float lognormal_weight_mean = 0.0f;
     float lognormal_weight_sigma = 1.8f;
     float lognormal_weight_offset = 0.7f;
+
+    // ICP params.
+    bool enable_icp = false;
+    bool keep_track_of_icp_correction = false;
   };
 
   LabelTsdfIntegrator(const Config& tsdf_config,
@@ -80,6 +92,11 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // Object database.
   void getLabelsToPublish(
       std::vector<voxblox::Label>* segment_labels_to_publish);
+
+  LabelTsdfConfig getLabelTsdfConfig() const { return label_tsdf_config_; }
+
+  Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
+                                     const Pointcloud& point_cloud);
 
  protected:
   // Label propagation.
@@ -220,6 +237,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Pairwise confidence merging.
   LLMap pairwise_confidence_;
+
+  // ICP variables.
+  std::shared_ptr<ICP> icp_;
+  Transformation T_Gicp_G_;
 
   // Semantic instance-aware segmentation.
   SemanticInstanceLabelFusion* semantic_instance_label_fusion_ptr_;

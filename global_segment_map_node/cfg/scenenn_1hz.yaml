@@ -1,21 +1,22 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "world"
-scene_gsm_update_topic: "scene_update"
-segment_gsm_update_topic: "gsm_update"
-max_segment_age: 6
-publish_gsm_updates: false
-validate_merged_object: "validate_merged_object"
-enable_pairwise_confidence_merging: true
-merging_min_overlap_ratio: 0.15
-merging_min_frame_count: 3
-mesh_color_scheme: "geometric_instance_label"
-mesh_filename: "gsm_scenenn_mesh.ply"
-publish_segment_mesh: false
-publish_scene_mesh: false
-update_mesh_every_n_sec: 0.5
-visualize: true
-voxel_size: 0.01
-voxels_per_side: 8
-truncation_distance_factor: 5.0
-voxel_carving_enabled: false
-max_ray_length_m: 3
+
+voxblox:
+  voxel_size: 0.01
+  voxels_per_side: 8
+  truncation_distance_factor: 5.0
+  voxel_carving_enabled: false
+  min_ray_length_m: 0.1
+  max_ray_length_m: 3
+
+pairwise_confidence_merging:
+  enable_pairwise_confidence_merging: true
+  merging_min_overlap_ratio: 0.15
+  merging_min_frame_count: 3
+
+meshing:
+  visualize: true
+  update_mesh_every_n_sec: 1.0
+  publish_segment_mesh: false
+  publish_scene_mesh: false
+  mesh_filename: "gsm_scenenn_mesh.ply"

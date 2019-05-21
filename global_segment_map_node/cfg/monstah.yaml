@@ -3,11 +3,12 @@ world_frame_id: "map"
 camera_frame_id: "camera0"
 
 voxblox:
-  voxel_size: 0.01
+  voxel_size: 0.02
   voxels_per_side: 8
-  truncation_distance_factor: 5.0
+  truncation_distance_factor: 3.0
   voxel_carving_enabled: false
-  max_ray_length_m: 2.5
+  max_ray_length_m: 3.5
+
 
 pairwise_confidence_merging:
   enable_pairwise_confidence_merging: false
@@ -16,7 +17,7 @@ pairwise_confidence_merging:
 
 object_database:
   publish_gsm_updates: true
-  max_segment_age: 50
+  max_segment_age: 10
   scene_gsm_update_topic: "all_gsm_updates"
   segment_gsm_update_topic: "all_gsm_updates"
   validate_merged_object: "validate_merged_object"
@@ -24,7 +25,7 @@ object_database:
 meshing:
   publish_segment_mesh: false
   publish_scene_mesh: false
-  mesh_filename: "gsm_tango_mesh.ply"
+  mesh_filename: "monstah_mesh.ply"
 
 sliding_window:
   is_on: false

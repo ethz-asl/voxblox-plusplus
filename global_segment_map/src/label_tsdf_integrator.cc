@@ -886,4 +886,48 @@ void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
   }
 }
 
+Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
+    const Transformation& T_G_C_init, const Pointcloud& point_cloud) {
+  // TODO(ff): We should actually check here how many blocks are in the
+  // camera frustum.
+  if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
+    return T_G_C_init;
+  }
+  Transformation T_Gicp_C;
+  timing::Timer icp_timer("icp");
+  if (!label_tsdf_config_.keep_track_of_icp_correction) {
+    T_Gicp_G_.setIdentity();
+  }
+
+  const size_t num_icp_updates =
+      icp_->runICP(*layer_, point_cloud, T_Gicp_G_ * T_G_C_init, &T_Gicp_C);
+  if (num_icp_updates == 0u ||
+      num_icp_updates > label_tsdf_config_.max_num_icp_updates) {
+    LOG(INFO) << "num_icp_updates is too high or 0: " << num_icp_updates
+              << ", using T_G_C_init.";
+    return T_G_C_init;
+  }
+  LOG(INFO) << "ICP refinement performed " << num_icp_updates
+            << " successful update steps.";
+  T_Gicp_G_ = T_Gicp_C * T_G_C_init.inverse();
+
+  if (!label_tsdf_config_.keep_track_of_icp_correction) {
+    LOG(INFO) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
+  } else {
+    LOG(INFO) << "ICP refinement for this pointcloud: T_Gicp_G: " << T_Gicp_G_;
+  }
+
+  if (!icp_->refiningRollPitch()) {
+    // its already removed internally but small floating point errors can
+    // build up if accumulating transforms
+    Transformation::Vector6 vec_T_Gicp_G = T_Gicp_G_.log();
+    vec_T_Gicp_G[3] = 0.0;
+    vec_T_Gicp_G[4] = 0.0;
+    T_Gicp_G_ = Transformation::exp(vec_T_Gicp_G);
+  }
+
+  icp_timer.Stop();
+  return T_Gicp_C;
+}
+
 }  // namespace voxblox
