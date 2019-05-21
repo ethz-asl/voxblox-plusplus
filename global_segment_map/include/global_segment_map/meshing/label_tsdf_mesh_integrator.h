@@ -94,10 +94,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
   const SemanticInstanceLabelFusion* semantic_instance_label_fusion_ptr_;
 
-  // const std::map<Label, std::map<SemanticLabel, int>>*
-  // label_class_count_ptr_; const std::map<Label, std::map<SemanticLabel,
-  // int>>* label_instance_count_ptr_;
-  // const std::map<Label, int>* label_frames_count_ptr_;
   std::set<SemanticLabel>* all_semantic_labels_ptr_;
   bool* remesh_ptr_;
   // This parameter is used if no valid remesh_ptr is provided to the class at
