@@ -499,9 +499,10 @@ void LabelTsdfIntegrator::integratePointCloud(const Transformation& T_G_C,
   // cleared.
   LongIndexHashMapType<AlignedVector<size_t>>::type clear_map;
 
-  ThreadSafeIndex index_getter(points_C.size());
+  std::unique_ptr<ThreadSafeIndex> index_getter(
+      ThreadSafeIndexFactory::get(config_.integration_order_mode, points_C));
 
-  bundleRays(T_G_C, points_C, freespace_points, &index_getter, &voxel_map,
+  bundleRays(T_G_C, points_C, freespace_points, index_getter.get(), &voxel_map,
              &clear_map);
 
   integrateRays(T_G_C, points_C, colors, label, config_.enable_anti_grazing,

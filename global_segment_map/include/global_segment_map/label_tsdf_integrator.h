@@ -50,10 +50,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // objects are published.
     int max_segment_age = 3;
 
-    // Mode of the ThreadSafeIndex, determines the integration order of the
-    // rays. Options: "mixed", "sorted"
-    std::string integration_order_mode = "mixed";
-
     // Distance-based log-normal distribution of label confidence weights.
     bool enable_confidence_weight_dropoff = false;
     float lognormal_weight_mean = 0.0f;
