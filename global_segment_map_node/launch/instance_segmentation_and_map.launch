@@ -1,5 +1,5 @@
 <launch>
-  <!-- <arg name="rgb_topic" default="/camera/rgb/image_raw" />
+  <arg name="rgb_topic" default="/camera/rgb/image_raw" />
   <arg name="depth_registered_topic" default="/camera/depth/image_raw"/>
   <arg name="depth_camera_info_topic" default="/camera/depth/camera_info" />
   <arg name="rgb_camera_info_topic" default="/camera/rgb/camera_info" />
@@ -18,7 +18,7 @@
     <remap from="/camera/depth/camera_info" to="$(arg depth_camera_info_topic)" />
     <remap from="/camera/rgb/camera_info" to="$(arg rgb_camera_info_topic)" />
     <remap from="/rgbd_segmentation_node/segmentation" to="$(arg segmentation_topic)" />
-  </node> -->
+  </node>
 
   <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/scenenn.yaml"/>
 
