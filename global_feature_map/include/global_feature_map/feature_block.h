@@ -43,7 +43,7 @@ class FeatureBlock {
 
   inline FloatingPoint block_size() const { return block_size_; }
 
-  inline Point origin() const { return origin_; }
+  inline const Point& origin() const { return origin_; }
   inline void setOrigin(const Point& new_origin) { origin_ = new_origin; }
 
   inline void set_updated(bool updated) { updated_ = updated; }
@@ -77,7 +77,8 @@ class FeatureBlock {
 
   inline size_t numFeatures() const { return features_.size(); }
 
-  inline void shiftFeatures(const Point& shift) {
+  inline void shiftBlockWithFeatures(const Point& shift) {
+    setOrigin(origin_ - shift);
     for (FeatureType& feature : features_) {
       feature.keypoint -= shift;
     }

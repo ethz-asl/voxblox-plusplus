@@ -24,12 +24,14 @@ void FeatureIntegrator::integrateFeatures(
     }
   }
 
-  MixedThreadSafeIndex index_getter(features_C.size());
+  std::unique_ptr<ThreadSafeIndex> index_getter(
+      new MixedThreadSafeIndex(features_C.size()));
 
   std::list<std::thread> integration_threads;
   for (size_t i = 0; i < config_.integrator_threads; ++i) {
     integration_threads.emplace_back(&FeatureIntegrator::integrateFunction,
-                                     this, T_G_C, features_C, &index_getter);
+                                     this, T_G_C, features_C,
+                                     index_getter.get());
   }
 
   for (std::thread& thread : integration_threads) {
@@ -133,16 +135,16 @@ void FeatureIntegrator::updateLayerWithStoredBlocks() {
 
   for (const std::pair<const BlockIndex, FeatureBlock<Feature3D>::Ptr>&
            temp_block_pair : temp_block_map_) {
-    const BlockIndex block_idx = temp_block_pair.first;
+    const BlockIndex& block_idx = temp_block_pair.first;
     FeatureBlock<Feature3D>::Ptr block = temp_block_pair.second;
-    std::vector<Feature3D> features_G = block->getFeatures();
+    const std::vector<Feature3D>& features_G = block->getFeatures();
 
     FeatureBlock<Feature3D>::Ptr original_block =
         layer_->allocateBlockPtrByIndex(block_idx);
 
     // TODO(ntonci): Do the sorting here or in modelify. If done here consider
     // implementing it as mergeBlock function.
-    for (Feature3D& feature_G : features_G) {
+    for (const Feature3D& feature_G : features_G) {
       original_block->addFeature(feature_G);
     }
   }

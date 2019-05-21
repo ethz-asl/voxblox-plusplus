@@ -169,7 +169,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_config.voxel_carving_enabled = false;
   integrator_config.allow_clear = true;
   FloatingPoint truncation_distance_factor = 5.0f;
-  // integrator_config.max_ray_length_m = 2.5f;
   integrator_config.max_ray_length_m = 4.0f;
 
   node_handle_private_->param<bool>("voxel_carving_enabled",
@@ -545,10 +544,10 @@ void Controller::segmentPointCloudCallback(
     constexpr bool kIsFreespacePointcloud = false;
 
     start = ros::WallTime::now();
-    if (segments_to_integrate_.size() > 0) {
+    if (segments_to_integrate_.size() > 0u) {
       Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
       Pointcloud point_cloud_all_segments_t;
-      for (const auto& segment : segments_to_integrate_) {
+      for (Segment* segment : segments_to_integrate_) {
         // Concatenate point clouds. (NOTE(ff): We should probably just use the
         // original cloud here instead.)
         Pointcloud::iterator it = point_cloud_all_segments_t.end();
@@ -557,14 +556,14 @@ void Controller::segmentPointCloudCallback(
       }
 
       Transformation T_Gicp_C = T_G_C;
-      LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_config =
+      const LabelTsdfIntegrator::LabelTsdfConfig& label_tsdf_config =
           integrator_->getLabelTsdfConfig();
       if (label_tsdf_config.enable_icp) {
         T_Gicp_C =
             integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
       }
 
-      for (const auto& segment : segments_to_integrate_) {
+      for (Segment* segment : segments_to_integrate_) {
         segment->T_G_C_ = T_Gicp_C;
         integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                          segment->colors_, segment->labels_,
