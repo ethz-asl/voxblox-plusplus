@@ -27,4 +27,5 @@ meshing:
   publish_scene_mesh: false
   mesh_filename: "gsm_tango_mesh.ply"
   min_weight: 0.0001
-  compute_and_publish_bbox_: false
+  compute_and_publish_bbox: false
+  publish_feature_blocks_marker: false

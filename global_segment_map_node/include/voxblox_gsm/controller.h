@@ -6,11 +6,17 @@
 #include <vector>
 
 #include <geometry_msgs/Transform.h>
+#include <global_feature_map/feature_block.h>
+#include <global_feature_map/feature_integrator.h>
+#include <global_feature_map/feature_layer.h>
+#include <global_feature_map/feature_types.h>
+#include <global_feature_map/feature_utils.h>
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
 #include <global_segment_map/utils/visualizer.h>
+#include <modelify_msgs/Features.h>
 #include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
 #include <ros/ros.h>
@@ -25,13 +31,25 @@
 namespace voxblox {
 namespace voxblox_gsm {
 
-typedef std::pair<Layer<TsdfVoxel>, Layer<LabelVoxel>> LayerPair;
+typedef std::tuple<Layer<TsdfVoxel>, Layer<LabelVoxel>, FeatureLayer<Feature3D>>
+    LayerTuple;
+
+enum LayerAccessor {
+  kTsdfLayer = 0,
+  kLabelLayer = 1,
+  kFeatureLayer = 2,
+  kCount
+};
 
 class Controller {
  public:
   Controller(ros::NodeHandle* node_handle);
 
   ~Controller();
+
+  void subscribeFeatureTopic(ros::Subscriber* feature_sub);
+
+  void advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub);
 
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
@@ -53,8 +71,8 @@ class Controller {
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
-  void advertiseExtractSegmentsService(
-      ros::ServiceServer* extract_segments_srv);
+  void advertiseSaveSegmentsAsMeshService(
+      ros::ServiceServer* save_segments_as_mesh_srv);
 
   void advertiseExtractInstancesService(
       ros::ServiceServer* extract_instances_srv);
@@ -65,6 +83,11 @@ class Controller {
 
   bool noNewUpdatesReceived() const;
 
+  virtual void extractSegmentLayers(
+      const std::vector<Label>& labels,
+      std::unordered_map<Label, LayerTuple>* label_layers_map,
+      bool labels_list_is_complete = false);
+
   bool enable_semantic_instance_segmentation_;
 
   bool publish_gsm_updates_;
@@ -72,12 +95,15 @@ class Controller {
   bool publish_scene_mesh_;
   bool publish_segment_mesh_;
   bool compute_and_publish_bbox_;
+  bool publish_feature_blocks_marker_;
 
   bool use_label_propagation_;
 
   double no_update_timeout_;
 
  protected:
+  virtual void featureCallback(const modelify_msgs::Features& features_msg);
+
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
@@ -91,8 +117,8 @@ class Controller {
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
 
-  bool extractSegmentsCallback(std_srvs::Empty::Request& request,
-                               std_srvs::Empty::Response& response);
+  bool saveSegmentsAsMeshCallback(std_srvs::Empty::Request& request,
+                                  std_srvs::Empty::Response& response);
 
   bool extractInstancesCallback(std_srvs::Empty::Request& request,
                                 std_srvs::Empty::Response& response);
@@ -139,6 +165,10 @@ class Controller {
   std::shared_ptr<LabelTsdfMap> map_;
   std::shared_ptr<LabelTsdfIntegrator> integrator_;
 
+  bool received_first_feature_;
+  std::shared_ptr<FeatureLayer<Feature3D>> feature_layer_;
+  std::shared_ptr<FeatureIntegrator> feature_integrator_;
+
   MeshIntegratorConfig mesh_config_;
   MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config_;
   ros::Timer update_mesh_timer_;
@@ -172,6 +202,7 @@ class Controller {
   std::map<Label, std::set<Label>> merges_to_publish_;
   std::set<Label> all_published_segments_;
   ros::Publisher* bbox_pub_;
+  ros::Publisher* feature_block_pub_;
 
   std::thread viz_thread_;
   Visualizer* visualizer_;

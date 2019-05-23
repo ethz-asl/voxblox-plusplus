@@ -18,8 +18,8 @@ pairwise_confidence_merging:
 object_database:
   publish_gsm_updates: true
   max_segment_age: 10
-  scene_gsm_update_topic: "all_gsm_updates"
-  segment_gsm_update_topic: "all_gsm_updates"
+  scene_gsm_update_topic: "gsm_updates"
+  segment_gsm_update_topic: "gsm_updates"
   validate_merged_object: "validate_merged_object"
 
 meshing:
