@@ -21,7 +21,7 @@ pairwise_confidence_merging:
   # pairwise_confidence_count_threshold: 0.15, 14, 0.13 9,10 very good.
 
 semantic_instance_segmentation:
-  enable_semantic_instance_segmentation: true
+  enable_semantic_instance_segmentation: false
   class_task: coco80
 
 object_database:
@@ -33,7 +33,7 @@ object_database:
 
 meshing:
   visualize: true
-  update_mesh_every_n_sec: 1.0
+  update_mesh_every_n_sec: 4.0
   publish_segment_mesh: false
   publish_scene_mesh: false
   mesh_filename: "gsm_scenenn_mesh.ply"

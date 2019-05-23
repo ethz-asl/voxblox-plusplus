@@ -6,7 +6,7 @@ namespace voxblox {
 
 void InstanceColorMap::getColor(const InstanceLabel& instance_label,
                                 Color* color) {
-  DCHECK(color != nullptr);
+  CHECK_NOTNULL(color);
 
   auto instance_color_map_it = color_map_.find(instance_label);
 
@@ -15,9 +15,9 @@ void InstanceColorMap::getColor(const InstanceLabel& instance_label,
   } else {
     if (instance_label == 0u) {
       // TODO(margaritaG): parametrize the grey color.
-      color->r = 200;
-      color->g = 200;
-      color->b = 200;
+      color->r = 200u;
+      color->g = 200u;
+      color->b = 200u;
     } else {
       *color = randomColor();
     }

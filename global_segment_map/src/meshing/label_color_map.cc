@@ -5,7 +5,7 @@
 namespace voxblox {
 
 void LabelColorMap::getColor(const Label& label, Color* color) {
-  DCHECK(color != nullptr);
+  CHECK_NOTNULL(color);
   CHECK_NE(label, 0u);
 
   auto label_color_map_it = color_map_.find(label);

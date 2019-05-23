@@ -12,6 +12,7 @@ SemanticColorMap SemanticColorMap::create(ClassTask class_task) {
 
 void SemanticColorMap::getColor(const SemanticLabel& semantic_label,
                                 Color* color) const {
+  CHECK_NOTNULL(color);
   color->r = color_code_.at(semantic_label)[0];
   color->g = color_code_.at(semantic_label)[1];
   color->b = color_code_.at(semantic_label)[2];

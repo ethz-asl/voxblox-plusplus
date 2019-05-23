@@ -40,7 +40,7 @@ void LabelTsdfMap::extractSegmentLayers(
     const std::vector<Label>& labels,
     std::unordered_map<Label, LayerPair>* label_layers_map,
     bool labels_list_is_complete) {
-  CHECK(label_layers_map);
+  CHECK_NOTNULL(label_layers_map);
 
   // Map a label to its corresponding TSDF and label layers.
   Layer<TsdfVoxel> tsdf_layer_empty(config_.voxel_size,
@@ -62,7 +62,7 @@ void LabelTsdfMap::extractSegmentLayers(
         label_layer_->getBlockPtrByIndex(block_index);
 
     const size_t vps = global_label_block->voxels_per_side();
-    for (size_t i = 0; i < vps * vps * vps; ++i) {
+    for (size_t i = 0u; i < vps * vps * vps; ++i) {
       const LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
 
@@ -108,6 +108,7 @@ void LabelTsdfMap::extractSegmentLayers(
 void LabelTsdfMap::extractInstanceLayers(
     const InstanceLabels& instance_labels,
     std::unordered_map<InstanceLabel, LayerPair>* instance_layers_map) {
+  CHECK_NOTNULL(instance_layers_map);
   // Map an instance label to its corresponding TSDF and label layers.
   Layer<TsdfVoxel> tsdf_layer_empty(config_.voxel_size,
                                     config_.voxels_per_side);
@@ -128,7 +129,7 @@ void LabelTsdfMap::extractInstanceLayers(
         label_layer_->getBlockPtrByIndex(block_index);
 
     const size_t vps = global_label_block->voxels_per_side();
-    for (size_t i = 0; i < vps * vps * vps; ++i) {
+    for (size_t i = 0u; i < vps * vps * vps; ++i) {
       const LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
 

@@ -478,34 +478,37 @@ void Controller::segmentPointCloudCallback(
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
-    timing::Timer ptcloud_timer("label_propagation");
 
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
              segment_point_cloud_msg->header.stamp.toSec());
-    ros::WallTime start;
-    ros::WallTime end;
-    if (use_label_propagation_) {
-      start = ros::WallTime::now();
 
-      integrator_->decideLabelPointClouds(&segments_to_integrate_,
-                                          &segment_label_candidates,
-                                          &segment_merge_candidates_);
-
-      end = ros::WallTime::now();
-      ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
-               segments_to_integrate_.size(), (end - start).toSec());
-    }
-
-    constexpr bool kIsFreespacePointcloud = false;
-
-    start = ros::WallTime::now();
     if (segments_to_integrate_.size() > 0u) {
+      ros::WallTime start;
+      ros::WallTime end;
+
+      if (use_label_propagation_) {
+        start = ros::WallTime::now();
+        timing::Timer propagation_timer("label_propagation");
+
+        integrator_->decideLabelPointClouds(&segments_to_integrate_,
+                                            &segment_label_candidates,
+                                            &segment_merge_candidates_);
+        propagation_timer.Stop();
+        end = ros::WallTime::now();
+        ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
+                 segments_to_integrate_.size(), (end - start).toSec());
+      }
+
+      constexpr bool kIsFreespacePointcloud = false;
+
+      start = ros::WallTime::now();
+      timing::Timer integrate_timer("integrate_frame_pointclouds");
       Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
       Pointcloud point_cloud_all_segments_t;
       for (Segment* segment : segments_to_integrate_) {
-        // Concatenate point clouds. (NOTE(ff): We should probably just use the
-        // original cloud here instead.)
+        // Concatenate point clouds. (NOTE(ff): We should probably just use
+        // the original cloud here instead.)
         Pointcloud::iterator it = point_cloud_all_segments_t.end();
         point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
                                           segment->points_C_.end());
@@ -518,16 +521,26 @@ void Controller::segmentPointCloudCallback(
             integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
       }
 
-      for (Segment* segment : segments_to_integrate_) {
-        segment->T_G_C_ = T_Gicp_C;
-        integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                         segment->colors_, segment->label_,
-                                         kIsFreespacePointcloud);
+      {
+        std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
+        integrator_->count_new = 0;
+        for (Segment* segment : segments_to_integrate_) {
+          segment->T_G_C_ = T_Gicp_C;
+
+          integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                           segment->colors_, segment->label_,
+                                           kIsFreespacePointcloud);
+        }
       }
 
+      integrate_timer.Stop();
       end = ros::WallTime::now();
-      ROS_INFO("Finished integrating %lu pointclouds in %f seconds.",
-               segments_to_integrate_.size(), (end - start).toSec());
+      ROS_INFO(
+          "Integrated %lu pointclouds in %f secs, have %lu tsdf "
+          "and %lu label blocks.",
+          segments_to_integrate_.size(), (end - start).toSec(),
+          map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks(),
+          map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks());
 
       start = ros::WallTime::now();
 
@@ -536,7 +549,7 @@ void Controller::segmentPointCloudCallback(
 
       end = ros::WallTime::now();
       ROS_INFO(
-          "Finished merging segments and fetching the ones to publish in %f "
+          "Merged segments and fetched the ones to publish in %f "
           "seconds.",
           (end - start).toSec());
       start = ros::WallTime::now();
@@ -555,6 +568,8 @@ void Controller::segmentPointCloudCallback(
       if (publish_gsm_updates_ && publishObjects()) {
         publishScene();
       }
+    } else {
+      ROS_INFO("No segments to integrate.");
     }
   }
   received_first_message_ = true;
@@ -595,13 +610,6 @@ void Controller::segmentPointCloudCallback(
       segment = new Segment(point_cloud, T_G_C);
     }
     segments_to_integrate_.push_back(segment);
-
-    // if (use_label_propagation_) {
-    //   fillSegmentWithData(segment_point_cloud_msg, segment);
-    // } else {
-    //   fillSegmentWithData<PointSurfelLabel>(segment_point_cloud_msg,
-    //   segment);
-    // }
     ptcloud_timer.Stop();
 
     timing::Timer label_candidates_timer("compute_label_candidates");
@@ -1047,6 +1055,8 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     if (publish_scene_mesh_) {
       timing::Timer publish_mesh_timer("mesh/publish");
       voxblox_msgs::Mesh mesh_msg;
+      // TODO(margaritaG) : this function cleans up empty meshes, and this seems
+      // to trouble the visualizer. Investigate.
       generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
       mesh_msg.header.frame_id = world_frame_;
       scene_mesh_pub_->publish(mesh_msg);
@@ -1087,11 +1097,12 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       only_mesh_updated_blocks = false;
       need_full_remesh_ = false;
     }
-    bool clear_updated_flag = false;
-    updated_mesh_ |= mesh_label_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
 
     if (enable_semantic_instance_segmentation_) {
+      bool clear_updated_flag = false;
+      updated_mesh_ |= mesh_label_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
+
       updated_mesh_ |= mesh_merged_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
 
@@ -1101,12 +1112,18 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       clear_updated_flag = true;
       updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
+    } else {
+      bool clear_updated_flag = true;
+      updated_mesh_ |= mesh_label_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
     }
     generate_mesh_timer.Stop();
 
     if (publish_scene_mesh_) {
       timing::Timer publish_mesh_timer("mesh/publish");
       voxblox_msgs::Mesh mesh_msg;
+      // TODO(margaritaG) : this function cleans up empty meshes, and this seems
+      // to trouble the visualizer. Investigate.
       generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
       mesh_msg.header.frame_id = world_frame_;
       scene_mesh_pub_->publish(mesh_msg);

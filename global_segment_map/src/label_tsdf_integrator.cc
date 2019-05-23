@@ -17,6 +17,7 @@ LabelTsdfIntegrator::LabelTsdfIntegrator(
 void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(
     Label label, int label_points_count, int segment_points_count,
     std::unordered_set<Label>* merge_candidate_labels) {
+  CHECK_NOTNULL(merge_candidate_labels);
   // All segment labels that overlap with more than a certain
   // percentage of the segment points are potential merge candidates.
   float label_segment_overlap_ratio = static_cast<float>(label_points_count) /
@@ -31,6 +32,8 @@ void LabelTsdfIntegrator::increaseLabelCountForSegment(
     Segment* segment, Label label, int segment_points_count,
     std::map<Label, std::map<Segment*, size_t>>* candidates,
     std::unordered_set<Label>* merge_candidate_labels) {
+  CHECK_NOTNULL(candidates);
+  CHECK_NOTNULL(merge_candidate_labels);
   auto label_it = candidates->find(label);
   if (label_it != candidates->end()) {
     auto segment_it = label_it->second.find(segment);
@@ -120,6 +123,7 @@ Label LabelTsdfIntegrator::getNextUnassignedLabel(
 
 void LabelTsdfIntegrator::updateVoxelLabelAndConfidence(
     LabelVoxel* label_voxel, const Label& preferred_label) {
+  CHECK_NOTNULL(label_voxel);
   Label max_label = 0u;
   LabelConfidence max_confidence = 0u;
   for (const LabelCount& label_count : label_voxel->label_count) {
@@ -137,6 +141,7 @@ void LabelTsdfIntegrator::updateVoxelLabelAndConfidence(
 void LabelTsdfIntegrator::addVoxelLabelConfidence(
     const Label& label, const LabelConfidence& confidence,
     LabelVoxel* label_voxel) {
+  CHECK_NOTNULL(label_voxel);
   bool updated = false;
   for (LabelCount& label_count : label_voxel->label_count) {
     if (label_count.label == label) {
@@ -170,8 +175,9 @@ void LabelTsdfIntegrator::computeSegmentLabelCandidates(
     Segment* segment, std::map<Label, std::map<Segment*, size_t>>* candidates,
     std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
     const std::set<Label>& assigned_labels) {
-  DCHECK(segment != nullptr);
-  DCHECK(candidates != nullptr);
+  CHECK_NOTNULL(segment);
+  CHECK_NOTNULL(candidates);
+  CHECK_NOTNULL(segment_merge_candidates);
   // Flag to check whether there exists at least one label candidate.
   bool candidate_label_exists = false;
   const int segment_points_count = segment->points_C_.size();
@@ -229,6 +235,11 @@ bool LabelTsdfIntegrator::getNextSegmentLabelPair(
     std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
     std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
     std::pair<Segment*, Label>* segment_label_pair) {
+  CHECK_NOTNULL(assigned_labels);
+  CHECK_NOTNULL(candidates);
+  CHECK_NOTNULL(segment_merge_candidates);
+  CHECK_NOTNULL(segment_label_pair);
+
   Label max_label;
   size_t max_count = 0u;
   Segment* max_segment;
@@ -277,6 +288,9 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
     std::vector<voxblox::Segment*>* segments_to_integrate,
     std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
     std::map<Segment*, std::vector<Label>>* segment_merge_candidates) {
+  CHECK_NOTNULL(segments_to_integrate);
+  CHECK_NOTNULL(candidates);
+  CHECK_NOTNULL(segment_merge_candidates);
   std::set<Label> assigned_labels;
   std::set<Segment*> labelled_segments;
   std::pair<Segment*, Label> pair;
@@ -377,7 +391,9 @@ void LabelTsdfIntegrator::changeLabelCount(const Label label, int count) {
     }
   } else {
     if (label != 0u) {
-      DCHECK(count > 0);
+      // TODO(margaritaG) : This seems to not hold true occasionally,
+      // investigate.
+      // CHECK_GE(count, 0);
       label_count_map_ptr_->insert(std::make_pair(label, count));
     }
   }
@@ -386,8 +402,8 @@ void LabelTsdfIntegrator::changeLabelCount(const Label label, int count) {
 LabelVoxel* LabelTsdfIntegrator::allocateStorageAndGetLabelVoxelPtr(
     const GlobalIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
     BlockIndex* last_block_idx) {
-  DCHECK(last_block != nullptr);
-  DCHECK(last_block_idx != nullptr);
+  CHECK_NOTNULL(last_block);
+  CHECK_NOTNULL(last_block_idx);
 
   const BlockIndex block_idx =
       getBlockIndexFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_inv_);
@@ -418,8 +434,8 @@ LabelVoxel* LabelTsdfIntegrator::allocateStorageAndGetLabelVoxelPtr(
                          voxels_per_side_, voxel_size_,
                          getOriginPointFromGridIndex(block_idx, block_size_)));
 
-      DCHECK(insert_status.second) << "Block already exists when allocating at "
-                                   << block_idx.transpose();
+      CHECK(insert_status.second) << "Block already exists when allocating at "
+                                  << block_idx.transpose();
 
       *last_block = insert_status.first->second;
     }
@@ -450,6 +466,7 @@ void LabelTsdfIntegrator::updateLabelVoxel(const Point& point_G,
                                            const Label& label,
                                            LabelVoxel* label_voxel,
                                            const LabelConfidence& confidence) {
+  CHECK_NOTNULL(label_voxel);
   // Lookup the mutex that is responsible for this voxel and lock it.
   std::lock_guard<std::mutex> lock(mutexes_.get(
       getGridIndexFromPoint<GlobalIndex>(point_G, voxel_size_inv_)));
@@ -581,6 +598,7 @@ void LabelTsdfIntegrator::integrateVoxel(
     updateTsdfVoxel(origin, merged_point_G, global_voxel_idx, merged_color,
                     merged_weight, tsdf_voxel);
 
+    // TODO(margaritaG): parametrize.
     // If voxel carving is enabled, then only allocate the label voxels
     // within twice the truncation distance from the surface.
     if (!config_.voxel_carving_enabled ||
@@ -609,8 +627,8 @@ void LabelTsdfIntegrator::integrateVoxels(
     it = voxel_map.begin();
     map_size = voxel_map.size();
   }
-  for (size_t i = 0; i < map_size; ++i) {
-    if (((i + thread_idx + 1) % config_.integrator_threads) == 0) {
+  for (size_t i = 0u; i < map_size; ++i) {
+    if (((i + thread_idx + 1) % config_.integrator_threads) == 0u) {
       integrateVoxel(T_G_C, points_C, colors, label, enable_anti_grazing,
                      clearing_ray, *it, voxel_map);
     }
@@ -626,13 +644,13 @@ void LabelTsdfIntegrator::integrateRays(
   const Point& origin = T_G_C.getPosition();
 
   // if only 1 thread just do function call, otherwise spawn threads
-  if (config_.integrator_threads == 1) {
-    constexpr size_t thread_idx = 0;
+  if (config_.integrator_threads == 1u) {
+    constexpr size_t thread_idx = 0u;
     integrateVoxels(T_G_C, points_C, colors, label, enable_anti_grazing,
                     clearing_ray, voxel_map, clear_map, thread_idx);
   } else {
     std::list<std::thread> integration_threads;
-    for (size_t i = 0; i < config_.integrator_threads; ++i) {
+    for (size_t i = 0u; i < config_.integrator_threads; ++i) {
       integration_threads.emplace_back(
           &LabelTsdfIntegrator::integrateVoxels, this, T_G_C, points_C, colors,
           label, enable_anti_grazing, clearing_ray, voxel_map, clear_map, i);
@@ -687,7 +705,7 @@ void LabelTsdfIntegrator::swapLabels(Label old_label, Label new_label) {
     Block<LabelVoxel>::Ptr block =
         label_layer_->getBlockPtrByIndex(block_index);
     size_t vps = block->voxels_per_side();
-    for (int i = 0; i < vps * vps * vps; i++) {
+    for (int i = 0u; i < vps * vps * vps; i++) {
       LabelVoxel& voxel = block->getVoxelByLinearIndex(i);
       Label previous_label = voxel.label;
 
@@ -853,6 +871,7 @@ bool LabelTsdfIntegrator::getNextMerge(Label* new_label, Label* old_label) {
 
 // Not thread safe.
 void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
+  CHECK_NOTNULL(merges_to_publish);
   if (label_tsdf_config_.enable_pairwise_confidence_merging) {
     Label new_label;
     Label old_label;

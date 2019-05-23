@@ -7,7 +7,7 @@ Visualizer::Visualizer(
     bool* updated_mesh, std::mutex* updated_mesh_mutex_ptr)
     : mesh_layers_(mesh_layers),
       updated_mesh_(updated_mesh),
-      updated_mesh_mutex_ptr_(updated_mesh_mutex_ptr),
+      updated_mesh_mutex_ptr_(CHECK_NOTNULL(updated_mesh_mutex_ptr)),
       frame_count_(0u) {}
 
 // TODO(grinvalm): make it more efficient by only updating the
