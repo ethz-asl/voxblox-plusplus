@@ -68,8 +68,7 @@ void SlidingWindowController::extractSegmentLayers(
   if (!label_to_layers_.empty()) {
     *label_layers_map = label_to_layers_;
   } else {
-    map_->extractSegmentLayers(labels, label_layers_map,
-                               labels_list_is_complete);
+    extractSegmentLayers(labels, label_layers_map, labels_list_is_complete);
   }
 }
 

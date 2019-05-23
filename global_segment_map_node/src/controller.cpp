@@ -789,7 +789,7 @@ bool Controller::saveSegmentsAsMeshCallback(
   Labels labels = map_->getLabelList();
   static constexpr bool kConnectedMesh = false;
 
-  std::unordered_map<Label, LayerPair> label_to_layers;
+  std::unordered_map<Label, LabelTsdfMap::LayerPair> label_to_layers;
   // Extract the TSDF and label layers corresponding to a segment.
   constexpr bool kLabelsListIsComplete = false;
   map_->extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
@@ -922,7 +922,8 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
   InstanceLabels instance_labels = map_->getInstanceList();
   static constexpr bool kConnectedMesh = false;
 
-  std::unordered_map<InstanceLabel, LayerPair> instance_label_to_layers;
+  std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>
+      instance_label_to_layers;
   // Extract the TSDF and label layers corresponding to a segment.
   constexpr bool kLabelsListIsComplete = true;
   map_->extractInstanceLayers(instance_labels, &instance_label_to_layers);
