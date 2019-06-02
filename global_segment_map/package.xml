@@ -17,6 +17,7 @@
 
   <depend>Boost</depend>
   <depend>eigen_catkin</depend>
+  <depend>global_feature_map</depend>
   <depend>glog_catkin</depend>
   <depend>pcl_catkin</depend>
   <depend>voxblox</depend>
