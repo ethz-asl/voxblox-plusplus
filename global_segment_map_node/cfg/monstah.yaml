@@ -3,14 +3,15 @@ world_frame_id: "map"
 camera_frame_id: "camera0"
 scene_gsm_update_topic: "gsm_updates"
 segment_gsm_update_topic: "gsm_updates"
-object_flushing_age_threshold: 10
+object_flushing_age_threshold: 5
 validate_merged_object: "validate_merged_object"
-enable_pairwise_confidence_merging: false
-pairwise_confidence_ratio_threshold: 0.2
-pairwise_confidence_count_threshold: 30
+enable_pairwise_confidence_merging: true
+pairwise_confidence_ratio_threshold: 0.15
+pairwise_confidence_count_threshold: 1
 mesh_filename: "monstah_mesh.ply"
-publish_segment_mesh: false
-publish_scene_mesh: false
+publish_segment_mesh: true
+publish_scene_mesh: true
+update_mesh_every_n_sec: 0
 voxel_size: 0.02
 voxels_per_side: 8
 truncation_distance_factor: 3.0
@@ -27,3 +28,6 @@ sliding_window:
   # is larger than this fraction times the window radius, the window is updated
   # and its position is set equal the camera position.
   update_fraction: 0.5
+
+mesh_config:
+  min_weight: 3

@@ -561,11 +561,14 @@ void Controller::segmentPointCloudCallback(
             integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
       }
 
-      for (Segment* segment : segments_to_integrate_) {
-        segment->T_G_C_ = T_Gicp_C;
-        integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                         segment->colors_, segment->labels_,
-                                         kIsFreespacePointcloud);
+      {
+        boost::mutex::scoped_lock updateMeshLock(updateMeshMutex);
+        for (Segment* segment : segments_to_integrate_) {
+          segment->T_G_C_ = T_Gicp_C;
+          integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                           segment->colors_, segment->labels_,
+                                           kIsFreespacePointcloud);
+        }
       }
 
       end = ros::WallTime::now();
@@ -918,10 +921,6 @@ bool Controller::publishObjects(const bool publish_all) {
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_feature_layer_W);
 
     // Extract surfel cloud from layer.
-    MeshIntegratorConfig mesh_config;
-    node_handle_private_->param<float>("mesh_config/min_weight",
-                                       mesh_config.min_weight,
-                                       mesh_config.min_weight);
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
     convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
@@ -964,8 +963,8 @@ bool Controller::publishObjects(const bool publish_all) {
     transform.rotation.z = 0.;
     gsm_update_msg.object.transforms.clear();
     gsm_update_msg.object.transforms.push_back(transform);
-    gsm_update_msg.object.surfel_cloud.header.frame_id = world_frame_;
     pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
+    gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
@@ -1086,6 +1085,16 @@ void Controller::publishScene() {
   serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(), kSerializeOnlyUpdated,
                                   &gsm_update_msg.object.label_layer);
   // TODO(ntonci): Also publish feature layer for scene.
+
+  MeshIntegratorConfig mesh_config;
+  node_handle_private_->param<float>(
+      "mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
+  pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
+      new pcl::PointCloud<pcl::PointSurfel>());
+  convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config,
+                               surfel_cloud.get());
+  pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
+  gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
 
   gsm_update_msg.object.label = 0u;
   gsm_update_msg.old_labels.clear();
