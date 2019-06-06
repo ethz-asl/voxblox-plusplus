@@ -11,9 +11,9 @@ class SemanticColorMap {
  public:
   enum ClassTask { kCoco80 = 0, kNyu13 };
 
-  static SemanticColorMap create(ClassTask class_task);
+  static SemanticColorMap create(const ClassTask& class_task);
 
-  SemanticColorMap(const std::vector<std::array<float, 3>> color_code)
+  SemanticColorMap(const std::vector<std::array<float, 3>>& color_code)
       : color_code_(color_code) {}
 
   void getColor(const SemanticLabel& semantic_label, Color* color) const;

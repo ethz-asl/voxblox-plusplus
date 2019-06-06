@@ -109,15 +109,17 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
                                const std::set<Label>& assigned_labels);
 
   void checkForSegmentLabelMergeCandidate(
-      Label label, int label_points_count, int segment_points_count,
+      const Label& label, const int label_points_count,
+      const int segment_points_count,
       std::unordered_set<Label>* merge_candidate_labels);
 
   void increaseLabelCountForSegment(
-      Segment* segment, Label label, int segment_points_count,
+      Segment* segment, const Label& label, const int segment_points_count,
       std::map<Label, std::map<Segment*, size_t>>* candidates,
       std::unordered_set<Label>* merge_candidate_labels);
 
-  void increasePairwiseConfidenceCount(std::vector<Label> merge_candidates);
+  void increasePairwiseConfidenceCount(
+      const std::vector<Label>& merge_candidates);
 
   void updateVoxelLabelAndConfidence(LabelVoxel* label_voxel,
                                      const Label& preferred_label = 0u);
@@ -129,7 +131,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void increaseLabelFramesCount(const Label& label);
 
   // Increase or decrease the voxel count for a label.
-  void changeLabelCount(const Label label, int count);
+  void changeLabelCount(const Label& label, const int count);
 
   // Will return a pointer to a voxel located at global_voxel_idx in the label
   // layer. Thread safe.
@@ -174,10 +176,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
       const LongIndexHashMapType<AlignedVector<size_t>>::type& voxel_map,
       const LongIndexHashMapType<AlignedVector<size_t>>::type& clear_map);
 
-  FloatingPoint computeConfidenceWeight(FloatingPoint distance);
+  FloatingPoint computeConfidenceWeight(const FloatingPoint& distance);
 
   // Not thread safe.
-  void swapLabels(Label old_label, Label new_label);
+  void swapLabels(const Label& old_label, const Label& new_label);
 
   inline void clearCurrentFrameInstanceLabels() {
     current_to_global_instance_map_.clear();
@@ -185,7 +187,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void resetCurrentFrameUpdatedLabelsAge();
 
-  void addPairwiseConfidenceCount(LLMapIt label_map_it, Label label, int count);
+  void addPairwiseConfidenceCount(const LLMapIt& label_map_it,
+                                  const Label& label, const int count);
 
   void adjustPairwiseConfidenceAfterMerging(const Label& new_label,
                                             const Label& old_label);

@@ -274,7 +274,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       MeshLabelIntegrator::ColorScheme::kLabel;
   mesh_label_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, label_tsdf_mesh_config_, map_.get(),
-      mesh_label_layer_.get(), all_semantic_labels_, &need_full_remesh_));
+      mesh_label_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
 
   if (enable_semantic_instance_segmentation_) {
     mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
@@ -285,17 +285,17 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
         MeshLabelIntegrator::ColorScheme::kSemantic;
     mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_semantic_layer_.get(), all_semantic_labels_, &need_full_remesh_));
+        mesh_semantic_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
     label_tsdf_mesh_config_.color_scheme =
         MeshLabelIntegrator::ColorScheme::kInstance;
     mesh_instance_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_instance_layer_.get(), all_semantic_labels_, &need_full_remesh_));
+        mesh_instance_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
     label_tsdf_mesh_config_.color_scheme =
         MeshLabelIntegrator::ColorScheme::kMerged;
     mesh_merged_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_merged_layer_.get(), all_semantic_labels_, &need_full_remesh_));
+        mesh_merged_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
   }
 
   // Determine feature integrator parameters.
@@ -338,9 +338,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 #ifndef APPROXMVBB_AVAILABLE
   if (compute_and_publish_bbox_) {
     ROS_WARN_STREAM(
-        "ApproxMVBB is not available and therefore bounding box "
-        "functionality "
-        "is disabled.");
+        "ApproxMVBB is not available and therefore "
+        "bounding box functionality is disabled.");
   }
   compute_and_publish_bbox_ = false;
 #endif

@@ -80,7 +80,7 @@ class LabelTsdfMap {
   void extractSegmentLayers(
       const Labels& labels,
       std::unordered_map<Label, LayerPair>* label_layers_map,
-      bool labels_list_is_complete = false);
+      const bool labels_list_is_complete = false);
 
   void extractInstanceLayers(
       const InstanceLabels& instance_labels,

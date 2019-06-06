@@ -7,14 +7,15 @@ namespace voxblox {
 
 class Segment {
  public:
-  Segment(pcl::PointCloud<voxblox::PointType> point_cloud,
-          Transformation T_G_C);
+  Segment(const pcl::PointCloud<voxblox::PointType>& point_cloud,
+          const Transformation& T_G_C);
 
-  Segment(pcl::PointCloud<voxblox::PointLabelType> point_cloud,
-          Transformation T_G_C);
+  Segment(const pcl::PointCloud<voxblox::PointLabelType>& point_cloud,
+          const Transformation& T_G_C);
 
-  Segment(pcl::PointCloud<voxblox::PointSemanticInstanceType> point_cloud,
-          Transformation T_G_C);
+  Segment(
+      const pcl::PointCloud<voxblox::PointSemanticInstanceType>& point_cloud,
+      const Transformation& T_G_C);
 
   voxblox::Transformation T_G_C_;
   voxblox::Pointcloud points_C_;

@@ -4,7 +4,7 @@
 namespace voxblox {
 namespace utils {
 
-inline void getColorFromNormals(Point normals, Color* color) {
+inline void getColorFromNormals(const Point& normals, Color* color) {
   CHECK_NOTNULL(color);
 
   color->r = (normals.x() * 0.5f + 0.5f) * 255.0f;
@@ -14,7 +14,7 @@ inline void getColorFromNormals(Point normals, Color* color) {
 }
 
 inline void getColorFromLabelConfidence(const LabelVoxel& label_voxel,
-                                        LabelConfidence max_confidence,
+                                        const LabelConfidence& max_confidence,
                                         Color* color) {
   CHECK_NOTNULL(color);
   *color = rainbowColorMap(label_voxel.label_confidence / max_confidence);

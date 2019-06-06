@@ -39,7 +39,7 @@ InstanceLabels LabelTsdfMap::getInstanceList() {
 void LabelTsdfMap::extractSegmentLayers(
     const std::vector<Label>& labels,
     std::unordered_map<Label, LayerPair>* label_layers_map,
-    bool labels_list_is_complete) {
+    const bool labels_list_is_complete) {
   CHECK_NOTNULL(label_layers_map);
 
   // Map a label to its corresponding TSDF and label layers.

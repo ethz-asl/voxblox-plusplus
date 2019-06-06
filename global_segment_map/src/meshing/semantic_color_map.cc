@@ -1,7 +1,7 @@
 #include "global_segment_map/meshing/semantic_color_map.h"
 
 namespace voxblox {
-SemanticColorMap SemanticColorMap::create(ClassTask class_task) {
+SemanticColorMap SemanticColorMap::create(const ClassTask& class_task) {
   switch (class_task) {
     case kCoco80:
       return CocoColorMap();

@@ -15,7 +15,8 @@ LabelTsdfIntegrator::LabelTsdfIntegrator(
           map->getSemanticInstanceLabelFusionPtr()) {}
 
 void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(
-    Label label, int label_points_count, int segment_points_count,
+    const Label& label, const int label_points_count,
+    const int segment_points_count,
     std::unordered_set<Label>* merge_candidate_labels) {
   CHECK_NOTNULL(merge_candidate_labels);
   // All segment labels that overlap with more than a certain
@@ -29,7 +30,7 @@ void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(
 }
 
 void LabelTsdfIntegrator::increaseLabelCountForSegment(
-    Segment* segment, Label label, int segment_points_count,
+    Segment* segment, const Label& label, const int segment_points_count,
     std::map<Label, std::map<Segment*, size_t>>* candidates,
     std::unordered_set<Label>* merge_candidate_labels) {
   CHECK_NOTNULL(candidates);
@@ -56,7 +57,7 @@ void LabelTsdfIntegrator::increaseLabelCountForSegment(
 }
 
 void LabelTsdfIntegrator::increasePairwiseConfidenceCount(
-    std::vector<Label> merge_candidates) {
+    const std::vector<Label>& merge_candidates) {
   for (size_t i = 0u; i < merge_candidates.size(); ++i) {
     for (size_t j = i + 1; j < merge_candidates.size(); ++j) {
       Label new_label = merge_candidates[i];
@@ -382,7 +383,8 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
 }
 
 // Increase or decrease the voxel count for a label.
-void LabelTsdfIntegrator::changeLabelCount(const Label label, int count) {
+void LabelTsdfIntegrator::changeLabelCount(const Label& label,
+                                           const int count) {
   auto label_count_it = label_count_map_ptr_->find(label);
   if (label_count_it != label_count_map_ptr_->end()) {
     label_count_it->second = label_count_it->second + count;
@@ -669,23 +671,23 @@ void LabelTsdfIntegrator::integrateRays(
 }
 
 FloatingPoint LabelTsdfIntegrator::computeConfidenceWeight(
-    FloatingPoint distance) {
+    const FloatingPoint& distance) {
   const FloatingPoint mu = label_tsdf_config_.lognormal_weight_mean;
   const FloatingPoint sigma = label_tsdf_config_.lognormal_weight_sigma;
   FloatingPoint x =
       std::max(0.0f, distance - label_tsdf_config_.lognormal_weight_offset);
 
-  if (x == 0) {
-    return 0;
+  if (x == 0.0f) {
+    return 0.0f;
   }
-  CHECK(sigma > 0.0 && std::isfinite(sigma))
+  CHECK(sigma > 0.0f && std::isfinite(sigma))
       << "Scale parameter is " << sigma << ", but must be > 0 !";
   CHECK(std::isfinite(mu)) << "Location parameter is " << mu
                            << ", but must be finite!";
-  CHECK(x >= 0.0 && std::isfinite(x))
+  CHECK(x >= 0.0f && std::isfinite(x))
       << "Random variate is " << x << " but must be >= 0 !";
 
-  FloatingPoint result = 0.0;
+  FloatingPoint result = 0.0f;
   FloatingPoint exponent = std::log(x) - mu;
   exponent *= -exponent;
   exponent /= 2 * sigma * sigma;
@@ -697,7 +699,8 @@ FloatingPoint LabelTsdfIntegrator::computeConfidenceWeight(
 }
 
 // Not thread safe.
-void LabelTsdfIntegrator::swapLabels(Label old_label, Label new_label) {
+void LabelTsdfIntegrator::swapLabels(const Label& old_label,
+                                     const Label& new_label) {
   BlockIndexList all_label_blocks;
   label_layer_->getAllAllocatedBlocks(&all_label_blocks);
 
@@ -770,8 +773,8 @@ void LabelTsdfIntegrator::getLabelsToPublish(
   }
 }
 
-void LabelTsdfIntegrator::addPairwiseConfidenceCount(LLMapIt label_map_it,
-                                                     Label label, int count) {
+void LabelTsdfIntegrator::addPairwiseConfidenceCount(
+    const LLMapIt& label_map_it, const Label& label, const int count) {
   LMapIt label_count_it = label_map_it->second.find(label);
   if (label_count_it != label_map_it->second.end()) {
     // label_map already contains a pairwise confidence count

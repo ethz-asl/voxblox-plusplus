@@ -4,6 +4,9 @@ This repository contains a framework for incrementally building volumetric objec
 
 *Ubuntu 16.04 + ROS kinetic* and *Ubuntu 18.04 + ROS melodic*: [![Build Status](https://jenkins.asl.ethz.ch/buildStatus/icon?job=voxblox_gsm_nightly)](https://jenkins.asl.ethz.ch/job/voxblox_gsm_nightly/)
 
+# Getting started
+- [Installing on Ubuntu](https://github.com/ethz-asl/voxblox_gsm/wiki/Installation-on-Ubuntu)
+
 # Citing
 Please cite the [following paper](https://arxiv.org/abs/1903.00268) when using this framework in your research:
 

@@ -13,7 +13,6 @@ Visualizer::Visualizer(
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
 void Visualizer::visualizeMesh() {
-  // uint8_t n_visualizers = 1u;
   uint8_t n_visualizers = mesh_layers_.size();
 
   std::vector<std::shared_ptr<pcl::visualization::PCLVisualizer>>
@@ -45,8 +44,8 @@ void Visualizer::visualizeMesh() {
                                   -0.997911);
     visualizer->setCameraClipDistances(1.79126, 8.86051);
 
-    visualizer->setSize(1898, 1301);
-    visualizer->setPosition(646, 801);
+    visualizer->setSize(1900, 1300);
+    visualizer->setPosition(650, 800);
 
     pcl_visualizers.push_back(visualizer);
   }

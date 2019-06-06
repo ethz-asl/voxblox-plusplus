@@ -49,13 +49,13 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       const MeshIntegratorConfig& config,
       const MeshLabelIntegrator::LabelTsdfConfig& label_tsdf_config,
       LabelTsdfMap* map, MeshLayer* mesh_layer,
-      std::set<SemanticLabel>& all_semantic_labels, bool* remesh = nullptr);
+      std::set<SemanticLabel>* all_semantic_labels, bool* remesh = nullptr);
 
   MeshLabelIntegrator(
       const MeshIntegratorConfig& config,
       const MeshLabelIntegrator::LabelTsdfConfig& label_tsdf_config,
       const LabelTsdfMap& map, MeshLayer* mesh_layer,
-      std::set<SemanticLabel>& all_semantic_labels, bool* remesh = nullptr);
+      std::set<SemanticLabel>* all_semantic_labels, bool* remesh = nullptr);
 
   MeshLabelIntegrator(
       const MeshIntegratorConfig& config,
@@ -64,11 +64,12 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
       MeshLayer* mesh_layer);
 
   // Generates mesh for the tsdf layer.
-  bool generateMesh(bool only_mesh_updated_blocks, bool clear_updated_flag);
+  bool generateMesh(const bool only_mesh_updated_blocks,
+                    const bool clear_updated_flag);
 
  protected:
   void generateMeshBlocksFunction(const BlockIndexList& all_tsdf_blocks,
-                                  bool clear_updated_flag,
+                                  const bool clear_updated_flag,
                                   ThreadSafeIndex* index_getter);
 
   InstanceLabel getInstanceLabel(const Label& label);

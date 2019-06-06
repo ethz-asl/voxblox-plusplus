@@ -21,7 +21,7 @@ pairwise_confidence_merging:
   # pairwise_confidence_count_threshold: 0.15, 14, 0.13 9,10 very good.
 
 semantic_instance_segmentation:
-  enable_semantic_instance_segmentation: false
+  enable_semantic_instance_segmentation: true
   class_task: coco80
 
 object_database:
