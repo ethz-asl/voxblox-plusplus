@@ -5,7 +5,7 @@ namespace voxblox {
 Labels LabelTsdfMap::getLabelList() {
   Labels labels;
   int count_unused_labels = 0;
-  for (std::pair<Label, int> label_count_pair : label_count_map_) {
+  for (const std::pair<Label, int>& label_count_pair : label_count_map_) {
     if (label_count_pair.second > 0) {
       labels.push_back(label_count_pair.first);
     } else {
@@ -22,7 +22,7 @@ InstanceLabels LabelTsdfMap::getInstanceList() {
 
   float kFramesCountThresholdFactor = 0.1f;
 
-  for (Label label : labels) {
+  for (const Label label : labels) {
     InstanceLabel instance_label =
         semantic_instance_label_fusion_.getInstanceLabel(
             label, kFramesCountThresholdFactor);

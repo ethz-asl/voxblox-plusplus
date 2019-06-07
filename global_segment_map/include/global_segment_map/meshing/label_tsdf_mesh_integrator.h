@@ -8,8 +8,8 @@
 #include <vector>
 
 #include <glog/logging.h>
-#include "voxblox/core/color.h"
-#include "voxblox/mesh/mesh_integrator.h"
+#include <voxblox/core/color.h>
+#include <voxblox/mesh/mesh_integrator.h>
 
 #include "global_segment_map/label_tsdf_map.h"
 #include "global_segment_map/label_voxel.h"

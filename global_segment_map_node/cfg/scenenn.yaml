@@ -33,7 +33,7 @@ object_database:
 
 meshing:
   visualize: true
-  update_mesh_every_n_sec: 4.0
+  update_mesh_every_n_sec: 5.0
   publish_segment_mesh: false
   publish_scene_mesh: false
   mesh_filename: "gsm_scenenn_mesh.ply"

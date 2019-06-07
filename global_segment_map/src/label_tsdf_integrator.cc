@@ -33,6 +33,7 @@ void LabelTsdfIntegrator::increaseLabelCountForSegment(
     Segment* segment, const Label& label, const int segment_points_count,
     std::map<Label, std::map<Segment*, size_t>>* candidates,
     std::unordered_set<Label>* merge_candidate_labels) {
+  CHECK_NOTNULL(segment);
   CHECK_NOTNULL(candidates);
   CHECK_NOTNULL(merge_candidate_labels);
   auto label_it = candidates->find(label);
@@ -250,10 +251,12 @@ bool LabelTsdfIntegrator::getNextSegmentLabelPair(
        ++label_it) {
     for (auto segment_it = label_it->second.begin();
          segment_it != label_it->second.end(); segment_it++) {
-      if (segment_it->second > max_count &&
-          segment_it->second > label_tsdf_config_.min_label_voxel_count &&
-          labelled_segments.find(segment_it->first) ==
-              labelled_segments.end()) {
+      bool count_greater_than_max = segment_it->second > max_count;
+      bool count_greater_than_min =
+          segment_it->second > label_tsdf_config_.min_label_voxel_count;
+      bool is_unlabelled =
+          labelled_segments.find(segment_it->first) == labelled_segments.end();
+      if (count_greater_than_max && count_greater_than_min && is_unlabelled) {
         max_count = segment_it->second;
         max_segment = segment_it->first;
         max_label = label_it->first;
@@ -300,6 +303,7 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
   while (getNextSegmentLabelPair(labelled_segments, &assigned_labels,
                                  candidates, segment_merge_candidates, &pair)) {
     Segment* segment = pair.first;
+    CHECK_NOTNULL(segment);
     Label& label = pair.second;
 
     segment->label_ = label;
@@ -327,7 +331,7 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
     for (auto segment_it = labelled_segments.begin();
          segment_it != labelled_segments.end(); ++segment_it) {
       Label label = (*segment_it)->label_;
-      if ((*segment_it)->points_C_.size() > 0) {
+      if ((*segment_it)->points_C_.size() > 0u) {
         semantic_instance_label_fusion_ptr_->increaseLabelFramesCount(label);
       }
 
@@ -602,7 +606,7 @@ void LabelTsdfIntegrator::integrateVoxel(
 
     // TODO(margaritaG): parametrize.
     // If voxel carving is enabled, then only allocate the label voxels
-    // within twice the truncation distance from the surface.
+    // within three times the truncation distance from the surface.
     if (!config_.voxel_carving_enabled ||
         std::abs(tsdf_voxel->distance) <
             3 * config_.default_truncation_distance) {
@@ -744,7 +748,7 @@ void LabelTsdfIntegrator::swapLabels(const Label& old_label,
 }
 
 void LabelTsdfIntegrator::resetCurrentFrameUpdatedLabelsAge() {
-  for (Label label : updated_labels_) {
+  for (const Label label : updated_labels_) {
     // Set timestamp or integer age of segment.
     // Here is the place to do it so it's the same timestamp
     // for all segments in a frame.

@@ -618,6 +618,7 @@ void Controller::segmentPointCloudCallback(
       {
         std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
         for (Segment* segment : segments_to_integrate_) {
+          CHECK_NOTNULL(segment);
           segment->T_G_C_ = T_Gicp_C;
 
           integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
@@ -687,7 +688,7 @@ void Controller::segmentPointCloudCallback(
     }
     timing::Timer ptcloud_timer("ptcloud_preprocess");
 
-    Segment* segment;
+    Segment* segment = nullptr;
     if (enable_semantic_instance_segmentation_) {
       pcl::PointCloud<voxblox::PointSemanticInstanceType>
           point_cloud_semantic_instance;
@@ -702,6 +703,7 @@ void Controller::segmentPointCloudCallback(
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
       segment = new Segment(point_cloud, T_G_C);
     }
+    CHECK_NOTNULL(segment);
     segments_to_integrate_.push_back(segment);
     ptcloud_timer.Stop();
 
@@ -927,7 +929,7 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
   constexpr bool kLabelsListIsComplete = true;
   map_->extractInstanceLayers(instance_labels, &instance_label_to_layers);
 
-  for (InstanceLabel instance_label : instance_labels) {
+  for (const InstanceLabel instance_label : instance_labels) {
     auto it = instance_label_to_layers.find(instance_label);
     CHECK(it != instance_label_to_layers.end())
         << "Layers for instance label " << instance_label

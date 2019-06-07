@@ -47,10 +47,10 @@ struct PointSurfelLabel {
 
 struct PointSurfelSemanticInstance {
   PCL_ADD_POINT4D;
+  PCL_ADD_NORMAL4D;
   PCL_ADD_RGB;
-  // TODO(margaritaG): Fix field names to:
-  SemanticLabel label;  // semantic_label
-  uint8_t instance;     // instance_label
+  uint8_t instance_label;
+  SemanticLabel semantic_label;
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
@@ -68,8 +68,7 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(voxblox::PointSurfelLabel,
 POINT_CLOUD_REGISTER_POINT_STRUCT(
     voxblox::PointSemanticInstanceType,
     (float, x, x)(float, y, y)(float, z, z)(float, rgb, rgb)(
-        voxblox::SemanticLabel, label,
-        label)(uint8_t, instance,
-               instance))  // TODO(margaritaG): Fix field names
+        uint8_t, instance_label,
+        instance_label)(voxblox::SemanticLabel, semantic_label, semantic_label))
 
 #endif  // GLOBAL_SEGMENT_MAP_COMMON_H_

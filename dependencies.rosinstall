@@ -10,6 +10,5 @@
 - git: {local-name: modelify_msgs, uri: 'git@github.com:ethz-asl/modelify_msgs.git'}
 - git: {local-name: opencv3_catkin, uri: 'git@github.com:ethz-asl/opencv3_catkin.git'}
 - git: {local-name: pcl_catkin, uri: 'git@github.com:ethz-asl/pcl_catkin.git'}
-- git: {local-name: protobuf_catkin, uri: 'git@github.com:ethz-asl/protobuf_catkin.git'}
 - git: {local-name: yaml_cpp_catkin, uri: 'git@github.com:ethz-asl/yaml_cpp_catkin.git'}
 - git: {local-name: approxmvbb_catkin, uri: 'git@github.com:ethz-asl/approxmvbb_catkin.git'}

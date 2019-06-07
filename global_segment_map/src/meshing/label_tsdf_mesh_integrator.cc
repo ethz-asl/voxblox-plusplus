@@ -8,7 +8,7 @@ MeshLabelIntegrator::MeshLabelIntegrator(
     const MeshLabelIntegrator::LabelTsdfConfig& label_tsdf_config,
     LabelTsdfMap* map, MeshLayer* mesh_layer,
     std::set<SemanticLabel>* all_semantic_labels, bool* remesh)
-    : MeshIntegrator(config, map->getTsdfLayerPtr(), mesh_layer),
+    : MeshIntegrator(config, CHECK_NOTNULL(map)->getTsdfLayerPtr(), mesh_layer),
       label_tsdf_config_(label_tsdf_config),
       label_layer_mutable_ptr_(CHECK_NOTNULL(map->getLabelLayerPtr())),
       label_layer_const_ptr_(CHECK_NOTNULL(map->getLabelLayerPtr())),

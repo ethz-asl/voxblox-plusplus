@@ -6,7 +6,7 @@ Visualizer::Visualizer(
     const std::vector<std::shared_ptr<MeshLayer>>& mesh_layers,
     bool* updated_mesh, std::mutex* updated_mesh_mutex_ptr)
     : mesh_layers_(mesh_layers),
-      updated_mesh_(updated_mesh),
+      updated_mesh_(CHECK_NOTNULL(updated_mesh)),
       updated_mesh_mutex_ptr_(CHECK_NOTNULL(updated_mesh_mutex_ptr)),
       frame_count_(0u) {}
 
@@ -50,7 +50,7 @@ void Visualizer::visualizeMesh() {
     pcl_visualizers.push_back(visualizer);
   }
 
-  while (1) {
+  while (true) {
     for (int index = 0; index < n_visualizers; ++index) {
       constexpr int kUpdateIntervalMs = 1000;
       pcl_visualizers[index]->spinOnce(kUpdateIntervalMs);

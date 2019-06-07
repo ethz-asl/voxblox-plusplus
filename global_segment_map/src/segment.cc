@@ -47,8 +47,8 @@ Segment::Segment(
     const pcl::PointCloud<voxblox::PointSemanticInstanceType>& point_cloud,
     const Transformation& T_G_C)
     : T_G_C_(T_G_C),
-      semantic_label_(point_cloud.points[0].label),
-      instance_label_(point_cloud.points[0].instance) {
+      semantic_label_(point_cloud.points[0].semantic_label),
+      instance_label_(point_cloud.points[0].instance_label) {
   points_C_.reserve(point_cloud.points.size());
   colors_.reserve(point_cloud.points.size());
 

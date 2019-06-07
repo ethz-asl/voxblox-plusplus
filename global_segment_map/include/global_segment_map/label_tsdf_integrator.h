@@ -195,12 +195,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   bool getNextMerge(Label* new_label, Label* old_label);
 
-  Label getFreshLabel() {
+  inline Label getFreshLabel() {
     CHECK_LT(*highest_label_ptr_, std::numeric_limits<unsigned short>::max());
     return ++(*highest_label_ptr_);
   }
 
-  InstanceLabel getFreshInstance() {
+  inline InstanceLabel getFreshInstance() {
     CHECK_LT(*highest_instance_ptr_,
              std::numeric_limits<unsigned short>::max());
     return ++(*highest_instance_ptr_);
