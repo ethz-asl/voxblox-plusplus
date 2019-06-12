@@ -1,0 +1,39 @@
+segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
+world_frame_id: "world"
+camera_frame_id: "scenenn_camera_frame"
+
+voxblox:
+  voxel_size: 0.01
+  voxels_per_side: 8
+  truncation_distance_factor: 5.0
+  voxel_carving_enabled: false
+  min_ray_length_m: 0.1
+  max_ray_length_m: 3
+
+gsm:
+  min_label_voxel_count: 20
+  label_propagation_td_factor: 1.0
+
+pairwise_confidence_merging:
+  enable_pairwise_confidence_merging: true
+  merging_min_overlap_ratio: 0.13
+  merging_min_frame_count: 9
+  # pairwise_confidence_count_threshold: 0.15, 14, 0.13 9,10 very good.
+
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: true
+  class_task: coco80
+
+object_database:
+  publish_gsm_updates: false
+  max_segment_age: 6
+  scene_gsm_update_topic: "scene_update"
+  segment_gsm_update_topic: "gsm_update"
+  validate_merged_object: "validate_merged_object"
+
+meshing:
+  visualize: true
+  update_mesh_every_n_sec: 5.0
+  publish_segment_mesh: false
+  publish_scene_mesh: false
+  mesh_filename: "gsm_scenenn_mesh.ply"

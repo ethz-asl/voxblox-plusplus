@@ -13,13 +13,12 @@
 #include <global_feature_map/feature_utils.h>
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
-#include <global_segment_map/label_tsdf_mesh_integrator.h>
 #include <global_segment_map/label_voxel.h>
+#include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
+#include <global_segment_map/utils/visualizer.h>
 #include <modelify_msgs/Features.h>
 #include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
-#include <pcl/io/vtk_lib_io.h>
-#include <pcl/visualization/pcl_visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_srvs/Empty.h>
@@ -75,11 +74,21 @@ class Controller {
   void advertiseSaveSegmentsAsMeshService(
       ros::ServiceServer* save_segments_as_mesh_srv);
 
+  void advertiseExtractInstancesService(
+      ros::ServiceServer* extract_instances_srv);
+
   bool publishObjects(const bool publish_all = false);
 
   void publishScene();
 
   bool noNewUpdatesReceived() const;
+
+  virtual void extractSegmentLayers(
+      const std::vector<Label>& labels,
+      std::unordered_map<Label, LayerTuple>* label_layers_map,
+      bool labels_list_is_complete = false);
+
+  bool enable_semantic_instance_segmentation_;
 
   bool publish_gsm_updates_;
 
@@ -93,11 +102,6 @@ class Controller {
   double no_update_timeout_;
 
  protected:
-  template <typename point_type = pcl::PointXYZRGB>
-  void fillSegmentWithData(
-      const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
-      Segment* segment);
-
   virtual void featureCallback(const modelify_msgs::Features& features_msg);
 
   virtual void segmentPointCloudCallback(
@@ -116,19 +120,8 @@ class Controller {
   bool saveSegmentsAsMeshCallback(std_srvs::Empty::Request& request,
                                   std_srvs::Empty::Response& response);
 
-  /**
-   * Extracts separate tsdf and label layers from the gsm, for every given
-   * label.
-   * @param labels of segments to extract
-   * @param label_layers_map output map
-   * @param labels_list_is_complete true if the gsm does not contain other
-   * labels. false if \labels is only a subset of all labels contained by the
-   * gsm.
-   */
-  virtual void extractSegmentLayers(
-      const std::vector<Label>& labels,
-      std::unordered_map<Label, LayerTuple>* label_layers_map,
-      bool labels_list_is_complete = false);
+  bool extractInstancesCallback(std_srvs::Empty::Request& request,
+                                std_srvs::Empty::Response& response);
 
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
@@ -156,26 +149,18 @@ class Controller {
   ros::Time last_segment_msg_timestamp_;
   size_t integrated_frames_count_;
 
+  std::string world_frame_;
+  std::string camera_frame_;
+
+  // TODO(margaritaG): make this optional.
   // Shutdown logic: if no messages are received for X amount of time,
   // shut down node.
   bool received_first_message_;
   ros::Time last_update_received_;
 
-  ros::Publisher* scene_gsm_update_pub_;
-  ros::Publisher* segment_gsm_update_pub_;
-  ros::Publisher* feature_block_pub_;
-
-  ros::Timer update_mesh_timer_;
-  ros::Publisher* scene_mesh_pub_;
-  ros::Publisher* segment_mesh_pub_;
-  ros::Publisher* bbox_pub_;
-  ros::Publisher* scene_pointcloud_pub_;
-  std::string mesh_filename_;
-
-  std::string world_frame_;
-  std::string camera_frame_;
-
   LabelTsdfMap::Config map_config_;
+  LabelTsdfIntegrator::Config tsdf_integrator_config_;
+  LabelTsdfIntegrator::LabelTsdfConfig label_tsdf_integrator_config_;
 
   std::shared_ptr<LabelTsdfMap> map_;
   std::shared_ptr<LabelTsdfIntegrator> integrator_;
@@ -185,28 +170,48 @@ class Controller {
   std::shared_ptr<FeatureIntegrator> feature_integrator_;
 
   MeshIntegratorConfig mesh_config_;
+  MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config_;
+  ros::Timer update_mesh_timer_;
+  ros::Publisher* scene_mesh_pub_;
+  ros::Publisher* segment_mesh_pub_;
+  MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
+  std::string mesh_filename_;
 
-  std::shared_ptr<MeshLayer> mesh_layer_;
-  std::shared_ptr<MeshLabelIntegrator> mesh_integrator_;
+  std::shared_ptr<MeshLayer> mesh_label_layer_;
+  std::shared_ptr<MeshLayer> mesh_semantic_layer_;
+  std::shared_ptr<MeshLayer> mesh_instance_layer_;
+  std::shared_ptr<MeshLayer> mesh_merged_layer_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_label_integrator_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_semantic_integrator_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_instance_integrator_;
+  std::shared_ptr<MeshLabelIntegrator> mesh_merged_integrator_;
 
+  // Semantic labels.
+  std::set<SemanticLabel> all_semantic_labels_;
+  std::map<Label, std::map<SemanticLabel, int>>* label_class_count_ptr_;
+
+  // Current frame label propagation.
   std::vector<Segment*> segments_to_integrate_;
   std::map<Label, std::map<Segment*, size_t>> segment_label_candidates;
   std::map<Segment*, std::vector<Label>> segment_merge_candidates_;
 
-  std::set<Label> all_published_segments_;
+  // Object Database..
+  ros::Publisher* scene_gsm_update_pub_;
+  ros::Publisher* segment_gsm_update_pub_;
   std::vector<Label> segment_labels_to_publish_;
-
   std::map<Label, std::set<Label>> merges_to_publish_;
-};
+  std::set<Label> all_published_segments_;
+  ros::Publisher* bbox_pub_;
+  ros::Publisher* feature_block_pub_;
 
-template <>
-void Controller::fillSegmentWithData<PointSurfelLabel>(
-    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg,
-    Segment* segment);
+  std::thread viz_thread_;
+  Visualizer* visualizer_;
+  std::mutex updated_mesh_mutex_;
+  bool updated_mesh_;
+  bool need_full_remesh_;
+};
 
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
 #endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
-
-#include "voxblox_gsm/controller_inl.h"
