@@ -2,7 +2,7 @@
 
 This repository contains a framework for incrementally building volumetric object-centric maps during online scanning with a localized RGB-D camera.
 
-*Ubuntu 16.04 + ROS kinetic* and *Ubuntu 18.04 + ROS melodic*: [![Build Status](https://jenkins.asl.ethz.ch/buildStatus/icon?job=voxblox_gsm_nightly)](https://jenkins.asl.ethz.ch/job/voxblox_gsm_nightly/)
+*Ubuntu 16.04 + ROS kinetic* and *Ubuntu 18.04 + ROS melodic*: [![Build Status](https://jenkins.asl.ethz.ch/buildStatus/icon?job=voxblox-plusplus-nightly)](https://jenkins.asl.ethz.ch/job/voxblox-plusplus-nightly/)
 
 # Getting started
 - [Installing on Ubuntu](https://github.com/ethz-asl/voxblox_gsm/wiki/Installation-on-Ubuntu)
