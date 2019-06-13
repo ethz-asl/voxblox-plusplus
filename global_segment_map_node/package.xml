@@ -2,13 +2,17 @@
 <package format="2">
   <name>gsm_node</name>
   <version>0.0.0</version>
-  <description>Global Segmentation Map ROS node</description>
+  <description>Voxblox++ ROS interface</description>
 
   <author email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</author>
+  <author email="fadri.furrer@mavt.ethz.ch">Fadri Furrer</author>
+  <author email="tonci.novkovic@mavt.ethz.ch">Tonci Novkovic</author>
+  <author email="marius.fehr@mavt.ethz.ch">Marius Fehr</author>
 
   <maintainer email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</maintainer>
-  <maintainer email="ffurrer@gmail.com">ffurrer</maintainer>
-  <maintainer email="marius.b.fehr@gmail.com">mfehr</maintainer>
+  <maintainer email="fadri.furrer@mavt.ethz.ch">Fadri Furrer</maintainer>
+  <maintainer email="tonci.novkovic@mavt.ethz.ch">Tonci Novkovic</maintainer>
+  <maintainer email="marius.fehr@mavt.ethz.ch">Marius Fehr</maintainer>
 
   <license>BSD</license>
 
