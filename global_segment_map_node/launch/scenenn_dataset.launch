@@ -1,0 +1,25 @@
+<launch>
+  <arg name="visualize" default="true" />
+  <arg name="bag_file" default="/path/to/data.bag"/>
+
+  <node name="mask_rcnn" pkg="mask_rcnn_ros" type="mask_rcnn_node.py" output="screen">
+      <remap from="~input" to="$(arg rgb_topic)" />
+      <param name="~visualization" value="$(arg visualize)" />
+  </node>
+
+  <arg name="depth_segmentation_node_params_name" default="$(find depth_segmentation)/cfg/scenenn_config.yaml"/>
+
+  <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="screen">
+    <rosparam command="load" file="$(arg depth_segmentation_node_params_name)" />
+    <param name="rgb_image_sub_topic" value="$(arg rgb_topic)" />
+    <param name="semantic_instance_segmentation/enable" value="true"/>
+    <param name="label_display" value="$(arg visualize)"/>
+  </node>
+
+  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/scenenn.yaml"/>
+
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+    <rosparam command="load" file="$(arg gsm_node_params_name)" />
+    <param name="meshing/visualize" value="$(arg visualize)"/>
+  </node>
+</launch>
