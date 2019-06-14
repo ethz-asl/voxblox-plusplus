@@ -1,8 +1,8 @@
-#include "global_segment_map/label_fusion.h"
+#include "global_segment_map/semantic_instance_label_fusion.h"
 
 namespace voxblox {
 
-void InstanceLabelFusion::increaseLabelInstanceCount(
+void SemanticInstanceLabelFusion::increaseLabelInstanceCount(
     const Label& label, const InstanceLabel& instance_label) {
   auto label_it = label_instance_count_.find(label);
   if (label_it != label_instance_count_.end()) {
@@ -19,7 +19,7 @@ void InstanceLabelFusion::increaseLabelInstanceCount(
   }
 }
 
-void InstanceLabelFusion::decreaseLabelInstanceCount(
+void SemanticInstanceLabelFusion::decreaseLabelInstanceCount(
     const Label& label, const InstanceLabel& instance_label) {
   auto label_it = label_instance_count_.find(label);
   if (label_it != label_instance_count_.end()) {
@@ -27,14 +27,14 @@ void InstanceLabelFusion::decreaseLabelInstanceCount(
     if (instance_it != label_it->second.end()) {
       --instance_it->second;
     } else {
-      // TODO(margaritaG): Shouldn't happen, what are we decreasing else?
+      LOG(FATAL) << "Decreasing a non existing label-instance count.";
     }
   } else {
-    // TODO(margaritaG): Shouldn't happen, what are we decreasing else?
+    LOG(FATAL) << "Decreasing a non existing label-instance count.";
   }
 }
 
-void InstanceLabelFusion::increaseLabelFramesCount(const Label& label) {
+void SemanticInstanceLabelFusion::increaseLabelFramesCount(const Label& label) {
   auto label_count_it = label_frames_count_.find(label);
   if (label_count_it != label_frames_count_.end()) {
     ++label_count_it->second;
@@ -43,13 +43,13 @@ void InstanceLabelFusion::increaseLabelFramesCount(const Label& label) {
   }
 }
 
-InstanceLabel InstanceLabelFusion::getLabelInstance(
+InstanceLabel SemanticInstanceLabelFusion::getInstanceLabel(
     const Label& label,
     const std::set<InstanceLabel>& assigned_instances) const {
-  return getLabelInstance(label, 0.0f, assigned_instances);
+  return getInstanceLabel(label, 0.0f, assigned_instances);
 }
 
-InstanceLabel InstanceLabelFusion::getLabelInstance(
+InstanceLabel SemanticInstanceLabelFusion::getInstanceLabel(
     const Label& label, const float count_threshold_factor,
     const std::set<InstanceLabel>& assigned_instances) const {
   InstanceLabel instance_label = 0u;
@@ -89,7 +89,7 @@ InstanceLabel InstanceLabelFusion::getLabelInstance(
   return instance_label;
 }
 
-void SemanticLabelFusion::increaseLabelClassCount(
+void SemanticInstanceLabelFusion::increaseLabelClassCount(
     const Label& label, const SemanticLabel& semantic_label) {
   auto label_it = label_class_count_.find(label);
   if (label_it != label_class_count_.end()) {
@@ -106,8 +106,13 @@ void SemanticLabelFusion::increaseLabelClassCount(
   }
 }
 
-SemanticLabel SemanticLabelFusion::getSemanticLabel(const Label& label) const {
-  SemanticLabel semantic_label = 0;
+SemanticLabel SemanticInstanceLabelFusion::getSemanticLabel(
+    const Label& label) const {
+  SemanticLabel semantic_label = 0u;
+
+  if (getInstanceLabel(label) == 0u) {
+    return semantic_label;
+  }
   int max_count = 0;
   auto label_it = label_class_count_.find(label);
   if (label_it != label_class_count_.end()) {

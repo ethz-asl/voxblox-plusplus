@@ -1,0 +1,38 @@
+segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
+world_frame_id: "map"
+camera_frame_id: "camera0"
+
+voxblox:
+  voxel_size: 0.02
+  voxels_per_side: 8
+  truncation_distance_factor: 3.0
+  voxel_carving_enabled: false
+  max_ray_length_m: 3.5
+
+
+pairwise_confidence_merging:
+  enable_pairwise_confidence_merging: false
+  merging_min_overlap_ratio: 0.2
+  merging_min_frame_count: 30
+
+object_database:
+  publish_gsm_updates: true
+  max_segment_age: 10
+  scene_gsm_update_topic: "gsm_updates"
+  segment_gsm_update_topic: "gsm_updates"
+  validate_merged_object: "validate_merged_object"
+
+meshing:
+  publish_segment_mesh: false
+  publish_scene_mesh: false
+  mesh_filename: "monstah_mesh.ply"
+
+sliding_window:
+  is_on: false
+  radius_m: 1.0
+  imu_frame_id: imu
+
+  # Between 0 and 1. As soon as the distance between sliding window and camera
+  # is larger than this fraction times the window radius, the window is updated
+  # and its position is set equal the camera position.
+  update_fraction: 0.5

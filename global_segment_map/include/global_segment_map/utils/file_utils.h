@@ -15,7 +15,7 @@ namespace file_utils {
 // Creates the given path, unless the path already exists, in which case
 // nothing is done and 0 (success) is returned.
 inline int makePath(const std::string& path_in, mode_t mode) {
-  size_t previous_slash_pos = 0;
+  size_t previous_slash_pos = 0u;
   size_t current_slash_pos;
   std::string dir;
   int make_dir_status = 0;
@@ -31,13 +31,11 @@ inline int makePath(const std::string& path_in, mode_t mode) {
          std::string::npos) {
     dir = path.substr(0, current_slash_pos++);
     previous_slash_pos = current_slash_pos;
-    if (dir.empty())
-      continue;  // If leading / first time is 0 length.
-    if (dir == ".")
-      continue;
+    if (dir.empty()) continue;  // If leading / first time is 0 length.
+    if (dir == ".") continue;
 
     const char* c_str = dir.c_str();
-    for (size_t i = 0; i < strlen(c_str); ++i) {
+    for (size_t i = 0u; i < strlen(c_str); ++i) {
       if (c_str[i] < static_cast<char>(32) ||
           c_str[i] > static_cast<char>(126)) {
         return -1;

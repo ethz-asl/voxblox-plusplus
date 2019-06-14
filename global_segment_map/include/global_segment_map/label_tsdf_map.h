@@ -9,8 +9,8 @@
 #include <voxblox/core/layer.h>
 #include <voxblox/core/voxel.h>
 
-#include "global_segment_map/label_fusion.h"
 #include "global_segment_map/label_voxel.h"
+#include "global_segment_map/semantic_instance_label_fusion.h"
 
 namespace voxblox {
 
@@ -50,12 +50,12 @@ class LabelTsdfMap {
 
   inline InstanceLabel* getHighestInstancePtr() { return &highest_instance_; }
 
-  inline InstanceLabelFusion* getInstanceLabelFusionPtr() {
-    return &instance_label_fusion_;
+  inline SemanticInstanceLabelFusion* getSemanticInstanceLabelFusionPtr() {
+    return &semantic_instance_label_fusion_;
   }
-
-  inline SemanticLabelFusion* getSemanticLabelFusionPtr() {
-    return &semantic_label_fusion_;
+  inline const SemanticInstanceLabelFusion& getSemanticInstanceLabelFusion()
+      const {
+    return semantic_instance_label_fusion_;
   }
 
   inline FloatingPoint block_size() const { return tsdf_layer_->block_size(); }
@@ -80,7 +80,7 @@ class LabelTsdfMap {
   void extractSegmentLayers(
       const Labels& labels,
       std::unordered_map<Label, LayerPair>* label_layers_map,
-      bool labels_list_is_complete = false);
+      const bool labels_list_is_complete = false);
 
   void extractInstanceLayers(
       const InstanceLabels& instance_labels,
@@ -99,8 +99,7 @@ class LabelTsdfMap {
   InstanceLabel highest_instance_;
 
   // Semantic instance-aware segmentation.
-  SemanticLabelFusion semantic_label_fusion_;
-  InstanceLabelFusion instance_label_fusion_;
+  SemanticInstanceLabelFusion semantic_instance_label_fusion_;
 };
 
 }  // namespace voxblox

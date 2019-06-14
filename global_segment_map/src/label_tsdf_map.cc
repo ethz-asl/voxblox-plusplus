@@ -5,7 +5,7 @@ namespace voxblox {
 Labels LabelTsdfMap::getLabelList() {
   Labels labels;
   int count_unused_labels = 0;
-  for (std::pair<Label, int> label_count_pair : label_count_map_) {
+  for (const std::pair<Label, int>& label_count_pair : label_count_map_) {
     if (label_count_pair.second > 0) {
       labels.push_back(label_count_pair.first);
     } else {
@@ -22,9 +22,10 @@ InstanceLabels LabelTsdfMap::getInstanceList() {
 
   float kFramesCountThresholdFactor = 0.1f;
 
-  for (Label label : labels) {
-    InstanceLabel instance_label = instance_label_fusion_.getLabelInstance(
-        label, kFramesCountThresholdFactor);
+  for (const Label label : labels) {
+    InstanceLabel instance_label =
+        semantic_instance_label_fusion_.getInstanceLabel(
+            label, kFramesCountThresholdFactor);
     if (instance_label != 0u) {
       instance_labels_set.emplace(instance_label);
     }
@@ -38,8 +39,8 @@ InstanceLabels LabelTsdfMap::getInstanceList() {
 void LabelTsdfMap::extractSegmentLayers(
     const std::vector<Label>& labels,
     std::unordered_map<Label, LayerPair>* label_layers_map,
-    bool labels_list_is_complete) {
-  CHECK(label_layers_map);
+    const bool labels_list_is_complete) {
+  CHECK_NOTNULL(label_layers_map);
 
   // Map a label to its corresponding TSDF and label layers.
   Layer<TsdfVoxel> tsdf_layer_empty(config_.voxel_size,
@@ -61,7 +62,7 @@ void LabelTsdfMap::extractSegmentLayers(
         label_layer_->getBlockPtrByIndex(block_index);
 
     const size_t vps = global_label_block->voxels_per_side();
-    for (size_t i = 0; i < vps * vps * vps; ++i) {
+    for (size_t i = 0u; i < vps * vps * vps; ++i) {
       const LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
 
@@ -107,6 +108,7 @@ void LabelTsdfMap::extractSegmentLayers(
 void LabelTsdfMap::extractInstanceLayers(
     const InstanceLabels& instance_labels,
     std::unordered_map<InstanceLabel, LayerPair>* instance_layers_map) {
+  CHECK_NOTNULL(instance_layers_map);
   // Map an instance label to its corresponding TSDF and label layers.
   Layer<TsdfVoxel> tsdf_layer_empty(config_.voxel_size,
                                     config_.voxels_per_side);
@@ -127,7 +129,7 @@ void LabelTsdfMap::extractInstanceLayers(
         label_layer_->getBlockPtrByIndex(block_index);
 
     const size_t vps = global_label_block->voxels_per_side();
-    for (size_t i = 0; i < vps * vps * vps; ++i) {
+    for (size_t i = 0u; i < vps * vps * vps; ++i) {
       const LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
 
@@ -135,8 +137,9 @@ void LabelTsdfMap::extractInstanceLayers(
         continue;
       }
       float kFramesCountThresholdFactor = 0.1f;
-      InstanceLabel instance_label = instance_label_fusion_.getLabelInstance(
-          global_label_voxel.label, kFramesCountThresholdFactor);
+      InstanceLabel instance_label =
+          semantic_instance_label_fusion_.getInstanceLabel(
+              global_label_voxel.label, kFramesCountThresholdFactor);
 
       if (instance_label == 0u) {
         continue;

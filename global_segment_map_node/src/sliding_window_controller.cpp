@@ -30,13 +30,14 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(
 
   for (const Label& label : all_labels) {
     auto it = label_to_layers_.find(label);
-    LayerPair& layer_pair = it->second;
+    LayerTuple& layers = it->second;
 
     // Iterate over all blocks of segment. If one of the blocks is inside the
     // window radius, the whole segment is valid. Otherwise, the blocks
     // containing the segment are removed from the GSM
     BlockIndexList blocks_of_label;
-    layer_pair.first.getAllAllocatedBlocks(&blocks_of_label);
+    (std::get<LayerAccessor::kTsdfLayer>(layers))
+        .getAllAllocatedBlocks(&blocks_of_label);
     bool has_block_within_radius = false;
     for (const BlockIndex& block_index : blocks_of_label) {
       Point center_block = getCenterPointFromGridIndex(
@@ -61,14 +62,13 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(
 
 void SlidingWindowController::extractSegmentLayers(
     const std::vector<Label>& labels,
-    std::unordered_map<Label, LayerPair>* label_layers_map,
+    std::unordered_map<Label, LayerTuple>* label_layers_map,
     bool labels_list_is_complete) {
   CHECK_NOTNULL(label_layers_map);
   if (!label_to_layers_.empty()) {
     *label_layers_map = label_to_layers_;
   } else {
-    map_->extractSegmentLayers(labels, label_layers_map,
-                               labels_list_is_complete);
+    extractSegmentLayers(labels, label_layers_map, labels_list_is_complete);
   }
 }
 
@@ -97,7 +97,7 @@ void SlidingWindowController::checkTfCallback() {
 }
 
 void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
-  LOG(WARNING) << "Update Window";
+  LOG(INFO) << "Update Window";
   removeSegmentsOutsideOfRadius(window_radius_, new_center);
 
   LOG(INFO) << "Publish scene";
@@ -108,7 +108,7 @@ void SlidingWindowController::updateAndPublishWindow(const Point& new_center) {
   ros::Time start = ros::Time::now();
   publishSceneCallback(req, res);
   ros::Time stop = ros::Time::now();
-  LOG(WARNING) << "Publishing took " << (stop - start).toSec() << "s";
+  LOG(INFO) << "Publishing took " << (stop - start).toSec() << "s";
 }
 
 void SlidingWindowController::publishGsmUpdate(

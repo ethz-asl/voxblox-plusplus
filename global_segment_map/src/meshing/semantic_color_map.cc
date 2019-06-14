@@ -1,17 +1,25 @@
-#include "global_segment_map/utils/semantic_color_map.h"
+#include "global_segment_map/meshing/semantic_color_map.h"
 
 namespace voxblox {
-SemanticColorMap SemanticColorMap::create(SemanticColor color_mode) {
-  switch (color_mode) {
-    case kCoco:
+SemanticColorMap SemanticColorMap::create(const ClassTask& class_task) {
+  switch (class_task) {
+    case kCoco80:
       return CocoColorMap();
-    case kNyuV2_13:
-      return NyuV213ColorMap();
+    case kNyu13:
+      return Nyu13ColorMap();
   }
 }
 
+void SemanticColorMap::getColor(const SemanticLabel& semantic_label,
+                                Color* color) const {
+  CHECK_NOTNULL(color);
+  color->r = color_code_.at(semantic_label)[0];
+  color->g = color_code_.at(semantic_label)[1];
+  color->b = color_code_.at(semantic_label)[2];
+}
+
 // NYUv2 13 class task color coding defined in SceneNet.
-NyuV213ColorMap::NyuV213ColorMap()
+Nyu13ColorMap::Nyu13ColorMap()
     : SemanticColorMap({{200, 200, 200},    // BG
                         {20, 20, 20},       // Unknown
                         {0, 128, 128},      // Bed

@@ -1,5 +1,8 @@
 // Copyright 2018 Margarita Grinvald, ASL, ETH Zurich, Switzerland
 
+// TODO(ntonci): Fix file extension. These files in global_segment_map_node have
+// cpp extension and all others have cc.
+
 #include "voxblox_gsm/controller.h"
 
 #include <stdlib.h>
@@ -22,7 +25,7 @@
 #include <minkindr_conversions/kindr_tf.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-
+#include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
@@ -35,6 +38,7 @@
 #endif
 
 #include "voxblox_gsm/conversions.h"
+#include "voxblox_gsm/feature_ros_tools.h"
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -126,7 +130,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       // Increased time limit for lookup in the past of tf messages
       // to give some slack to the pipeline and not lose any messages.
       integrated_frames_count_(0u),
-      tf_listener_(ros::Duration(1000)),
+      tf_listener_(ros::Duration(500)),
       world_frame_("world"),
       slice_level_x_(0.5),
       slice_level_y_(0.5),
@@ -135,11 +139,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
       received_first_message_(false),
+      received_first_feature_(false),
       updated_mesh_(false),
       need_full_remesh_(false),
       enable_semantic_instance_segmentation_(true),
       compute_and_publish_bbox_(false),
       publish_pointclouds_(false),
+      publish_feature_blocks_marker_(false),
       use_label_propagation_(true) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
@@ -161,12 +167,15 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
+  const double kBlockSize =
+      map_config_.voxel_size * map_config_.voxels_per_side;
+  feature_layer_.reset(new FeatureLayer<Feature3D>(kBlockSize));
 
   // Determine TSDF integrator parameters.
   tsdf_integrator_config_.voxel_carving_enabled = false;
   tsdf_integrator_config_.allow_clear = true;
   FloatingPoint truncation_distance_factor = 5.0f;
-  tsdf_integrator_config_.max_ray_length_m = 2.5f;
+  tsdf_integrator_config_.max_ray_length_m = 4.0f;
 
   node_handle_private_->param<bool>(
       "voxblox/voxel_carving_enabled",
@@ -198,23 +207,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     tsdf_integrator_config_.enable_anti_grazing = false;
   }
 
-  std::string mesh_color_scheme("label");
-  node_handle_private_->param<std::string>(
-      "meshing/mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
-  if (mesh_color_scheme.compare("label") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
-  } else if (mesh_color_scheme.compare("semantic_label") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
-  } else if (mesh_color_scheme.compare("instance_label") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
-  } else if (mesh_color_scheme.compare("geometric_instance_label") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
-  } else if (mesh_color_scheme.compare("confidence") == 0) {
-    mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
-  } else {
-    mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
-  }
-
   // Determine label integrator parameters.
   node_handle_private_->param<bool>(
       "pairwise_confidence_merging/enable_pairwise_confidence_merging",
@@ -242,6 +234,35 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config_.max_segment_age,
       label_tsdf_integrator_config_.max_segment_age);
 
+  // TODO(margaritaG) : this is not used, remove?
+  // std::string mesh_color_scheme("label");
+  // node_handle_private_->param<std::string>(
+  //     "meshing/mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
+  // if (mesh_color_scheme.compare("label") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
+  // } else if (mesh_color_scheme.compare("semantic_label") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
+  // } else if (mesh_color_scheme.compare("instance_label") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
+  // } else if (mesh_color_scheme.compare("geometric_instance_label") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
+  // } else if (mesh_color_scheme.compare("confidence") == 0) {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
+  // } else {
+  //   mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
+  // }
+
+  std::string class_task("coco80");
+  node_handle_private_->param<std::string>(
+      "semantic_instance_segmentation/class_task", class_task, class_task);
+  if (class_task.compare("coco80") == 0) {
+    label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask ::kCoco80;
+  } else if (class_task.compare("nyu13") == 0) {
+    label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask ::kNyu13;
+  } else {
+    label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask::kCoco80;
+  }
+
   node_handle_private_->param<bool>("enable_icp", enable_icp_, enable_icp_);
   node_handle_private_->param<bool>(
       "keep_track_of_icp_correction",
@@ -253,33 +274,39 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
 
+  label_tsdf_mesh_config_.color_scheme =
+      MeshLabelIntegrator::ColorScheme::kLabel;
   mesh_label_integrator_.reset(new MeshLabelIntegrator(
-      mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-      mesh_label_layer_.get(), all_semantic_labels_,
-      map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
-      MeshLabelIntegrator::LabelColor, &need_full_remesh_));
+      mesh_config_, label_tsdf_mesh_config_, map_.get(),
+      mesh_label_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
 
   if (enable_semantic_instance_segmentation_) {
     mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
 
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kSemantic;
     mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-        mesh_semantic_layer_.get(), all_semantic_labels_,
-        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
-        MeshLabelIntegrator::SemanticColor, &need_full_remesh_));
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_semantic_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kInstance;
     mesh_instance_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-        mesh_instance_layer_.get(), all_semantic_labels_,
-        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
-        MeshLabelIntegrator::InstanceColor, &need_full_remesh_));
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_instance_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kMerged;
     mesh_merged_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, map_->getTsdfLayerPtr(), map_->getLabelLayerPtr(),
-        mesh_merged_layer_.get(), all_semantic_labels_,
-        map_->getInstanceLabelFusionPtr(), map_->getSemanticLabelFusionPtr(),
-        MeshLabelIntegrator::GeometricInstanceColor, &need_full_remesh_));
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_merged_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
   }
+
+  // Determine feature integrator parameters.
+  // TODO(ntonci): Make rosparam if there are any.
+  FeatureIntegrator::Config feature_integrator_config;
+  feature_integrator_.reset(
+      new FeatureIntegrator(feature_integrator_config, feature_layer_.get()));
 
   // Visualization settings.
   bool visualize = false;
@@ -289,9 +316,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     mesh_layers.push_back(mesh_label_layer_);
 
     if (enable_semantic_instance_segmentation_) {
-      mesh_layers.push_back(mesh_merged_layer_);
-      mesh_layers.push_back(mesh_semantic_layer_);
       mesh_layers.push_back(mesh_instance_layer_);
+      mesh_layers.push_back(mesh_semantic_layer_);
+      mesh_layers.push_back(mesh_merged_layer_);
     }
     visualizer_ =
         new Visualizer(mesh_layers, &updated_mesh_, &updated_mesh_mutex_);
@@ -306,18 +333,20 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("meshing/compute_and_publish_bbox",
                                     compute_and_publish_bbox_,
                                     compute_and_publish_bbox_);
+  node_handle_private_->param<bool>("publish_feature_blocks_marker",
+                                    publish_feature_blocks_marker_,
+                                    publish_feature_blocks_marker_);
+  node_handle_private_->param<bool>(
+      "use_label_propagation", use_label_propagation_, use_label_propagation_);
+
 #ifndef APPROXMVBB_AVAILABLE
   if (compute_and_publish_bbox_) {
     ROS_WARN_STREAM(
-        "ApproxMVBB is not available and therefore bounding box "
-        "functionality "
-        "is disabled.");
+        "ApproxMVBB is not available and therefore "
+        "bounding box functionality is disabled.");
   }
   compute_and_publish_bbox_ = false;
 #endif
-
-  node_handle_private_->param<bool>(
-      "use_label_propagation", use_label_propagation_, use_label_propagation_);
 
   // If set, use a timer to progressively update the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -353,6 +382,33 @@ void Controller::dynamicReconfigureCallback(
   slice_level_z_ = config.z;
 }
 
+// TODO(ntonci): Move all sub, pub, etc., and helpers to inline header.
+void Controller::subscribeFeatureTopic(ros::Subscriber* feature_sub) {
+  CHECK_NOTNULL(feature_sub);
+  std::string feature_topic = "/rgbd_feature_node/features";
+  node_handle_private_->param<std::string>("feature_topic", feature_topic,
+                                           feature_topic);
+
+  // Large queue size to give slack to the
+  // pipeline and not lose any messages.
+  constexpr int kFeatureQueueSize = 2000;
+  *feature_sub = node_handle_private_->subscribe(
+      feature_topic, kFeatureQueueSize, &Controller::featureCallback, this);
+}
+
+void Controller::advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub) {
+  CHECK_NOTNULL(feature_block_pub);
+  std::string feature_block_topic = "feature_block_array";
+  node_handle_private_->param<std::string>(
+      "feature_block_topic", feature_block_topic, feature_block_topic);
+
+  constexpr int kFeatureBlockQueueSize = 2000;
+  *feature_block_pub =
+      node_handle_private_->advertise<visualization_msgs::MarkerArray>(
+          feature_block_topic, kFeatureBlockQueueSize, true);
+  feature_block_pub_ = feature_block_pub;
+}
+
 void Controller::subscribeSegmentPointCloudTopic(
     ros::Subscriber* segment_point_cloud_sub) {
   CHECK_NOTNULL(segment_point_cloud_sub);
@@ -365,9 +421,10 @@ void Controller::subscribeSegmentPointCloudTopic(
   // refactored to be received as one single message.
   // Large queue size to give slack to the
   // pipeline and not lose any messages.
+  constexpr int kSegmentPointCloudQueueSize = 6000;
   *segment_point_cloud_sub = node_handle_private_->subscribe(
-      segment_point_cloud_topic, 6000, &Controller::segmentPointCloudCallback,
-      this);
+      segment_point_cloud_topic, kSegmentPointCloudQueueSize,
+      &Controller::segmentPointCloudCallback, this);
 }
 
 void Controller::advertiseSegmentGsmUpdateTopic(
@@ -379,7 +436,6 @@ void Controller::advertiseSegmentGsmUpdateTopic(
                                            segment_gsm_update_topic);
   // TODO(ff): Reduce this value, once we know some reasonable limit.
   constexpr int kGsmUpdateQueueSize = 2000;
-
   *segment_gsm_update_pub =
       node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
           segment_gsm_update_topic, kGsmUpdateQueueSize, true);
@@ -478,11 +534,11 @@ void Controller::advertiseGenerateMeshService(
       "generate_mesh", &Controller::generateMeshCallback, this);
 }
 
-void Controller::advertiseExtractSegmentsService(
-    ros::ServiceServer* extract_segments_srv) {
-  CHECK_NOTNULL(extract_segments_srv);
-  *extract_segments_srv = node_handle_private_->advertiseService(
-      "extract_segments", &Controller::extractSegmentsCallback, this);
+void Controller::advertiseSaveSegmentsAsMeshService(
+    ros::ServiceServer* save_segments_as_mesh_srv) {
+  CHECK_NOTNULL(save_segments_as_mesh_srv);
+  *save_segments_as_mesh_srv = node_handle_private_->advertiseService(
+      "save_segments_as_mesh", &Controller::saveSegmentsAsMeshCallback, this);
 }
 
 void Controller::advertiseExtractInstancesService(
@@ -490,6 +546,56 @@ void Controller::advertiseExtractInstancesService(
   CHECK_NOTNULL(extract_instances_srv);
   *extract_instances_srv = node_handle_private_->advertiseService(
       "extract_instances", &Controller::extractInstancesCallback, this);
+}
+
+void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
+  size_t descriptor_size;
+  std::string camera_frame;
+  ros::Time timestamp;
+  std::vector<Feature3D> features_C;
+
+  ros::WallTime start = ros::WallTime::now();
+
+  fromFeaturesMsgToFeature3D(features_msg, &descriptor_size, &camera_frame,
+                             &timestamp, &features_C);
+
+  if (!received_first_feature_ && features_C.size() > 0) {
+    received_first_feature_ = true;
+    feature_layer_->setDescriptorSize(descriptor_size);
+  }
+
+  if (camera_frame != camera_frame_) {
+    ROS_WARN_STREAM("Camera frame in the header ("
+                    << camera_frame
+                    << "), is not the same as specified rosparam camera frame ("
+                    << camera_frame_ << ").");
+  }
+
+  Transformation T_G_C;
+  if (lookupTransform(camera_frame, world_frame_, timestamp, &T_G_C)) {
+    feature_integrator_->integrateFeatures(T_G_C, features_C);
+  } else {
+    ROS_WARN_STREAM("Could not find the transform to "
+                    << camera_frame << ", at time " << timestamp.toSec()
+                    << ", in the tf tree.");
+  }
+
+  if (publish_feature_blocks_marker_) {
+    CHECK_NOTNULL(feature_block_pub_);
+    visualization_msgs::MarkerArray feature_blocks;
+    // TODO(ntonci): Make this a param.
+    constexpr size_t kMaxNumberOfFeatures = 500u;
+    createOccupancyBlocksFromFeatureLayer(
+        *feature_layer_, world_frame_, kMaxNumberOfFeatures, &feature_blocks);
+    feature_block_pub_->publish(feature_blocks);
+  }
+
+  ros::WallTime end = ros::WallTime::now();
+  ROS_INFO(
+      "Integrated %lu features in %f seconds. Total number of features: %lu.",
+      features_C.size(), (end - start).toSec(),
+      feature_layer_->getNumberOfFeatures());
+  ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
 }
 
 void Controller::segmentPointCloudCallback(
@@ -507,109 +613,116 @@ void Controller::segmentPointCloudCallback(
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
              segment_point_cloud_msg->header.stamp.toSec());
+    if (segments_to_integrate_.size() > 0u) {
+      ros::WallTime start;
+      ros::WallTime end;
 
-    if (enable_icp_) {
-      Pointcloud point_cloud_all_segments_t;
-      Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
-      Transformation T_G_C_icp = T_G_C;
+      if (enable_icp_) {
+        Pointcloud point_cloud_all_segments_t;
+        Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+        Transformation T_G_C_icp = T_G_C;
 
-      for (const auto& segment : segments_to_integrate_) {
-        // Concatenate point clouds. (NOTE(ff): We should probably just use
-        // the original cloud here instead.)
-        Pointcloud::iterator it = point_cloud_all_segments_t.end();
-        point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
-                                          segment->points_C_.end());
+        for (const auto& segment : segments_to_integrate_) {
+          // Concatenate point clouds. (NOTE(ff): We should probably just use
+          // the original cloud here instead.)
+          Pointcloud::iterator it = point_cloud_all_segments_t.end();
+          point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
+                                            segment->points_C_.end());
+        }
+        T_G_C_icp =
+            integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
+
+        for (const auto& segment : segments_to_integrate_) {
+          segment->T_G_C_ = T_G_C_icp;
+        }
       }
-      T_G_C_icp =
-          integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
 
-      for (const auto& segment : segments_to_integrate_) {
-        segment->T_G_C_ = T_G_C_icp;
+      if (use_label_propagation_) {
+        timing::Timer label_candidates_timer("compute_label_candidates");
+        start = ros::WallTime::now();
+
+        for (const auto& segment : segments_to_integrate_) {
+          integrator_->computeSegmentLabelCandidates(
+              segment, &segment_label_candidates, &segment_merge_candidates_);
+        }
+        end = ros::WallTime::now();
+        label_candidates_timer.Stop();
+
+        ROS_INFO("Computed label candidates for %lu pointclouds in %f seconds.",
+                 segments_to_integrate_.size(), (end - start).toSec());
+
+        timing::Timer ptcloud_timer("label_propagation");
+
+        start = ros::WallTime::now();
+
+        integrator_->decideLabelPointClouds(&segments_to_integrate_,
+                                            &segment_label_candidates,
+                                            &segment_merge_candidates_);
+
+        end = ros::WallTime::now();
+
+        ptcloud_timer.Stop();
+
+        ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
+                 segments_to_integrate_.size(), (end - start).toSec());
       }
-    }
 
-    if (use_label_propagation_) {
-      timing::Timer label_candidates_timer("compute_label_candidates");
-      ros::WallTime start = ros::WallTime::now();
+      constexpr bool kIsFreespacePointcloud = false;
+      {
+        std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
 
-      for (const auto& segment : segments_to_integrate_) {
-        integrator_->computeSegmentLabelCandidates(
-            segment, &segment_label_candidates, &segment_merge_candidates_);
+        start = ros::WallTime::now();
+        timing::Timer integrate_timer("integrate_frame_pointclouds");
+
+        for (Segment* segment : segments_to_integrate_) {
+          CHECK_NOTNULL(segment);
+
+          integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                           segment->colors_, segment->label_,
+                                           kIsFreespacePointcloud);
+        }
+        integrate_timer.Stop();
+
+        end = ros::WallTime::now();
+        ROS_INFO(
+            "Integrated %lu pointclouds in %f secs, have %lu tsdf "
+            "and %lu label blocks.",
+            segments_to_integrate_.size(), (end - start).toSec(),
+            map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks(),
+            map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks());
       }
-      ros::WallTime end = ros::WallTime::now();
-      label_candidates_timer.Stop();
-
-      ROS_INFO("Computed label candidates for %lu pointclouds in %f seconds.",
-               segments_to_integrate_.size(), (end - start).toSec());
-
-      timing::Timer ptcloud_timer("label_propagation");
 
       start = ros::WallTime::now();
 
-      integrator_->decideLabelPointClouds(&segments_to_integrate_,
-                                          &segment_label_candidates,
-                                          &segment_merge_candidates_);
+      integrator_->mergeLabels(&merges_to_publish_);
+      integrator_->getLabelsToPublish(&segment_labels_to_publish_);
 
       end = ros::WallTime::now();
+      ROS_INFO(
+          "Merged segments and fetched the ones to publish in %f "
+          "seconds.",
+          (end - start).toSec());
+      start = ros::WallTime::now();
 
-      ptcloud_timer.Stop();
-
-      ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
-               segments_to_integrate_.size(), (end - start).toSec());
-    }
-
-    constexpr bool kIsFreespacePointcloud = false;
-
-    ros::WallTime start = ros::WallTime::now();
-    timing::Timer integrate_timer("integrate_frame_pointclouds");
-
-    {
-      std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
-
-      for (const auto& segment : segments_to_integrate_) {
-        integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                         segment->colors_, segment->label_,
-                                         kIsFreespacePointcloud);
+      segment_merge_candidates_.clear();
+      segment_label_candidates.clear();
+      for (Segment* segment : segments_to_integrate_) {
+        delete segment;
       }
+      segments_to_integrate_.clear();
+
+      end = ros::WallTime::now();
+      ROS_INFO("Cleared candidates and memory in %f seconds.",
+               (end - start).toSec());
+
+      if (publish_gsm_updates_ && publishObjects()) {
+        publishScene();
+      }
+    } else {
+      ROS_INFO("No segments to integrate.");
     }
-    integrate_timer.Stop();
-
-    ros::WallTime end = ros::WallTime::now();
-    ROS_INFO(
-        "Integrated %lu pointclouds in %f secs, have %lu tsdf "
-        "and %lu label blocks.",
-        segments_to_integrate_.size(), (end - start).toSec(),
-        map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks(),
-        map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks());
-
-    start = ros::WallTime::now();
-
-    integrator_->mergeLabels(&merges_to_publish_);
-
-    integrator_->getLabelsToPublish(&segment_labels_to_publish_);
-
-    end = ros::WallTime::now();
-    ROS_INFO(
-        "Merged segments and fetched the ones to publish in %f "
-        "seconds.",
-        (end - start).toSec());
-    start = ros::WallTime::now();
-
-    segment_merge_candidates_.clear();
-    segment_label_candidates.clear();
-    for (Segment* segment : segments_to_integrate_) {
-      delete segment;
-    }
-    segments_to_integrate_.clear();
-
-    end = ros::WallTime::now();
-    ROS_INFO("Cleared candidates and memory in %f seconds.",
-             (end - start).toSec());
-
-    // if (publish_gsm_updates_ && publishObjects()) {
-    //   publishScene();
-    // }
   }
+
   received_first_message_ = true;
   last_update_received_ = ros::Time::now();
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
@@ -632,7 +745,7 @@ void Controller::segmentPointCloudCallback(
     }
     timing::Timer ptcloud_timer("ptcloud_preprocess");
 
-    Segment* segment;
+    Segment* segment = nullptr;
     if (enable_semantic_instance_segmentation_) {
       pcl::PointCloud<voxblox::PointSemanticInstanceType>
           point_cloud_semantic_instance;
@@ -647,24 +760,9 @@ void Controller::segmentPointCloudCallback(
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
       segment = new Segment(point_cloud, T_G_C);
     }
+    CHECK_NOTNULL(segment);
     segments_to_integrate_.push_back(segment);
-
-    // if (use_label_propagation_) {
-    //   fillSegmentWithData(segment_point_cloud_msg, segment);
-    // } else {
-    //   fillSegmentWithData<PointSurfelLabel>(segment_point_cloud_msg,
-    //   segment);
-    // }
     ptcloud_timer.Stop();
-
-    // ros::WallTime start = ros::WallTime::now();
-
-    //     "Comput
-    // ros::WallTime end = ros::WallTime::now();
-    // ROS_INFO(
-    //     "Computed label candidates for a pointcloud of size %lu in %f "
-    //     "seconds.",
-    //     segment->points_C_.size(), (end - start).toSec());
   }
 }
 
@@ -725,17 +823,25 @@ bool Controller::generateMeshCallback(
   return true;
 }
 
-bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
-                                         std_srvs::Empty::Response& response) {
+bool Controller::saveSegmentsAsMeshCallback(
+    std_srvs::Empty::Request& request, std_srvs::Empty::Response& response) {
   // Get list of all labels in the map.
   Labels labels = map_->getLabelList();
   static constexpr bool kConnectedMesh = false;
 
-  std::unordered_map<Label, LayerPair> label_to_layers;
+  std::unordered_map<Label, LabelTsdfMap::LayerPair> label_to_layers;
   // Extract the TSDF and label layers corresponding to a segment.
   constexpr bool kLabelsListIsComplete = false;
   map_->extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
 
+  const char* kSegmentFolder = "gsm_segments";
+
+  struct stat info;
+  if (stat(kSegmentFolder, &info) != 0) {
+    CHECK_EQ(mkdir(kSegmentFolder, ACCESSPERMS), 0);
+  }
+
+  bool overall_success = true;
   for (Label label : labels) {
     auto it = label_to_layers.find(label);
     CHECK(it != label_to_layers.end())
@@ -759,7 +865,95 @@ bool Controller::extractSegmentsCallback(std_srvs::Empty::Request& request,
       ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
     }
   }
-  return true;
+
+  return overall_success;
+}
+
+void Controller::extractSegmentLayers(
+    const std::vector<Label>& labels,
+    std::unordered_map<Label, LayerTuple>* label_layers_map,
+    bool labels_list_is_complete) {
+  CHECK(label_layers_map);
+
+  // Build map from labels to tsdf and label layers. Each will contain the
+  // segment of the corresponding layer.
+  Layer<TsdfVoxel> tsdf_layer_empty(map_config_.voxel_size,
+                                    map_config_.voxels_per_side);
+  Layer<LabelVoxel> label_layer_empty(map_config_.voxel_size,
+                                      map_config_.voxels_per_side);
+  FeatureLayer<Feature3D> feature_layer_empty(
+      map_config_.voxel_size * map_config_.voxels_per_side,
+      feature_layer_->getDescriptorSize());
+
+  for (const Label& label : labels) {
+    label_layers_map->emplace(
+        label, std::make_tuple(tsdf_layer_empty, label_layer_empty,
+                               feature_layer_empty));
+  }
+
+  BlockIndexList all_label_blocks;
+  map_->getTsdfLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
+
+  for (const BlockIndex& block_index : all_label_blocks) {
+    Block<TsdfVoxel>::Ptr global_tsdf_block =
+        map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
+    Block<LabelVoxel>::Ptr global_label_block =
+        map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
+    FeatureBlock<Feature3D>::Ptr global_feature_block =
+        feature_layer_->getBlockPtrByIndex(block_index);
+
+    const size_t vps = global_label_block->voxels_per_side();
+    for (size_t i = 0; i < vps * vps * vps; ++i) {
+      const LabelVoxel& global_label_voxel =
+          global_label_block->getVoxelByLinearIndex(i);
+
+      if (global_label_voxel.label == 0u) {
+        continue;
+      }
+
+      auto it = label_layers_map->find(global_label_voxel.label);
+      if (it == label_layers_map->end()) {
+        if (labels_list_is_complete) {
+          LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
+                     << global_label_voxel.label
+                     << " which is not in the given "
+                        "list of labels to retrieve.";
+        }
+        continue;
+      }
+
+      Layer<TsdfVoxel>& tsdf_layer =
+          std::get<LayerAccessor::kTsdfLayer>(it->second);
+      Layer<LabelVoxel>& label_layer =
+          std::get<LayerAccessor::kLabelLayer>(it->second);
+      FeatureLayer<Feature3D>& feature_layer =
+          std::get<LayerAccessor::kFeatureLayer>(it->second);
+
+      Block<TsdfVoxel>::Ptr tsdf_block =
+          tsdf_layer.allocateBlockPtrByIndex(block_index);
+      Block<LabelVoxel>::Ptr label_block =
+          label_layer.allocateBlockPtrByIndex(block_index);
+      FeatureBlock<Feature3D>::Ptr feature_block =
+          feature_layer.allocateBlockPtrByIndex(block_index);
+
+      CHECK(tsdf_block);
+      CHECK(label_block);
+      CHECK(feature_block);
+
+      TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
+      LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
+
+      const TsdfVoxel& global_tsdf_voxel =
+          global_tsdf_block->getVoxelByLinearIndex(i);
+
+      tsdf_voxel = global_tsdf_voxel;
+      label_voxel = global_label_voxel;
+
+      if (global_feature_block != nullptr) {
+        feature_block->getFeatures() = global_feature_block->getFeatures();
+      }
+    }
+  }
 }
 
 bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
@@ -768,12 +962,13 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
   InstanceLabels instance_labels = map_->getInstanceList();
   static constexpr bool kConnectedMesh = false;
 
-  std::unordered_map<InstanceLabel, LayerPair> instance_label_to_layers;
+  std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>
+      instance_label_to_layers;
   // Extract the TSDF and label layers corresponding to a segment.
   constexpr bool kLabelsListIsComplete = true;
   map_->extractInstanceLayers(instance_labels, &instance_label_to_layers);
 
-  for (InstanceLabel instance_label : instance_labels) {
+  for (const InstanceLabel instance_label : instance_labels) {
     auto it = instance_label_to_layers.find(instance_label);
     CHECK(it != instance_label_to_layers.end())
         << "Layers for instance label " << instance_label
@@ -883,9 +1078,9 @@ bool Controller::publishObjects(const bool publish_all) {
   std::vector<Label> labels_to_publish;
   getLabelsToPublish(publish_all, &labels_to_publish);
 
-  std::unordered_map<Label, LayerPair> label_to_layers;
+  std::unordered_map<Label, LayerTuple> label_to_layers;
   ros::Time start = ros::Time::now();
-  map_->extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
+  extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
   LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";
@@ -895,8 +1090,12 @@ bool Controller::publishObjects(const bool publish_all) {
     CHECK(it != label_to_layers.end())
         << "Layers for " << label << " could not be extracted.";
 
-    Layer<TsdfVoxel>& tsdf_layer = it->second.first;
-    Layer<LabelVoxel>& label_layer = it->second.second;
+    Layer<TsdfVoxel>& tsdf_layer =
+        std::get<LayerAccessor::kTsdfLayer>(it->second);
+    Layer<LabelVoxel>& label_layer =
+        std::get<LayerAccessor::kLabelLayer>(it->second);
+    FeatureLayer<Feature3D>& feature_layer =
+        std::get<LayerAccessor::kFeatureLayer>(it->second);
 
     // TODO(ff): Check what a reasonable size is for this.
     constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
@@ -915,11 +1114,16 @@ bool Controller::publishObjects(const bool publish_all) {
                                            &origin_shifted_label_layer_W);
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
 
+    // TODO(ntonci): Check that this is centered the same way as tsdf.
+    Point origin_shifted_feature_layer_W;
+    centerBlocksOfFeatureLayer<Feature3D>(&feature_layer,
+                                          &origin_shifted_feature_layer_W);
+    CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_feature_layer_W);
+
     // Extract surfel cloud from layer.
     MeshIntegratorConfig mesh_config;
-    node_handle_private_->param<float>("mesh_config/min_weight",
-                                       mesh_config.min_weight,
-                                       mesh_config.min_weight);
+    node_handle_private_->param<float>(
+        "meshing/min_weight", mesh_config.min_weight, mesh_config.min_weight);
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
     convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
@@ -943,10 +1147,18 @@ bool Controller::publishObjects(const bool publish_all) {
     // yet, hence it doesn't work.
     serializeLayerAsMsg<LabelVoxel>(label_layer, kSerializeOnlyUpdated,
                                     &gsm_update_msg.object.label_layer);
+    // TODO(ntonci): Check action and maybe change convention to be in the
+    // same style as above.
+    feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
+                                      DeserializeAction::kUpdate,
+                                      &gsm_update_msg.object.feature_layer);
+    LOG(INFO) << "Extracted segment with " << surfel_cloud->points.size()
+              << " points and " << feature_layer.getNumberOfFeatures()
+              << " features.";
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.object.semantic_label =
-        map_->getSemanticLabelFusionPtr()->getSemanticLabel(label);
+        map_->getSemanticInstanceLabelFusionPtr()->getSemanticLabel(label);
     gsm_update_msg.old_labels.clear();
     geometry_msgs::Transform transform;
     transform.translation.x = origin_shifted_tsdf_layer_W[0];
@@ -979,6 +1191,8 @@ bool Controller::publishObjects(const bool publish_all) {
     }
 
     if (compute_and_publish_bbox_) {
+      CHECK_NOTNULL(bbox_pub_);
+
       Eigen::Vector3f bbox_translation;
       Eigen::Quaternionf bbox_quaternion;
       Eigen::Vector3f bbox_size;
@@ -1035,15 +1249,20 @@ bool Controller::publishObjects(const bool publish_all) {
     publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
 
     if (publish_segment_mesh_) {
+      // TODO(ntonci): Why not call generateMesh?
+
       // Generate mesh for visualization purposes.
       std::shared_ptr<MeshLayer> mesh_layer;
       mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
       // mesh_layer.reset(new MeshLayer(map_->block_size()));
-      MeshLabelIntegrator mesh_integrator(mesh_config_, &tsdf_layer,
-                                          &label_layer, mesh_layer.get(),
-                                          all_semantic_labels_);
+      MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config;
+      label_tsdf_mesh_config.color_scheme =
+          MeshLabelIntegrator::ColorScheme::kColor;
+      MeshLabelIntegrator mesh_integrator(mesh_config_, label_tsdf_mesh_config,
+                                          tsdf_layer, label_layer,
+                                          mesh_layer.get());
       constexpr bool only_mesh_updated_blocks = false;
-      constexpr bool clear_updated_flag = true;
+      constexpr bool clear_updated_flag = false;
       mesh_integrator.generateMesh(only_mesh_updated_blocks,
                                    clear_updated_flag);
 
@@ -1063,6 +1282,8 @@ void Controller::publishScene() {
   CHECK_NOTNULL(scene_gsm_update_pub_);
   modelify_msgs::GsmUpdate gsm_update_msg;
 
+  // TODO(ntonci): Create a method that generalizes this part such that you
+  // dont need to do it twice, for objects and scene.
   gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
   gsm_update_msg.header.frame_id = world_frame_;
 
@@ -1071,8 +1292,10 @@ void Controller::publishScene() {
                                  &gsm_update_msg.object.tsdf_layer);
   // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
   // yet, hence it doesn't work.
+  // TODO(ntonci): This seems to work?
   serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(), kSerializeOnlyUpdated,
                                   &gsm_update_msg.object.label_layer);
+  // TODO(ntonci): Also publish feature layer for scene.
 
   gsm_update_msg.object.label = 0u;
   gsm_update_msg.old_labels.clear();
@@ -1090,6 +1313,8 @@ void Controller::publishScene() {
   publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
 }
 
+// TODO(ntonci): Generalize this and rename since this one is also publishing
+// and saving, not just generating.
 void Controller::generateMesh() {  // NOLINT
   voxblox::timing::Timer generate_mesh_timer("mesh/generate");
   {
@@ -1135,6 +1360,8 @@ void Controller::generateMesh() {  // NOLINT
     if (publish_scene_mesh_) {
       timing::Timer publish_mesh_timer("mesh/publish");
       voxblox_msgs::Mesh mesh_msg;
+      // TODO(margaritaG) : this function cleans up empty meshes, and this
+      // seems to trouble the visualizer. Investigate.
       generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
       mesh_msg.header.frame_id = world_frame_;
       scene_mesh_pub_->publish(mesh_msg);
@@ -1175,11 +1402,12 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       only_mesh_updated_blocks = false;
       need_full_remesh_ = false;
     }
-    bool clear_updated_flag = false;
-    updated_mesh_ |= mesh_label_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
 
     if (enable_semantic_instance_segmentation_) {
+      bool clear_updated_flag = false;
+      updated_mesh_ |= mesh_label_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
+
       updated_mesh_ |= mesh_merged_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
 
@@ -1189,13 +1417,22 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       clear_updated_flag = true;
       updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
+    } else {
+      bool clear_updated_flag = true;
+      // TODO(ntonci): Why not calling generateMesh instead?
+      updated_mesh_ |= mesh_label_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
     }
     generate_mesh_timer.Stop();
 
     if (publish_scene_mesh_) {
       timing::Timer publish_mesh_timer("mesh/publish");
       voxblox_msgs::Mesh mesh_msg;
+
+      // TODO(margaritaG) : this function cleans up empty meshes, and this
+      // seems to trouble the visualizer. Investigate.
       generateVoxbloxMeshMsg(mesh_merged_layer_, ColorMode::kColor, &mesh_msg);
+
       mesh_msg.header.frame_id = world_frame_;
       scene_mesh_pub_->publish(mesh_msg);
       publish_mesh_timer.Stop();

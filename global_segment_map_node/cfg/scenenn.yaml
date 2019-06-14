@@ -24,6 +24,7 @@ pairwise_confidence_merging:
 
 semantic_instance_segmentation:
   enable_semantic_instance_segmentation: true
+  class_task: coco80
 
 object_database:
   publish_gsm_updates: false
@@ -33,9 +34,8 @@ object_database:
   validate_merged_object: "validate_merged_object"
 
 meshing:
-  visualize: false
-  update_mesh_every_n_sec: 0.0
-  mesh_color_scheme: "geometric_instance_label"
+  visualize: true
+  update_mesh_every_n_sec: 5.0
   publish_segment_mesh: false
   publish_scene_mesh: false
   mesh_filename: "gsm_scenenn_mesh.ply"

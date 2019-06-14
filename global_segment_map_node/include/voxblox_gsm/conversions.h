@@ -101,10 +101,10 @@ bool convertLabelTsdfLayersToMesh(
   CHECK_NOTNULL(mesh);
 
   MeshIntegratorConfig mesh_config;
+  MeshLabelIntegrator::LabelTsdfConfig label_tsdf_config;
   MeshLayer mesh_layer(tsdf_layer.block_size());
-  std::set<SemanticLabel> all_semantic_labels;
-  MeshLabelIntegrator mesh_integrator(mesh_config, tsdf_layer, label_layer,
-                                      &mesh_layer, all_semantic_labels);
+  MeshLabelIntegrator mesh_integrator(mesh_config, label_tsdf_config,
+                                      tsdf_layer, label_layer, &mesh_layer);
 
   // Generate mesh layer.
   constexpr bool only_mesh_updated_blocks = false;

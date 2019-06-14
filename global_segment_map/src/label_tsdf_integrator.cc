@@ -11,62 +11,18 @@ LabelTsdfIntegrator::LabelTsdfIntegrator(
       label_count_map_ptr_(map->getLabelCountPtr()),
       highest_label_ptr_(CHECK_NOTNULL(map->getHighestLabelPtr())),
       highest_instance_ptr_(CHECK_NOTNULL(map->getHighestInstancePtr())),
-      instance_label_fusion_ptr_(map->getInstanceLabelFusionPtr()),
-      semantic_label_fusion_ptr_(map->getSemanticLabelFusionPtr()),
+      semantic_instance_label_fusion_ptr_(
+          map->getSemanticInstanceLabelFusionPtr()),
       icp_(new ICP(getICPConfigFromGflags())) {
   CHECK(label_layer_);
   T_G_G_icp_.setIdentity();
 }
 
-// Pose tracking.
-Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
-    const Transformation& T_G_C_init, const Pointcloud& point_cloud) {
-  // TODO(ff): We should actually check here
-  // how many blocks are in the
-  // camera frustum.
-  if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
-    return T_G_C_init;
-  }
-  Transformation T_G_C_icp;
-  timing::Timer icp_timer("icp");
-  if (!label_tsdf_config_.keep_track_of_icp_correction) {
-    T_G_G_icp_.setIdentity();
-  }
-
-  const size_t num_icp_updates =
-      icp_->runICP(*layer_, point_cloud, T_G_G_icp_ * T_G_C_init, &T_G_C_icp);
-  if (num_icp_updates == 0u || num_icp_updates > 800u) {
-    LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
-               << num_icp_updates << ", using T_G_C_init.";
-    return T_G_C_init;
-  }
-  LOG(ERROR) << "ICP refinement performed " << num_icp_updates
-             << " successful update steps.";
-  T_G_G_icp_ = T_G_C_icp * T_G_C_init.inverse();
-
-  if (!label_tsdf_config_.keep_track_of_icp_correction) {
-    LOG(ERROR) << "Current ICP refinement offset: T_Gicp_G: " << T_G_G_icp_;
-  } else {
-    LOG(ERROR) << "ICP refinement for this pointcloud: T_Gicp_G: "
-               << T_G_G_icp_;
-  }
-
-  if (!icp_->refiningRollPitch()) {
-    // its already removed internally but small floating point errors can
-    // build up if accumulating transforms
-    Transformation::Vector6 vec_T_Gicp_G = T_G_G_icp_.log();
-    vec_T_Gicp_G[3] = 0.0;
-    vec_T_Gicp_G[4] = 0.0;
-    T_G_G_icp_ = Transformation::exp(vec_T_Gicp_G);
-  }
-
-  icp_timer.Stop();
-  return T_G_C_icp;
-}
-
 void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(
-    Label label, int label_points_count, int segment_points_count,
+    const Label& label, const int label_points_count,
+    const int segment_points_count,
     std::unordered_set<Label>* merge_candidate_labels) {
+  CHECK_NOTNULL(merge_candidate_labels);
   // All segment labels that overlap with more than a certain
   // percentage of the segment points are potential merge candidates.
   float label_segment_overlap_ratio = static_cast<float>(label_points_count) /
@@ -78,9 +34,12 @@ void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(
 }
 
 void LabelTsdfIntegrator::increaseLabelCountForSegment(
-    Segment* segment, Label label, int segment_points_count,
+    Segment* segment, const Label& label, const int segment_points_count,
     std::map<Label, std::map<Segment*, size_t>>* candidates,
     std::unordered_set<Label>* merge_candidate_labels) {
+  CHECK_NOTNULL(segment);
+  CHECK_NOTNULL(candidates);
+  CHECK_NOTNULL(merge_candidate_labels);
   auto label_it = candidates->find(label);
   if (label_it != candidates->end()) {
     auto segment_it = label_it->second.find(segment);
@@ -103,7 +62,7 @@ void LabelTsdfIntegrator::increaseLabelCountForSegment(
 }
 
 void LabelTsdfIntegrator::increasePairwiseConfidenceCount(
-    std::vector<Label> merge_candidates) {
+    const std::vector<Label>& merge_candidates) {
   for (size_t i = 0u; i < merge_candidates.size(); ++i) {
     for (size_t j = i + 1; j < merge_candidates.size(); ++j) {
       Label new_label = merge_candidates[i];
@@ -170,6 +129,7 @@ Label LabelTsdfIntegrator::getNextUnassignedLabel(
 
 void LabelTsdfIntegrator::updateVoxelLabelAndConfidence(
     LabelVoxel* label_voxel, const Label& preferred_label) {
+  CHECK_NOTNULL(label_voxel);
   Label max_label = 0u;
   LabelConfidence max_confidence = 0u;
   for (const LabelCount& label_count : label_voxel->label_count) {
@@ -187,6 +147,7 @@ void LabelTsdfIntegrator::updateVoxelLabelAndConfidence(
 void LabelTsdfIntegrator::addVoxelLabelConfidence(
     const Label& label, const LabelConfidence& confidence,
     LabelVoxel* label_voxel) {
+  CHECK_NOTNULL(label_voxel);
   bool updated = false;
   for (LabelCount& label_count : label_voxel->label_count) {
     if (label_count.label == label) {
@@ -220,8 +181,9 @@ void LabelTsdfIntegrator::computeSegmentLabelCandidates(
     Segment* segment, std::map<Label, std::map<Segment*, size_t>>* candidates,
     std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
     const std::set<Label>& assigned_labels) {
-  DCHECK(segment != nullptr);
-  DCHECK(candidates != nullptr);
+  CHECK_NOTNULL(segment);
+  CHECK_NOTNULL(candidates);
+  CHECK_NOTNULL(segment_merge_candidates);
   // Flag to check whether there exists at least one label candidate.
   bool candidate_label_exists = false;
   const int segment_points_count = segment->points_C_.size();
@@ -279,6 +241,11 @@ bool LabelTsdfIntegrator::getNextSegmentLabelPair(
     std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
     std::map<Segment*, std::vector<Label>>* segment_merge_candidates,
     std::pair<Segment*, Label>* segment_label_pair) {
+  CHECK_NOTNULL(assigned_labels);
+  CHECK_NOTNULL(candidates);
+  CHECK_NOTNULL(segment_merge_candidates);
+  CHECK_NOTNULL(segment_label_pair);
+
   Label max_label;
   size_t max_count = 0u;
   Segment* max_segment;
@@ -288,10 +255,12 @@ bool LabelTsdfIntegrator::getNextSegmentLabelPair(
        ++label_it) {
     for (auto segment_it = label_it->second.begin();
          segment_it != label_it->second.end(); segment_it++) {
-      if (segment_it->second > max_count &&
-          segment_it->second > label_tsdf_config_.min_label_voxel_count &&
-          labelled_segments.find(segment_it->first) ==
-              labelled_segments.end()) {
+      bool count_greater_than_max = segment_it->second > max_count;
+      bool count_greater_than_min =
+          segment_it->second > label_tsdf_config_.min_label_voxel_count;
+      bool is_unlabelled =
+          labelled_segments.find(segment_it->first) == labelled_segments.end();
+      if (count_greater_than_max && count_greater_than_min && is_unlabelled) {
         max_count = segment_it->second;
         max_segment = segment_it->first;
         max_label = label_it->first;
@@ -327,6 +296,9 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
     std::vector<voxblox::Segment*>* segments_to_integrate,
     std::map<voxblox::Label, std::map<voxblox::Segment*, size_t>>* candidates,
     std::map<Segment*, std::vector<Label>>* segment_merge_candidates) {
+  CHECK_NOTNULL(segments_to_integrate);
+  CHECK_NOTNULL(candidates);
+  CHECK_NOTNULL(segment_merge_candidates);
   std::set<Label> assigned_labels;
   std::set<Segment*> labelled_segments;
   std::pair<Segment*, Label> pair;
@@ -335,6 +307,7 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
   while (getNextSegmentLabelPair(labelled_segments, &assigned_labels,
                                  candidates, segment_merge_candidates, &pair)) {
     Segment* segment = pair.first;
+    CHECK_NOTNULL(segment);
     Label& label = pair.second;
 
     segment->label_ = label;
@@ -362,8 +335,8 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
     for (auto segment_it = labelled_segments.begin();
          segment_it != labelled_segments.end(); ++segment_it) {
       Label label = (*segment_it)->label_;
-      if ((*segment_it)->points_C_.size() > 0) {
-        instance_label_fusion_ptr_->increaseLabelFramesCount(label);
+      if ((*segment_it)->points_C_.size() > 0u) {
+        semantic_instance_label_fusion_ptr_->increaseLabelFramesCount(label);
       }
 
       // Loop through all the segments.
@@ -373,19 +346,19 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
             (*segment_it)->instance_label_);
         if (global_instance_it != current_to_global_instance_map_.end()) {
           // If current frame instance maps to a global instance, use it.
-          instance_label_fusion_ptr_->increaseLabelInstanceCount(
+          semantic_instance_label_fusion_ptr_->increaseLabelInstanceCount(
               label, global_instance_it->second);
         } else {
           // Current frame instance doesn't map to any global instance.
           // Get the global instance with max count.
           InstanceLabel instance_label =
-              instance_label_fusion_ptr_->getLabelInstance(label,
-                                                           assigned_instances);
+              semantic_instance_label_fusion_ptr_->getInstanceLabel(
+                  label, assigned_instances);
 
           if (instance_label != 0u) {
             current_to_global_instance_map_.emplace(
                 (*segment_it)->instance_label_, instance_label);
-            instance_label_fusion_ptr_->increaseLabelInstanceCount(
+            semantic_instance_label_fusion_ptr_->increaseLabelInstanceCount(
                 label, instance_label);
             assigned_instances.emplace(instance_label);
           } else {
@@ -393,21 +366,22 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
             InstanceLabel fresh_instance = getFreshInstance();
             current_to_global_instance_map_.emplace(
                 (*segment_it)->instance_label_, fresh_instance);
-            instance_label_fusion_ptr_->increaseLabelInstanceCount(
+            semantic_instance_label_fusion_ptr_->increaseLabelInstanceCount(
                 label, fresh_instance);
           }
         }
-        semantic_label_fusion_ptr_->increaseLabelClassCount(
+        semantic_instance_label_fusion_ptr_->increaseLabelClassCount(
             label, (*segment_it)->semantic_label_);
       } else {
         // It's a segment with no instance prediction in the current frame.
         // Get the global instance it maps to, and set it as assigned.
         InstanceLabel instance_label =
-            instance_label_fusion_ptr_->getLabelInstance(label);
+            semantic_instance_label_fusion_ptr_->getInstanceLabel(label);
         // TODO(grinvalm) : also pass assigned instances here?
         if (instance_label != 0u) {
           assigned_instances.emplace(instance_label);
         }
+        // TODO(margaritaG): handle this nicely or remove.
         // if ((*segment_it)->points_C_.size() > 2500) {
         //   decreaseLabelInstanceCount(label, instance_label);
         // }
@@ -417,7 +391,8 @@ void LabelTsdfIntegrator::decideLabelPointClouds(
 }
 
 // Increase or decrease the voxel count for a label.
-void LabelTsdfIntegrator::changeLabelCount(const Label label, int count) {
+void LabelTsdfIntegrator::changeLabelCount(const Label& label,
+                                           const int count) {
   auto label_count_it = label_count_map_ptr_->find(label);
   if (label_count_it != label_count_map_ptr_->end()) {
     label_count_it->second = label_count_it->second + count;
@@ -426,7 +401,9 @@ void LabelTsdfIntegrator::changeLabelCount(const Label label, int count) {
     }
   } else {
     if (label != 0u) {
-      DCHECK(count > 0);
+      // TODO(margaritaG) : This seems to not hold true occasionally,
+      // investigate.
+      // CHECK_GE(count, 0);
       label_count_map_ptr_->insert(std::make_pair(label, count));
     }
   }
@@ -435,8 +412,8 @@ void LabelTsdfIntegrator::changeLabelCount(const Label label, int count) {
 LabelVoxel* LabelTsdfIntegrator::allocateStorageAndGetLabelVoxelPtr(
     const GlobalIndex& global_voxel_idx, Block<LabelVoxel>::Ptr* last_block,
     BlockIndex* last_block_idx) {
-  DCHECK(last_block != nullptr);
-  DCHECK(last_block_idx != nullptr);
+  CHECK_NOTNULL(last_block);
+  CHECK_NOTNULL(last_block_idx);
 
   const BlockIndex block_idx =
       getBlockIndexFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_inv_);
@@ -467,8 +444,8 @@ LabelVoxel* LabelTsdfIntegrator::allocateStorageAndGetLabelVoxelPtr(
                          voxels_per_side_, voxel_size_,
                          getOriginPointFromGridIndex(block_idx, block_size_)));
 
-      DCHECK(insert_status.second) << "Block already exists when allocating at "
-                                   << block_idx.transpose();
+      CHECK(insert_status.second) << "Block already exists when allocating at "
+                                  << block_idx.transpose();
 
       *last_block = insert_status.first->second;
     }
@@ -499,6 +476,7 @@ void LabelTsdfIntegrator::updateLabelVoxel(const Point& point_G,
                                            const Label& label,
                                            LabelVoxel* label_voxel,
                                            const LabelConfidence& confidence) {
+  CHECK_NOTNULL(label_voxel);
   // Lookup the mutex that is responsible for this voxel and lock it.
   std::lock_guard<std::mutex> lock(mutexes_.get(
       getGridIndexFromPoint<GlobalIndex>(point_G, voxel_size_inv_)));
@@ -549,9 +527,10 @@ void LabelTsdfIntegrator::integratePointCloud(const Transformation& T_G_C,
   // cleared.
   LongIndexHashMapType<AlignedVector<size_t>>::type clear_map;
 
-  ThreadSafeIndex index_getter(points_C.size());
+  std::unique_ptr<ThreadSafeIndex> index_getter(
+      ThreadSafeIndexFactory::get(config_.integration_order_mode, points_C));
 
-  bundleRays(T_G_C, points_C, freespace_points, &index_getter, &voxel_map,
+  bundleRays(T_G_C, points_C, freespace_points, index_getter.get(), &voxel_map,
              &clear_map);
 
   integrateRays(T_G_C, points_C, colors, label, config_.enable_anti_grazing,
@@ -629,8 +608,9 @@ void LabelTsdfIntegrator::integrateVoxel(
     updateTsdfVoxel(origin, merged_point_G, global_voxel_idx, merged_color,
                     merged_weight, tsdf_voxel);
 
+    // TODO(margaritaG): parametrize.
     // If voxel carving is enabled, then only allocate the label voxels
-    // within twice the truncation distance from the surface.
+    // within three times the truncation distance from the surface.
     if (!config_.voxel_carving_enabled ||
         std::abs(tsdf_voxel->distance) <
             3 * config_.default_truncation_distance) {
@@ -657,8 +637,8 @@ void LabelTsdfIntegrator::integrateVoxels(
     it = voxel_map.begin();
     map_size = voxel_map.size();
   }
-  for (size_t i = 0; i < map_size; ++i) {
-    if (((i + thread_idx + 1) % config_.integrator_threads) == 0) {
+  for (size_t i = 0u; i < map_size; ++i) {
+    if (((i + thread_idx + 1) % config_.integrator_threads) == 0u) {
       integrateVoxel(T_G_C, points_C, colors, label, enable_anti_grazing,
                      clearing_ray, *it, voxel_map);
     }
@@ -674,13 +654,13 @@ void LabelTsdfIntegrator::integrateRays(
   const Point& origin = T_G_C.getPosition();
 
   // if only 1 thread just do function call, otherwise spawn threads
-  if (config_.integrator_threads == 1) {
-    constexpr size_t thread_idx = 0;
+  if (config_.integrator_threads == 1u) {
+    constexpr size_t thread_idx = 0u;
     integrateVoxels(T_G_C, points_C, colors, label, enable_anti_grazing,
                     clearing_ray, voxel_map, clear_map, thread_idx);
   } else {
     std::list<std::thread> integration_threads;
-    for (size_t i = 0; i < config_.integrator_threads; ++i) {
+    for (size_t i = 0u; i < config_.integrator_threads; ++i) {
       integration_threads.emplace_back(
           &LabelTsdfIntegrator::integrateVoxels, this, T_G_C, points_C, colors,
           label, enable_anti_grazing, clearing_ray, voxel_map, clear_map, i);
@@ -699,23 +679,23 @@ void LabelTsdfIntegrator::integrateRays(
 }
 
 FloatingPoint LabelTsdfIntegrator::computeConfidenceWeight(
-    FloatingPoint distance) {
+    const FloatingPoint& distance) {
   const FloatingPoint mu = label_tsdf_config_.lognormal_weight_mean;
   const FloatingPoint sigma = label_tsdf_config_.lognormal_weight_sigma;
   FloatingPoint x =
       std::max(0.0f, distance - label_tsdf_config_.lognormal_weight_offset);
 
-  if (x == 0) {
-    return 0;
+  if (x == 0.0f) {
+    return 0.0f;
   }
-  CHECK(sigma > 0.0 && std::isfinite(sigma))
+  CHECK(sigma > 0.0f && std::isfinite(sigma))
       << "Scale parameter is " << sigma << ", but must be > 0 !";
   CHECK(std::isfinite(mu)) << "Location parameter is " << mu
                            << ", but must be finite!";
-  CHECK(x >= 0.0 && std::isfinite(x))
+  CHECK(x >= 0.0f && std::isfinite(x))
       << "Random variate is " << x << " but must be >= 0 !";
 
-  FloatingPoint result = 0.0;
+  FloatingPoint result = 0.0f;
   FloatingPoint exponent = std::log(x) - mu;
   exponent *= -exponent;
   exponent /= 2 * sigma * sigma;
@@ -727,7 +707,8 @@ FloatingPoint LabelTsdfIntegrator::computeConfidenceWeight(
 }
 
 // Not thread safe.
-void LabelTsdfIntegrator::swapLabels(Label old_label, Label new_label) {
+void LabelTsdfIntegrator::swapLabels(const Label& old_label,
+                                     const Label& new_label) {
   BlockIndexList all_label_blocks;
   label_layer_->getAllAllocatedBlocks(&all_label_blocks);
 
@@ -735,7 +716,7 @@ void LabelTsdfIntegrator::swapLabels(Label old_label, Label new_label) {
     Block<LabelVoxel>::Ptr block =
         label_layer_->getBlockPtrByIndex(block_index);
     size_t vps = block->voxels_per_side();
-    for (int i = 0; i < vps * vps * vps; i++) {
+    for (int i = 0u; i < vps * vps * vps; i++) {
       LabelVoxel& voxel = block->getVoxelByLinearIndex(i);
       Label previous_label = voxel.label;
 
@@ -771,7 +752,7 @@ void LabelTsdfIntegrator::swapLabels(Label old_label, Label new_label) {
 }
 
 void LabelTsdfIntegrator::resetCurrentFrameUpdatedLabelsAge() {
-  for (Label label : updated_labels_) {
+  for (const Label label : updated_labels_) {
     // Set timestamp or integer age of segment.
     // Here is the place to do it so it's the same timestamp
     // for all segments in a frame.
@@ -800,8 +781,8 @@ void LabelTsdfIntegrator::getLabelsToPublish(
   }
 }
 
-void LabelTsdfIntegrator::addPairwiseConfidenceCount(LLMapIt label_map_it,
-                                                     Label label, int count) {
+void LabelTsdfIntegrator::addPairwiseConfidenceCount(
+    const LLMapIt& label_map_it, const Label& label, const int count) {
   LMapIt label_count_it = label_map_it->second.find(label);
   if (label_count_it != label_map_it->second.end()) {
     // label_map already contains a pairwise confidence count
@@ -901,6 +882,7 @@ bool LabelTsdfIntegrator::getNextMerge(Label* new_label, Label* old_label) {
 
 // Not thread safe.
 void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
+  CHECK_NOTNULL(merges_to_publish);
   if (label_tsdf_config_.enable_pairwise_confidence_merging) {
     Label new_label;
     Label old_label;
@@ -934,6 +916,51 @@ void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
       merge_timer.Stop();
     }
   }
+}
+
+// Pose tracking.
+Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
+    const Transformation& T_G_C_init, const Pointcloud& point_cloud) {
+  // TODO(ff): We should actually check here how many blocks are in the camera
+  // frustum.
+  if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
+    return T_G_C_init;
+  }
+  Transformation T_G_C_icp;
+  timing::Timer icp_timer("icp");
+  if (!label_tsdf_config_.keep_track_of_icp_correction) {
+    T_G_G_icp_.setIdentity();
+  }
+
+  const size_t num_icp_updates =
+      icp_->runICP(*layer_, point_cloud, T_G_G_icp_ * T_G_C_init, &T_G_C_icp);
+  if (num_icp_updates == 0u || num_icp_updates > 800u) {
+    LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
+               << num_icp_updates << ", using T_G_C_init.";
+    return T_G_C_init;
+  }
+  LOG(ERROR) << "ICP refinement performed " << num_icp_updates
+             << " successful update steps.";
+  T_G_G_icp_ = T_G_C_icp * T_G_C_init.inverse();
+
+  if (!label_tsdf_config_.keep_track_of_icp_correction) {
+    LOG(ERROR) << "Current ICP refinement offset: T_Gicp_G: " << T_G_G_icp_;
+  } else {
+    LOG(ERROR) << "ICP refinement for this pointcloud: T_Gicp_G: "
+               << T_G_G_icp_;
+  }
+
+  if (!icp_->refiningRollPitch()) {
+    // its already removed internally but small floating point errors can
+    // build up if accumulating transforms
+    Transformation::Vector6 vec_T_Gicp_G = T_G_G_icp_.log();
+    vec_T_Gicp_G[3] = 0.0;
+    vec_T_Gicp_G[4] = 0.0;
+    T_G_G_icp_ = Transformation::exp(vec_T_Gicp_G);
+  }
+
+  icp_timer.Stop();
+  return T_G_C_icp;
 }
 
 }  // namespace voxblox
