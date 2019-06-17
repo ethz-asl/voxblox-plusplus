@@ -670,7 +670,6 @@ void Controller::segmentPointCloudCallback(
       constexpr bool kIsFreespacePointcloud = false;
       {
         std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
-
         start = ros::WallTime::now();
         timing::Timer integrate_timer("integrate_frame_pointclouds");
 
@@ -1060,7 +1059,6 @@ void Controller::publishTsdf() {
 void Controller::publishLabelTsdf() {
   // Create a pointcloud with distance = intensity.
   pcl::PointCloud<pcl::PointXYZI> pointcloud;
-
   createLabelDistancePointcloudFromLabelTsdfLayer(
       map_->getTsdfLayer(), map_->getLabelLayer(), &pointcloud);
 
@@ -1394,54 +1392,52 @@ void Controller::generateMesh() {  // NOLINT
 }
 
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
-  {
-    std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
-    timing::Timer generate_mesh_timer("mesh/update");
-    bool only_mesh_updated_blocks = true;
-    if (need_full_remesh_) {
-      only_mesh_updated_blocks = false;
-      need_full_remesh_ = false;
-    }
+  std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
+  timing::Timer generate_mesh_timer("mesh/update");
+  bool only_mesh_updated_blocks = true;
+  if (need_full_remesh_) {
+    only_mesh_updated_blocks = false;
+    need_full_remesh_ = false;
+  }
 
-    if (enable_semantic_instance_segmentation_) {
-      bool clear_updated_flag = false;
-      updated_mesh_ |= mesh_label_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
+  if (enable_semantic_instance_segmentation_) {
+    bool clear_updated_flag = false;
+    updated_mesh_ |= mesh_label_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
 
-      updated_mesh_ |= mesh_merged_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
+    updated_mesh_ |= mesh_merged_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
 
-      updated_mesh_ |= mesh_instance_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
+    updated_mesh_ |= mesh_instance_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
 
-      clear_updated_flag = true;
-      updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
-    } else {
-      bool clear_updated_flag = true;
-      // TODO(ntonci): Why not calling generateMesh instead?
-      updated_mesh_ |= mesh_label_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
-    }
-    generate_mesh_timer.Stop();
+    clear_updated_flag = true;
+    updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
+  } else {
+    bool clear_updated_flag = true;
+    // TODO(ntonci): Why not calling generateMesh instead?
+    updated_mesh_ |= mesh_label_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
+  }
+  generate_mesh_timer.Stop();
 
-    if (publish_scene_mesh_) {
-      timing::Timer publish_mesh_timer("mesh/publish");
-      voxblox_msgs::Mesh mesh_msg;
+  if (publish_scene_mesh_) {
+    timing::Timer publish_mesh_timer("mesh/publish");
+    voxblox_msgs::Mesh mesh_msg;
 
-      // TODO(margaritaG) : this function cleans up empty meshes, and this
-      // seems to trouble the visualizer. Investigate.
-      generateVoxbloxMeshMsg(mesh_merged_layer_, ColorMode::kColor, &mesh_msg);
+    // TODO(margaritaG) : this function cleans up empty meshes, and this
+    // seems to trouble the visualizer. Investigate.
+    generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
 
-      mesh_msg.header.frame_id = world_frame_;
-      scene_mesh_pub_->publish(mesh_msg);
-      publish_mesh_timer.Stop();
-    }
-    if (publish_pointclouds_) {
-      publishTsdfSlice();
-      publishTsdf();
-      publishLabelTsdf();
-    }
+    mesh_msg.header.frame_id = world_frame_;
+    scene_mesh_pub_->publish(mesh_msg);
+    publish_mesh_timer.Stop();
+  }
+  if (publish_pointclouds_) {
+    publishTsdfSlice();
+    publishTsdf();
+    publishLabelTsdf();
   }
 }
 

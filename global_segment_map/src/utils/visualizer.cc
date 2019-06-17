@@ -66,8 +66,8 @@ void Visualizer::visualizeMesh() {
         refresh = true;
         *updated_mesh_ = false;
       }
+      updated_mesh_mutex_ptr_->unlock();
     }
-    updated_mesh_mutex_ptr_->unlock();
 
     if (refresh) {
       for (int index = 0; index < n_visualizers; index++) {

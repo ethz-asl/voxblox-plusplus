@@ -27,6 +27,6 @@ meshing:
   update_mesh_every_n_sec: 1.0
   mesh_color_scheme: "geometric_instance_label"
   publish_segment_mesh: false
-  publish_scene_mesh: true
+  publish_scene_mesh: false
   mesh_filename: "scenenet_gsm.ply"
   publish_pointclouds: true
