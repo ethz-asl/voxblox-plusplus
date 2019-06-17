@@ -9,7 +9,7 @@ voxblox:
   voxel_carving_enabled: true
   max_ray_length_m: 3
 
-gsm: # label_count: 3
+gsm:
   min_label_voxel_count: 20
   label_propagation_td_factor: 1.0
 
@@ -22,8 +22,8 @@ semantic_instance_segmentation:
   enable_semantic_instance_segmentation: true
 
 meshing:
-  visualize: false
-  update_mesh_every_n_sec: 1.0
+  visualize: true
+  update_mesh_every_n_sec: 2.0
   mesh_color_scheme: "geometric_instance_label"
   publish_segment_mesh: false
   publish_scene_mesh: true
