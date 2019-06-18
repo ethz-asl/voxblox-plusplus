@@ -1,13 +1,11 @@
-## Voxblox++: Volumetric Instance-Aware Semantic Mapping and 3D Object Discovery
+# Voxblox++
 
-[![Build Status](https://jenkins.asl.ethz.ch/buildStatus/icon?subject=Ubuntu%2016.04%20%2B%20ROS%20kinetic&job=voxblox-plusplus-nightly%2Flabel%3Dubuntu-xenial)](https://jenkins.asl.ethz.ch/job/voxblox-plusplus-nightly/label=ubuntu-xenial/)
-[![Build Status](https://jenkins.asl.ethz.ch/buildStatus/icon?subject=Ubuntu%2018.04%20%2B%20ROS%20melodic&job=voxblox-plusplus-nightly%2Flabel%3Dubuntu-bionic)](https://jenkins.asl.ethz.ch/job/voxblox-plusplus-nightly/label=ubuntu-bionic/)
+[![Build Status](https://jenkins.asl.ethz.ch/buildStatus/icon?subject=ubuntu%2016.04%20%2B%20ROS%20kinetic&job=voxblox-plusplus-nightly%2Flabel%3Dubuntu-xenial)](https://jenkins.asl.ethz.ch/job/voxblox-plusplus-nightly/label=ubuntu-xenial/)
+[![Build Status](https://jenkins.asl.ethz.ch/buildStatus/icon?subject=ubuntu%2018.04%20%2B%20ROS%20melodic&job=voxblox-plusplus-nightly%2Flabel%3Dubuntu-bionic)](https://jenkins.asl.ethz.ch/job/voxblox-plusplus-nightly/label=ubuntu-bionic/)
 
-This repository contains the **Voxblox++** framework for incrementally building volumetric object-centric maps during online scanning with a localized RGB-D camera. Besides accurately describing the geometry of the reconstructed scene, the built maps contain information about the individual object instances observed in the scene. In particular, the proposed framework retrieves the dense shape and pose of recognized semantic objects, as well as of newly discovered, previously unobserved object-like instances.
+**Voxblox++** is a framework for incrementally building volumetric object-centric maps during online scanning with a localized RGB-D camera. Besides accurately describing the geometry of the reconstructed scene, the built maps contain information about the individual object instances observed in the scene. In particular, the proposed framework retrieves the dense shape and pose of recognized semantic objects, as well as of newly discovered, previously unobserved object-like instances.
 
 <img src="https://github.com/ethz-asl/voxblox-plusplus/wiki/images/office_floor_map.png" width=700>
-
-
 
 
 ## Getting started
@@ -17,7 +15,7 @@ This repository contains the **Voxblox++** framework for incrementally building 
 More information can be found in the [wiki pages](https://github.com/ethz-asl/voxblox-plusplus/wiki).
 
 ## Citing
-If you use the **Voxblox++** framework in your research, please cite the following publication:
+If you use **Voxblox++** in your research, please cite the following publication:
 
 - Margarita Grinvald, Fadri Furrer, Tonci Novkovic, Jen Jen Chung, Cesar Cadena, Roland Siegwart, Juan Nieto, **Volumetric Instance-Aware Semantic Mapping and 3D Object Discovery**, _IEEE Robotics and Automation Letters_, 2019. [[PDF](https://arxiv.org/abs/1903.00268)] [[Video](https://www.youtube.com/watch?v=Jvl42VJmYxg)]
 
