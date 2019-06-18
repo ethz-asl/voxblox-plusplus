@@ -608,9 +608,7 @@ void Controller::segmentPointCloudCallback(
                                           segment->points_C_.end());
       }
       Transformation T_Gicp_C = T_G_C;
-      const LabelTsdfIntegrator::LabelTsdfConfig& label_tsdf_config =
-          integrator_->getLabelTsdfConfig();
-      if (label_tsdf_config.enable_icp) {
+      if (label_tsdf_integrator_config_.enable_icp) {
         T_Gicp_C =
             integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
       }
