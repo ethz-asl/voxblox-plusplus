@@ -26,6 +26,7 @@
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
+#include <voxblox_ros/ptcloud_vis.h>
 
 #ifdef APPROXMVBB_AVAILABLE
 #include <ApproxMVBB/ComputeApproxMVBB.hpp>
@@ -354,6 +355,35 @@ void Controller::advertiseSegmentGsmUpdateTopic(
       node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
           segment_gsm_update_topic, kGsmUpdateQueueSize, true);
   segment_gsm_update_pub_ = segment_gsm_update_pub;
+}
+
+void Controller::advertiseGsmUpdateCloudTopic(
+    ros::Publisher* gsm_update_cloud_pub) {
+  CHECK_NOTNULL(gsm_update_cloud_pub);
+  std::string gsm_update_cloud_topic = "gsm_update_cloud";
+  node_handle_private_->param<std::string>(
+      "gsm_update_cloud_topic", gsm_update_cloud_topic, gsm_update_cloud_topic);
+  // TODO(ff): Reduce this value, once we know some reasonable limit.
+  constexpr int kGsmUpdateQueueSize = 2000;
+  *gsm_update_cloud_pub =
+      node_handle_private_->advertise<sensor_msgs::PointCloud2>(
+          gsm_update_cloud_topic, kGsmUpdateQueueSize, true);
+  gsm_update_cloud_pub_ = gsm_update_cloud_pub;
+}
+
+void Controller::advertiseGsmUpdateVoxelLayerTopic(
+    ros::Publisher* gsm_update_voxel_layer_pub) {
+  CHECK_NOTNULL(gsm_update_voxel_layer_pub);
+  std::string gsm_update_voxel_layer_topic = "gsm_update_voxel_layer";
+  node_handle_private_->param<std::string>("gsm_update_voxel_layer",
+                                           gsm_update_voxel_layer_topic,
+                                           gsm_update_voxel_layer_topic);
+  // TODO(ff): Reduce this value, once we know some reasonable limit.
+  constexpr int kGsmUpdateQueueSize = 2000;
+  *gsm_update_voxel_layer_pub =
+      node_handle_private_->advertise<visualization_msgs::MarkerArray>(
+          gsm_update_voxel_layer_topic, kGsmUpdateQueueSize, true);
+  gsm_update_voxel_layer_pub_ = gsm_update_voxel_layer_pub;
 }
 
 void Controller::advertiseSceneGsmUpdateTopic(
@@ -874,6 +904,9 @@ bool Controller::lookupTransform(const std::string& from_frame,
 // void serializeGsmAsMsg(const map&, const label&, const parent_labels&, msg*);
 bool Controller::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
+  CHECK_NOTNULL(gsm_update_cloud_pub_);
+  CHECK_NOTNULL(gsm_update_voxel_layer_pub_);
+
   bool published_segment_label = false;
   std::vector<Label> labels_to_publish;
   getLabelsToPublish(publish_all, &labels_to_publish);
@@ -903,6 +936,34 @@ bool Controller::publishObjects(const bool publish_all) {
         kMinNumberOfAllocatedBlocksToPublish) {
       continue;
     }
+
+    visualization_msgs::MarkerArray voxel_layer_array;
+    createOccupancyBlocksFromTsdfLayer(tsdf_layer, world_frame_,
+                                       &voxel_layer_array);
+    gsm_update_voxel_layer_pub_->publish(voxel_layer_array);
+
+    MeshIntegratorConfig mesh_config;
+    node_handle_private_->param<float>("mesh_config/min_weight",
+                                       mesh_config.min_weight,
+                                       mesh_config.min_weight);
+
+    pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud_tmp(
+        new pcl::PointCloud<pcl::PointSurfel>());
+    convertVoxelGridToPointCloud(tsdf_layer, mesh_config,
+                                 surfel_cloud_tmp.get());
+    int r = rand() % 256;
+    int g = rand() % 256;
+    int b = rand() % 256;
+    for (pcl::PointSurfel& point : surfel_cloud_tmp->points) {
+      point.r = r;
+      point.g = g;
+      point.b = b;
+    }
+    sensor_msgs::PointCloud2 cloud_msg;
+    pcl::toROSMsg(*surfel_cloud_tmp, cloud_msg);
+    cloud_msg.header.stamp = last_segment_msg_timestamp_;
+    cloud_msg.header.frame_id = world_frame_;
+    gsm_update_cloud_pub_->publish(cloud_msg);
 
     // Convert to origin and extract translation.
     Point origin_shifted_tsdf_layer_W;

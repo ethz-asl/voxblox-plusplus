@@ -40,6 +40,12 @@ int main(int argc, char** argv) {
   ros::Publisher segment_gsm_update_publisher;
   controller->advertiseSegmentGsmUpdateTopic(&segment_gsm_update_publisher);
 
+  ros::Publisher gsm_update_cloud_publisher;
+  controller->advertiseGsmUpdateCloudTopic(&gsm_update_cloud_publisher);
+  ros::Publisher gsm_update_voxel_layer_publisher;
+  controller->advertiseGsmUpdateVoxelLayerTopic(
+      &gsm_update_voxel_layer_publisher);
+
   ros::Publisher scene_gsm_update_publisher;
   controller->advertiseSceneGsmUpdateTopic(&scene_gsm_update_publisher);
 

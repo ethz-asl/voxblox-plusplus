@@ -57,6 +57,10 @@ class Controller {
 
   void advertiseSegmentGsmUpdateTopic(ros::Publisher* segment_gsm_update_pub);
 
+  void advertiseGsmUpdateCloudTopic(ros::Publisher* gsm_update_cloud_pub);
+  void advertiseGsmUpdateVoxelLayerTopic(
+      ros::Publisher* gsm_update_voxel_layer_pub);
+
   void advertiseSceneGsmUpdateTopic(ros::Publisher* scene_gsm_update_pub);
 
   void advertiseSegmentMeshTopic(ros::Publisher* segment_mesh_pub);
@@ -163,6 +167,8 @@ class Controller {
 
   ros::Publisher* scene_gsm_update_pub_;
   ros::Publisher* segment_gsm_update_pub_;
+  ros::Publisher* gsm_update_cloud_pub_;
+  ros::Publisher* gsm_update_voxel_layer_pub_;
   ros::Publisher* feature_block_pub_;
 
   ros::Timer update_mesh_timer_;
