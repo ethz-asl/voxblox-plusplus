@@ -4,10 +4,10 @@ namespace voxblox {
 
 Visualizer::Visualizer(
     const std::vector<std::shared_ptr<MeshLayer>>& mesh_layers,
-    bool* updated_mesh, std::mutex* updated_mesh_mutex_ptr)
+    bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr)
     : mesh_layers_(mesh_layers),
-      updated_mesh_(CHECK_NOTNULL(updated_mesh)),
-      updated_mesh_mutex_ptr_(CHECK_NOTNULL(updated_mesh_mutex_ptr)),
+      mesh_layer_updated_(CHECK_NOTNULL(mesh_layer_updated)),
+      mesh_layer_mutex_ptr_(CHECK_NOTNULL(mesh_layer_mutex_ptr)),
       frame_count_(0u) {}
 
 // TODO(grinvalm): make it more efficient by only updating the
@@ -51,6 +51,7 @@ void Visualizer::visualizeMesh() {
   }
 
   while (true) {
+    LOG(ERROR) << "Start spinning";
     for (int index = 0; index < n_visualizers; ++index) {
       constexpr int kUpdateIntervalMs = 1000;
       pcl_visualizers[index]->spinOnce(kUpdateIntervalMs);
@@ -58,18 +59,21 @@ void Visualizer::visualizeMesh() {
     meshes.clear();
     meshes.resize(n_visualizers);
 
-    if (updated_mesh_mutex_ptr_->try_lock()) {
-      if (*updated_mesh_) {
+    if (mesh_layer_mutex_ptr_->try_lock()) {
+      LOG(ERROR) << "Getting mesh";
+      if (*mesh_layer_updated_) {
         for (int index = 0; index < n_visualizers; index++) {
           mesh_layers_[index]->getMesh(&meshes[index]);
         }
         refresh = true;
-        *updated_mesh_ = false;
+        *mesh_layer_updated_ = false;
       }
-      updated_mesh_mutex_ptr_->unlock();
+      LOG(ERROR) << "Done getting mesh";
+      mesh_layer_mutex_ptr_->unlock();
     }
 
     if (refresh) {
+      LOG(ERROR) << "Refreshing";
       for (int index = 0; index < n_visualizers; index++) {
         pointclouds[index].points.clear();
       }
@@ -122,6 +126,7 @@ void Visualizer::visualizeMesh() {
       frame_count_++;
 
       refresh = false;
+      LOG(ERROR) << "Done refreshing";
     }
   }
 }

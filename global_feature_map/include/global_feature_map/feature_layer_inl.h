@@ -79,10 +79,12 @@ template <typename FeatureType>
 void FeatureLayer<FeatureType>::serializeLayerAsMsg(
     const bool only_updated, const DeserializeAction& action,
     modelify_msgs::FeatureLayer* msg) {
-  CHECK_GT(getDescriptorSize(), 0u)
-      << "You need to set the descriptor size before you can serialize the "
-         "layer! You can do this either directly in the constructor of the "
-         "layer or during feature callback.";
+  if (!getDescriptorSize() > 0u) {
+    LOG(WARNING)
+        << "You need to set the descriptor size before you can serialize the "
+           "layer! You can do this either directly in the constructor of the "
+           "layer or during feature callback.";
+  }
   CHECK_NOTNULL(msg);
   msg->block_size = block_size();
   msg->feature_descriptor_size = getDescriptorSize();

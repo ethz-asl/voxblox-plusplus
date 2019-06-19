@@ -206,8 +206,9 @@ class Controller {
 
   std::thread viz_thread_;
   Visualizer* visualizer_;
-  std::mutex updated_mesh_mutex_;
-  bool updated_mesh_;
+  std::mutex label_tsdf_layers_mutex_;
+  std::mutex mesh_layer_mutex_;
+  bool mesh_layer_updated_;
   bool need_full_remesh_;
 };
 

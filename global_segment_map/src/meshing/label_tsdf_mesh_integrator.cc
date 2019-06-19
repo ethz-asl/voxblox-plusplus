@@ -93,6 +93,7 @@ bool MeshLabelIntegrator::generateMesh(bool only_mesh_updated_blocks,
   std::unique_ptr<ThreadSafeIndex> index_getter(
       new MixedThreadSafeIndex(all_tsdf_blocks.size()));
 
+  LOG(ERROR) << "Generate 1";
   std::list<std::thread> integration_threads;
   for (size_t i = 0u; i < config_.integrator_threads; ++i) {
     integration_threads.emplace_back(
@@ -100,9 +101,13 @@ bool MeshLabelIntegrator::generateMesh(bool only_mesh_updated_blocks,
         clear_updated_flag, index_getter.get());
   }
 
+  LOG(ERROR) << "Generate 2";
+
   for (std::thread& thread : integration_threads) {
     thread.join();
   }
+
+  LOG(ERROR) << "Generate 3";
 
   return true;
 }
@@ -124,7 +129,6 @@ void MeshLabelIntegrator::generateMeshBlocksFunction(
         sdf_layer_mutable_->getBlockPtrByIndex(block_idx);
     typename Block<LabelVoxel>::Ptr label_block =
         label_layer_mutable_ptr_->getBlockPtrByIndex(block_idx);
-
     updateMeshForBlock(block_idx);
     if (clear_updated_flag) {
       typename Block<TsdfVoxel>::Ptr tsdf_block =
@@ -178,7 +182,6 @@ void MeshLabelIntegrator::updateMeshForBlock(const BlockIndex& block_index) {
   // } else if (!(tsdf_block && label_block)) {
   //   LOG(FATAL) << "Block allocation differs between the two layers.";
   // }
-
   extractBlockMesh(tsdf_block, mesh_block);
   // Update colors if needed.
   if (config_.use_color) {

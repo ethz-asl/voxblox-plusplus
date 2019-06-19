@@ -135,7 +135,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_scene_mesh_(false),
       received_first_message_(false),
       received_first_feature_(false),
-      updated_mesh_(false),
+      mesh_layer_updated_(false),
       need_full_remesh_(false),
       enable_semantic_instance_segmentation_(true),
       compute_and_publish_bbox_(false),
@@ -317,7 +317,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       mesh_layers.push_back(mesh_merged_layer_);
     }
     visualizer_ =
-        new Visualizer(mesh_layers, &updated_mesh_, &updated_mesh_mutex_);
+        new Visualizer(mesh_layers, &mesh_layer_updated_, &mesh_layer_mutex_);
     viz_thread_ = std::thread(&Visualizer::visualizeMesh, visualizer_);
   }
 
@@ -615,7 +615,8 @@ void Controller::segmentPointCloudCallback(
       }
       LOG(ERROR) << "About to get lock for integrating";
       {
-        std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
+        std::lock_guard<std::mutex> label_tsdf_layers_lock(
+            label_tsdf_layers_mutex_);
         LOG(ERROR) << "Start integrating";
         for (Segment* segment : segments_to_integrate_) {
           CHECK_NOTNULL(segment);
@@ -1235,45 +1236,49 @@ void Controller::publishScene() {
 // TODO(ntonci): Generalize this and rename since this one is also publishing
 // and saving, not just generating.
 void Controller::generateMesh(bool clear_mesh) {  // NOLINT
-  voxblox::timing::Timer generate_mesh_timer("mesh/generate");
   {
-    std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
-    if (clear_mesh) {
-      constexpr bool only_mesh_updated_blocks = false;
-      constexpr bool clear_updated_flag = true;
-      mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
-                                           clear_updated_flag);
-      if (enable_semantic_instance_segmentation_) {
-        all_semantic_labels_.clear();
-        mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+    std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
+    voxblox::timing::Timer generate_mesh_timer("mesh/generate");
+    {
+      std::lock_guard<std::mutex> label_tsdf_layers_lock(
+          label_tsdf_layers_mutex_);
+      if (clear_mesh) {
+        constexpr bool only_mesh_updated_blocks = false;
+        constexpr bool clear_updated_flag = true;
+        mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
+                                             clear_updated_flag);
+        if (enable_semantic_instance_segmentation_) {
+          all_semantic_labels_.clear();
+          mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+          for (auto sl : all_semantic_labels_) {
+            LOG(ERROR) << classes[(unsigned)sl];
+          }
+          mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+          mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
                                                 clear_updated_flag);
-        for (auto sl : all_semantic_labels_) {
-          LOG(ERROR) << classes[(unsigned)sl];
         }
-        mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                clear_updated_flag);
-        mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                              clear_updated_flag);
-      }
 
-    } else {
-      constexpr bool only_mesh_updated_blocks = true;
-      constexpr bool clear_updated_flag = true;
-      mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
-                                           clear_updated_flag);
+      } else {
+        constexpr bool only_mesh_updated_blocks = true;
+        constexpr bool clear_updated_flag = true;
+        mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
+                                             clear_updated_flag);
 
-      if (enable_semantic_instance_segmentation_) {
-        mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+        if (enable_semantic_instance_segmentation_) {
+          mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+          mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+          mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
                                                 clear_updated_flag);
-        mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                clear_updated_flag);
-        mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                              clear_updated_flag);
+        }
       }
+      generate_mesh_timer.Stop();
     }
-    generate_mesh_timer.Stop();
 
-    updated_mesh_ = true;
+    mesh_layer_updated_ = true;
 
     if (publish_scene_mesh_) {
       timing::Timer publish_mesh_timer("mesh/publish");
@@ -1312,8 +1317,10 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 }
 
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
+  std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
   {
-    std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
     LOG(ERROR) << "Updating mesh";
     timing::Timer generate_mesh_timer("mesh/update");
     bool only_mesh_updated_blocks = true;
@@ -1321,40 +1328,39 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       only_mesh_updated_blocks = false;
       need_full_remesh_ = false;
     }
+    LOG(ERROR) << "I AM HERE 1";
 
     if (enable_semantic_instance_segmentation_) {
       bool clear_updated_flag = false;
-      updated_mesh_ |= mesh_label_integrator_->generateMesh(
+      mesh_layer_updated_ |= mesh_merged_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
-
-      updated_mesh_ |= mesh_merged_integrator_->generateMesh(
+      LOG(ERROR) << "I AM HERE 1.1";
+      mesh_layer_updated_ |= mesh_instance_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
-
-      updated_mesh_ |= mesh_instance_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
-
-      clear_updated_flag = true;
-      updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
-    } else {
-      bool clear_updated_flag = true;
-      // TODO(ntonci): Why not calling generateMesh instead?
-      updated_mesh_ |= mesh_label_integrator_->generateMesh(
+      LOG(ERROR) << "I AM HERE 1.2";
+      mesh_layer_updated_ |= mesh_semantic_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
     }
+    LOG(ERROR) << "I AM HERE 2";
+
+    bool clear_updated_flag = true;
+    // TODO(ntonci): Why not calling generateMesh instead?
+    mesh_layer_updated_ |= mesh_label_integrator_->generateMesh(
+        only_mesh_updated_blocks, clear_updated_flag);
+    LOG(ERROR) << "I AM HERE 3";
     generate_mesh_timer.Stop();
-
-    if (publish_scene_mesh_) {
-      timing::Timer publish_mesh_timer("mesh/publish");
-      voxblox_msgs::Mesh mesh_msg;
-      // TODO(margaritaG) : this function cleans up empty meshes, and this seems
-      // to trouble the visualizer. Investigate.
-      generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
-      mesh_msg.header.frame_id = world_frame_;
-      scene_mesh_pub_->publish(mesh_msg);
-      publish_mesh_timer.Stop();
-    }
     LOG(ERROR) << "Done updating mesh";
+  }
+
+  if (publish_scene_mesh_) {
+    timing::Timer publish_mesh_timer("mesh/publish");
+    voxblox_msgs::Mesh mesh_msg;
+    // TODO(margaritaG) : this function cleans up empty meshes, and this seems
+    // to trouble the visualizer. Investigate.
+    generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
+    mesh_msg.header.frame_id = world_frame_;
+    scene_mesh_pub_->publish(mesh_msg);
+    publish_mesh_timer.Stop();
   }
 }
 
