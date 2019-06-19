@@ -1,23 +1,32 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "map"
 camera_frame_id: "camera0"
-scene_gsm_update_topic: "gsm_updates"
-segment_gsm_update_topic: "gsm_updates"
-object_flushing_age_threshold: 5
-validate_merged_object: "validate_merged_object"
-enable_pairwise_confidence_merging: true
-pairwise_confidence_ratio_threshold: 0.15
-pairwise_confidence_count_threshold: 1
-mesh_filename: "monstah_mesh.ply"
-publish_segment_mesh: true
-publish_scene_mesh: true
-update_mesh_every_n_sec: 0
-voxel_size: 0.02
-voxels_per_side: 8
-truncation_distance_factor: 3.0
-voxel_carving_enabled: false
-max_ray_length_m: 3.5
-publish_gsm_updates: true
+
+voxblox:
+  voxel_size: 0.02
+  voxels_per_side: 8
+  truncation_distance_factor: 3.0
+  voxel_carving_enabled: false
+  max_ray_length_m: 3.5
+
+
+pairwise_confidence_merging:
+  enable_pairwise_confidence_merging: true
+  merging_min_overlap_ratio: 0.15
+  merging_min_frame_count: 1
+
+object_database:
+  publish_gsm_updates: true
+  max_segment_age: 5
+  scene_gsm_update_topic: "gsm_updates"
+  segment_gsm_update_topic: "gsm_updates"
+  validate_merged_object: "validate_merged_object"
+
+meshing:
+  publish_segment_mesh: true
+  publish_scene_mesh: true
+  mesh_filename: "monstah_mesh.ply"
+  update_mesh_every_n_sec: 5
 
 sliding_window:
   is_on: false

@@ -4,13 +4,15 @@
   <version>0.0.0</version>
   <description>Global Feature Map voxblox extension</description>
 
-  <author email="tonci.novkovic@gmail.com">Tonci Novkovic</author>
-  <author email="marius.b.fehr@gmail.com">Marius Fehr</author>
+  <author email="tonci.novkovic@mavt.ethz.ch">Tonci Novkovic</author>
+  <author email="marius.fehr@mavt.ethz.ch">Marius Fehr</author>
+  <author email="fadri.furrer@mavt.ethz.ch">Fadri Furrer</author>
+  <author email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</author>
 
-  <maintainer email="tonci.novkovic@gmail.com">Tonci Novkovic</maintainer>
-  <maintainer email="margaritagrinvald@gmail.com">Margarita Grinvald</maintainer>
-  <maintainer email="ffurrer@gmail.com">Fadru Furrer</maintainer>
-  <maintainer email="marius.b.fehr@gmail.com">Marius Fehr</maintainer>
+  <maintainer email="tonci.novkovic@mavt.ethz.ch">Tonci Novkovic</maintainer>
+  <maintainer email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</maintainer>
+  <maintainer email="fadri.furrer@mavt.ethz.ch">Fadri Furrer</maintainer>
+  <maintainer email="marius.fehr@mavt.ethz.ch">Marius Fehr</maintainer>
 
   <license>BSD</license>
 

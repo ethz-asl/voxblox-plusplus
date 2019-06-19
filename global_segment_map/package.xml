@@ -2,20 +2,23 @@
 <package format="2">
   <name>global_segment_map</name>
   <version>0.0.0</version>
-  <description>Global Segmentation Map voxblox extension</description>
+  <description>Voxblox++</description>
 
-  <author email="margaritagrinvald@gmail.com">margaritaG</author>
+  <author email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</author>
+  <author email="fadri.furrer@mavt.ethz.ch">Fadri Furrer</author>
+  <author email="tonci.novkovic@mavt.ethz.ch">Tonci Novkovic</author>
+  <author email="marius.fehr@mavt.ethz.ch">Marius Fehr</author>
 
-  <maintainer email="margaritagrinvald@gmail.com">margaritaG</maintainer>
-  <maintainer email="ffurrer@gmail.com">ffurrer</maintainer>
-  <maintainer email="marius.b.fehr@gmail.com">mfehr</maintainer>
+  <maintainer email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</maintainer>
+  <maintainer email="fadri.furrer@mavt.ethz.ch">Fadri Furrer</maintainer>
+  <maintainer email="tonci.novkovic@mavt.ethz.ch">Tonci Novkovic</maintainer>
+  <maintainer email="marius.fehr@mavt.ethz.ch">Marius Fehr</maintainer>
 
   <license>BSD</license>
 
   <buildtool_depend>catkin</buildtool_depend>
   <buildtool_depend>catkin_simple</buildtool_depend>
 
-  <depend>Boost</depend>
   <depend>eigen_catkin</depend>
   <depend>glog_catkin</depend>
   <depend>pcl_catkin</depend>
