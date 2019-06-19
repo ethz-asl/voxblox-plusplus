@@ -1084,8 +1084,8 @@ bool Controller::publishObjects(const bool publish_all) {
     transform.rotation.z = 0.;
     gsm_update_msg.object.transforms.clear();
     gsm_update_msg.object.transforms.push_back(transform);
-    gsm_update_msg.object.surfel_cloud.header.frame_id = world_frame_;
     pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
+    gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
@@ -1210,6 +1210,18 @@ void Controller::publishScene() {
   serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(), kSerializeOnlyUpdated,
                                   &gsm_update_msg.object.label_layer);
   // TODO(ntonci): Also publish feature layer for scene.
+
+  // TODO(ntonci): This is done twice, rather do it in the beginning with all
+  // the other params.
+  MeshIntegratorConfig mesh_config;
+  node_handle_private_->param<float>(
+      "mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
+  pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
+      new pcl::PointCloud<pcl::PointSurfel>());
+  convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config,
+                               surfel_cloud.get());
+  pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
+  gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
 
   gsm_update_msg.object.label = 0u;
   gsm_update_msg.old_labels.clear();
