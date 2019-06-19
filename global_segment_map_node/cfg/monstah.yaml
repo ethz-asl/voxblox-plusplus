@@ -9,7 +9,6 @@ voxblox:
   voxel_carving_enabled: false
   max_ray_length_m: 3.5
 
-
 pairwise_confidence_merging:
   enable_pairwise_confidence_merging: true
   merging_min_overlap_ratio: 0.15
@@ -26,7 +25,7 @@ meshing:
   publish_segment_mesh: true
   publish_scene_mesh: true
   mesh_filename: "monstah_mesh.ply"
-  update_mesh_every_n_sec: 5
+  update_mesh_every_n_sec: 0.0
 
 sliding_window:
   is_on: false
