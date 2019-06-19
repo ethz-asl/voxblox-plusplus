@@ -94,16 +94,17 @@ inline void convertVoxelGridToPointCloud(
   surfel_cloud->height = 1u;
 }
 
-bool convertTsdfLabelLayersToMesh(
+bool convertLabelTsdfLayersToMesh(
     const Layer<TsdfVoxel>& tsdf_layer, const Layer<LabelVoxel>& label_layer,
     voxblox::Mesh* mesh, const bool connected_mesh = true,
     const FloatingPoint vertex_proximity_threshold = 1e-10) {
   CHECK_NOTNULL(mesh);
 
   MeshIntegratorConfig mesh_config;
+  MeshLabelIntegrator::LabelTsdfConfig label_tsdf_config;
   MeshLayer mesh_layer(tsdf_layer.block_size());
-  MeshLabelIntegrator mesh_integrator(mesh_config, tsdf_layer, label_layer,
-                                      &mesh_layer);
+  MeshLabelIntegrator mesh_integrator(mesh_config, label_tsdf_config,
+                                      tsdf_layer, label_layer, &mesh_layer);
 
   // Generate mesh layer.
   constexpr bool only_mesh_updated_blocks = false;
