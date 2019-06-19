@@ -24,7 +24,7 @@
     <param name="meshing/update_mesh_every_n_sec" value="0.0" unless="$(arg visualize)"/>
   </node>
 
-  <node name="bag" pkg="rosbag" type="play" output="screen" args="--delay 5 $(arg bag_file)" if="$(arg play_bag)">
+  <node name="bag" pkg="rosbag" type="play" output="screen" args="--delay 5 -r 0.4 $(arg bag_file)" if="$(arg play_bag)">
     <remap from="/ps_front/rgb/image_raw" to="/camera/rgb/image_raw" />
     <remap from="/ps_front/rgb/camera_info" to="/camera/rgb/camera_info" />
     <remap from="/ps_front/depth_registered/image_raw" to="/camera/depth/image_raw" />

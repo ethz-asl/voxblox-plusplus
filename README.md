@@ -10,9 +10,10 @@
 
 ## Getting started
 - [Installing on Ubuntu](https://github.com/ethz-asl/voxblox_gsm/wiki/Installation-on-Ubuntu)
+- [Sample Datasets](https://github.com/ethz-asl/voxblox-plusplus/wiki/Sample-Datasets)
 - [Basic usage](https://github.com/ethz-asl/voxblox-plusplus/wiki/Basic-usage)
 
-More information can be found in the [wiki pages](https://github.com/ethz-asl/voxblox-plusplus/wiki).
+More information and sample datasets can be found in the [wiki pages](https://github.com/ethz-asl/voxblox-plusplus/wiki).
 
 ## Citing
 If you use **Voxblox++** in your research, please cite the following publication:

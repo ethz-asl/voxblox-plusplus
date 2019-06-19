@@ -571,6 +571,7 @@ void Controller::segmentPointCloudCallback(
   // integrated.
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
+    LOG(ERROR) << "Maybe here";
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
 
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
@@ -612,9 +613,10 @@ void Controller::segmentPointCloudCallback(
         T_Gicp_C =
             integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
       }
-
+      LOG(ERROR) << "About to get lock for integrating";
       {
         std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
+        LOG(ERROR) << "Start integrating";
         for (Segment* segment : segments_to_integrate_) {
           CHECK_NOTNULL(segment);
           segment->T_G_C_ = T_Gicp_C;
@@ -623,6 +625,7 @@ void Controller::segmentPointCloudCallback(
                                            segment->colors_, segment->label_,
                                            kIsFreespacePointcloud);
         }
+        LOG(ERROR) << "end integrating";
       }
 
       integrate_timer.Stop();
@@ -664,6 +667,7 @@ void Controller::segmentPointCloudCallback(
       ROS_INFO("No segments to integrate.");
     }
   }
+  LOG(ERROR) << "HERE!";
   received_first_message_ = true;
   last_update_received_ = ros::Time::now();
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
@@ -720,6 +724,7 @@ void Controller::segmentPointCloudCallback(
     }
 
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
+    LOG(ERROR) << "Here2";
   }
 }
 
@@ -1309,6 +1314,7 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   {
     std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
+    LOG(ERROR) << "Updating mesh";
     timing::Timer generate_mesh_timer("mesh/update");
     bool only_mesh_updated_blocks = true;
     if (need_full_remesh_) {
@@ -1348,6 +1354,7 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       scene_mesh_pub_->publish(mesh_msg);
       publish_mesh_timer.Stop();
     }
+    LOG(ERROR) << "Done updating mesh";
   }
 }
 
