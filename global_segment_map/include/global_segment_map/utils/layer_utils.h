@@ -15,7 +15,7 @@ inline bool isSameVoxel(const LabelVoxel& voxel_A, const LabelVoxel& voxel_B) {
   is_the_same &= voxel_A.label == voxel_B.label;
   is_the_same &= voxel_A.label_confidence == voxel_B.label_confidence;
 
-  constexpr int kNumberOfLabels = 40u;
+  constexpr size_t kNumberOfLabels = 40u;
 
   for (size_t i = 0u; i < kNumberOfLabels; ++i) {
     is_the_same &= voxel_A.label_count[i].label == voxel_B.label_count[i].label;
