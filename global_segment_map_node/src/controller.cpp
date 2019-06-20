@@ -40,6 +40,7 @@
 namespace voxblox {
 namespace voxblox_gsm {
 
+// TODO(ntonci): Move this to a separate header.
 std::string classes[81] = {"BG",
                            "person",
                            "bicycle",
@@ -257,11 +258,11 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask::kCoco80;
   }
 
-  node_handle_private_->param<bool>("enable_icp",
+  node_handle_private_->param<bool>("icp/enable_icp",
                                     label_tsdf_integrator_config_.enable_icp,
                                     label_tsdf_integrator_config_.enable_icp);
   node_handle_private_->param<bool>(
-      "keep_track_of_icp_correction",
+      "icp/keep_track_of_icp_correction",
       label_tsdf_integrator_config_.keep_track_of_icp_correction,
       label_tsdf_integrator_config_.keep_track_of_icp_correction);
 
@@ -609,6 +610,9 @@ void Controller::segmentPointCloudCallback(
       }
       Transformation T_Gicp_C = T_G_C;
       if (label_tsdf_integrator_config_.enable_icp) {
+        // TODO(ntonci): Make icp config members ros params.
+        // integrator_->icp_.reset(new
+        // ICP(getICPConfigFromRosParam(nh_private)));
         T_Gicp_C =
             integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
       }
@@ -693,13 +697,13 @@ void Controller::segmentPointCloudCallback(
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_semantic_instance);
       segment = new Segment(point_cloud_semantic_instance, T_G_C);
     } else if (use_label_propagation_) {
-      pcl::PointCloud<voxblox::PointLabelType> point_cloud_label;
-      pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_label);
-      segment = new Segment(point_cloud_label, T_G_C);
-    } else {
       pcl::PointCloud<voxblox::PointType> point_cloud;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
       segment = new Segment(point_cloud, T_G_C);
+    } else {
+      pcl::PointCloud<voxblox::PointLabelType> point_cloud_label;
+      pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_label);
+      segment = new Segment(point_cloud_label, T_G_C);
     }
     CHECK_NOTNULL(segment);
     segments_to_integrate_.push_back(segment);

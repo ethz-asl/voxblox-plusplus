@@ -1,9 +1,7 @@
 <launch>
-  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/tango.yaml"/>
+  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/generic.yaml"/>
 
   <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
     <rosparam command="load" file="$(arg gsm_node_params_name)" />
-    <param name="world_frame_id" type="string" value="world" />
-    <param name="camera_frame_id" type="string" value="rgb_camera" />
   </node>
 </launch>
