@@ -1,7 +1,6 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "map"
-camera_frame_id: "camera0"
-publish_feature_blocks_marker: true
+publish_feature_blocks_marker: false
 use_label_propagation: true
 
 voxblox:

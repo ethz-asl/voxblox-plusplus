@@ -130,7 +130,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrated_frames_count_(0u),
       tf_listener_(ros::Duration(500)),
       world_frame_("world"),
-      camera_frame_(""),
       no_update_timeout_(0.0),
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
@@ -145,8 +144,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
-  node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
-                                           camera_frame_);
 
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
@@ -418,9 +415,9 @@ void Controller::advertiseSegmentGsmUpdateTopic(
     ros::Publisher* segment_gsm_update_pub) {
   CHECK_NOTNULL(segment_gsm_update_pub);
   std::string segment_gsm_update_topic = "gsm_update";
-  node_handle_private_->param<std::string>("segment_gsm_update_topic",
-                                           segment_gsm_update_topic,
-                                           segment_gsm_update_topic);
+  node_handle_private_->param<std::string>(
+      "object_database/segment_gsm_update_topic", segment_gsm_update_topic,
+      segment_gsm_update_topic);
   // TODO(ff): Reduce this value, once we know some reasonable limit.
   constexpr int kGsmUpdateQueueSize = 2000;
   *segment_gsm_update_pub =
@@ -434,7 +431,8 @@ void Controller::advertiseSceneGsmUpdateTopic(
   CHECK_NOTNULL(scene_gsm_update_pub);
   std::string scene_gsm_update_topic = "scene";
   node_handle_private_->param<std::string>(
-      "scene_gsm_update_topic", scene_gsm_update_topic, scene_gsm_update_topic);
+      "object_database/scene_gsm_update_topic", scene_gsm_update_topic,
+      scene_gsm_update_topic);
   constexpr int kGsmSceneQueueSize = 1;
 
   *scene_gsm_update_pub =
@@ -479,12 +477,10 @@ void Controller::advertisePublishSceneService(
 void Controller::validateMergedObjectService(
     ros::ServiceServer* validate_merged_object_srv) {
   CHECK_NOTNULL(validate_merged_object_srv);
-  static const std::string kValidateMergedObjectTopicRosParam =
-      "validate_merged_object";
   std::string validate_merged_object_topic = "validate_merged_object";
-  node_handle_private_->param<std::string>(kValidateMergedObjectTopicRosParam,
-                                           validate_merged_object_topic,
-                                           validate_merged_object_topic);
+  node_handle_private_->param<std::string>(
+      "object_database/validate_merged_object", validate_merged_object_topic,
+      validate_merged_object_topic);
 
   *validate_merged_object_srv = node_handle_private_->advertiseService(
       validate_merged_object_topic, &Controller::validateMergedObjectCallback,
@@ -526,13 +522,6 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
   if (!received_first_feature_ && features_C.size() > 0) {
     received_first_feature_ = true;
     feature_layer_->setDescriptorSize(descriptor_size);
-  }
-
-  if (camera_frame != camera_frame_) {
-    ROS_WARN_STREAM("Camera frame in the header ("
-                    << camera_frame
-                    << "), is not the same as specified rosparam camera frame ("
-                    << camera_frame_ << ").");
   }
 
   Transformation T_G_C;
@@ -674,10 +663,7 @@ void Controller::segmentPointCloudCallback(
 
   // Look up transform from camera frame to world frame.
   Transformation T_G_C;
-  std::string from_frame = camera_frame_;
-  if (camera_frame_.empty()) {
-    from_frame = segment_point_cloud_msg->header.frame_id;
-  }
+  std::string from_frame = segment_point_cloud_msg->header.frame_id;
   if (lookupTransform(from_frame, world_frame_,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {
     // Convert the PCL pointcloud into voxblox format.
