@@ -420,7 +420,7 @@ void Controller::subscribeSegmentPointCloudTopic(
 void Controller::advertiseSegmentGsmUpdateTopic(
     ros::Publisher* segment_gsm_update_pub) {
   CHECK_NOTNULL(segment_gsm_update_pub);
-  std::string segment_gsm_update_topic = "gsm_update";
+  std::string segment_gsm_update_topic = "gsm_updates";
   node_handle_private_->param<std::string>(
       "object_database/segment_gsm_update_topic", segment_gsm_update_topic,
       segment_gsm_update_topic);
@@ -691,6 +691,9 @@ void Controller::segmentPointCloudCallback(
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_semantic_instance);
       segment = new Segment(point_cloud_semantic_instance, T_G_C);
     } else if (use_label_propagation_) {
+      // TODO(ntonci): maybe rename use_label_propagation_ to something like
+      // use_voxblox_plus_plus_lables_ or change the order and call it
+      // use_external_labels_
       pcl::PointCloud<voxblox::PointType> point_cloud;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
       segment = new Segment(point_cloud, T_G_C);
