@@ -987,7 +987,7 @@ bool Controller::publishObjects(const bool publish_all) {
   extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
-  LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";
+  ROS_INFO_STREAM("Extracting segment layers took " << duration.toSec() << "s");
 
   for (const Label& label : labels_to_publish) {
     auto it = label_to_layers.find(label);
@@ -1002,7 +1002,7 @@ bool Controller::publishObjects(const bool publish_all) {
         std::get<LayerAccessor::kFeatureLayer>(it->second);
 
     // TODO(ff): Check what a reasonable size is for this.
-    constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
+    constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 100u;
     if (tsdf_layer.getNumberOfAllocatedBlocks() <
         kMinNumberOfAllocatedBlocksToPublish) {
       continue;
@@ -1056,9 +1056,9 @@ bool Controller::publishObjects(const bool publish_all) {
     feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
                                       DeserializeAction::kUpdate,
                                       &gsm_update_msg.object.feature_layer);
-    LOG(INFO) << "Extracted segment with " << surfel_cloud->points.size()
-              << " points and " << feature_layer.getNumberOfFeatures()
-              << " features.";
+    ROS_INFO_STREAM("Extracted segment with "
+                    << surfel_cloud->points.size() << " points and "
+                    << feature_layer.getNumberOfFeatures() << " features.");
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.object.semantic_label =
