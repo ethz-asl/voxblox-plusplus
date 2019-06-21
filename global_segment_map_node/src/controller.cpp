@@ -140,7 +140,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       enable_semantic_instance_segmentation_(true),
       compute_and_publish_bbox_(false),
       publish_feature_blocks_marker_(false),
-      use_label_propagation_(true) {
+      use_label_propagation_(true),
+      min_number_of_allocated_blocks_to_publish_(10) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
@@ -362,6 +363,11 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   node_handle_private_->param<double>("object_database/no_update_timeout",
                                       no_update_timeout_, no_update_timeout_);
+
+  node_handle_private_->param<int>(
+      "object_database/min_number_of_allocated_blocks_to_publish",
+      min_number_of_allocated_blocks_to_publish_,
+      min_number_of_allocated_blocks_to_publish_);
 }  // namespace voxblox_gsm
 
 Controller::~Controller() { viz_thread_.join(); }
@@ -1001,10 +1007,8 @@ bool Controller::publishObjects(const bool publish_all) {
     FeatureLayer<Feature3D>& feature_layer =
         std::get<LayerAccessor::kFeatureLayer>(it->second);
 
-    // TODO(ff): Check what a reasonable size is for this.
-    constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 100u;
     if (tsdf_layer.getNumberOfAllocatedBlocks() <
-        kMinNumberOfAllocatedBlocksToPublish) {
+        min_number_of_allocated_blocks_to_publish_) {
       continue;
     }
 

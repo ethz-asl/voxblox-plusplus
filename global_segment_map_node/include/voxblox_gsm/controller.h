@@ -208,6 +208,8 @@ class Controller {
   std::mutex updated_mesh_mutex_;
   bool updated_mesh_;
   bool need_full_remesh_;
+
+  int min_number_of_allocated_blocks_to_publish_;
 };
 
 }  // namespace voxblox_gsm
