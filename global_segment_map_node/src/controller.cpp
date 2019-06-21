@@ -1166,6 +1166,7 @@ bool Controller::publishObjects(const bool publish_all) {
       // TODO(ntonci): Why not call generateMesh?
 
       // Generate mesh for visualization purposes.
+
       std::shared_ptr<MeshLayer> mesh_layer;
       mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
       // mesh_layer.reset(new MeshLayer(map_->block_size()));
@@ -1177,9 +1178,11 @@ bool Controller::publishObjects(const bool publish_all) {
                                           mesh_layer.get());
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = false;
-      mesh_integrator.generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
-
+      {
+        std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
+        mesh_integrator.generateMesh(only_mesh_updated_blocks,
+                                     clear_updated_flag);
+      }
       voxblox_msgs::Mesh segment_mesh_msg;
       generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor, &segment_mesh_msg);
       segment_mesh_msg.header.frame_id = world_frame_;
