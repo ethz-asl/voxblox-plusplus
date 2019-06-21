@@ -42,6 +42,7 @@ endif()
 
 cs_add_library(${PROJECT_NAME}_library
   src/controller.cpp
+  src/iodb_controller.cpp
   src/sliding_window_controller.cpp
   src/feature_ros_tools.cpp
 )
@@ -51,6 +52,11 @@ cs_add_executable(${PROJECT_NAME}
   src/node.cpp
 )
 target_link_libraries(${PROJECT_NAME} ${PROJECT_NAME}_library)
+
+cs_add_executable(${PROJECT_NAME}_iodb
+  src/iodb_node.cpp
+)
+target_link_libraries(${PROJECT_NAME}_iodb ${PROJECT_NAME}_library)
 
 cs_add_executable(${PROJECT_NAME}_util
   src/pose_to_tf_node.cpp

@@ -17,35 +17,12 @@ int main(int argc, char** argv) {
   ros::NodeHandle node_handle;
   ros::NodeHandle node_handle_private("~");
 
-  bool sliding_window = false;
-  node_handle_private.param<bool>("sliding_window/is_on", sliding_window,
-                                  sliding_window);
-
   voxblox::voxblox_gsm::Controller* controller;
-
-  if (sliding_window) {
-    LOG(INFO) << "Starting sliding window GSM";
-    controller =
-        new voxblox::voxblox_gsm::SlidingWindowController(&node_handle_private);
-  } else {
-    LOG(INFO) << "Starting GSM";
-    controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
-  }
-
-  ros::Subscriber feature_sub;
-  controller->subscribeFeatureTopic(&feature_sub);
+  LOG(INFO) << "Starting Voxblox++";
+  controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
 
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
-
-  ros::Publisher segment_gsm_update_publisher;
-  ros::Publisher scene_gsm_update_publisher;
-
-  if (controller->publish_gsm_updates_) {
-    controller->advertiseSegmentGsmUpdateTopic(&segment_gsm_update_publisher);
-
-    controller->advertiseSceneGsmUpdateTopic(&scene_gsm_update_publisher);
-  }
 
   ros::Publisher segment_mesh_publisher;
   if (controller->publish_segment_mesh_) {
@@ -62,17 +39,6 @@ int main(int argc, char** argv) {
     controller->advertiseBboxTopic(&bbox_pub);
   }
 
-  ros::Publisher feature_block_pub;
-  if (controller->publish_feature_blocks_marker_) {
-    controller->advertiseFeatureBlockTopic(&feature_block_pub);
-  }
-
-  ros::ServiceServer publish_scene_srv;
-  controller->advertisePublishSceneService(&publish_scene_srv);
-
-  ros::ServiceServer validate_merged_object_srv;
-  controller->validateMergedObjectService(&validate_merged_object_srv);
-
   ros::ServiceServer generate_mesh_srv;
   controller->advertiseGenerateMeshService(&generate_mesh_srv);
 
@@ -88,12 +54,6 @@ int main(int argc, char** argv) {
   ros::AsyncSpinner spinner(0);
   spinner.start();
   ros::waitForShutdown();
-
-  if (controller->publish_scene_mesh_) {
-    controller->publishScene();
-    constexpr bool kPublishAllSegments = true;
-    controller->publishObjects(kPublishAllSegments);
-  }
 
   LOG(INFO) << "Shutting down.";
   return 0;

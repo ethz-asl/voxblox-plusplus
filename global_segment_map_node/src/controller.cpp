@@ -25,17 +25,14 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
-#include <voxblox/integrator/merge_integration.h>
-#include <voxblox/utils/layer_utils.h>
-#include <voxblox_ros/conversions.h>
+
+#include <voxblox/io/sdf_ply.h>
+
 #include <voxblox_ros/mesh_vis.h>
 
 #ifdef APPROXMVBB_AVAILABLE
 #include <ApproxMVBB/ComputeApproxMVBB.hpp>
 #endif
-
-#include "voxblox_gsm/conversions.h"
-#include "voxblox_gsm/feature_ros_tools.h"
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -134,12 +131,10 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
       received_first_message_(false),
-      received_first_feature_(false),
       updated_mesh_(false),
       need_full_remesh_(false),
       enable_semantic_instance_segmentation_(true),
       compute_and_publish_bbox_(false),
-      publish_feature_blocks_marker_(false),
       use_label_propagation_(true) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
@@ -161,9 +156,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   map_config_.voxels_per_side = voxels_per_side;
 
   map_.reset(new LabelTsdfMap(map_config_));
-  const double kBlockSize =
-      map_config_.voxel_size * map_config_.voxels_per_side;
-  feature_layer_.reset(new FeatureLayer<Feature3D>(kBlockSize));
 
   // Determine TSDF integrator parameters.
   tsdf_integrator_config_.voxel_carving_enabled = false;
@@ -298,12 +290,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
         mesh_merged_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
   }
 
-  // Determine feature integrator parameters.
-  // TODO(ntonci): Make rosparam if there are any.
-  FeatureIntegrator::Config feature_integrator_config;
-  feature_integrator_.reset(
-      new FeatureIntegrator(feature_integrator_config, feature_layer_.get()));
-
   // Visualization settings.
   bool visualize = false;
   node_handle_private_->param<bool>("meshing/visualize", visualize, visualize);
@@ -329,9 +315,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("meshing/compute_and_publish_bbox",
                                     compute_and_publish_bbox_,
                                     compute_and_publish_bbox_);
-  node_handle_private_->param<bool>("publish_feature_blocks_marker",
-                                    publish_feature_blocks_marker_,
-                                    publish_feature_blocks_marker_);
+
   node_handle_private_->param<bool>(
       "use_label_propagation", use_label_propagation_, use_label_propagation_);
 
@@ -364,36 +348,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   node_handle_private_->param<double>("object_database/no_update_timeout",
                                       no_update_timeout_, no_update_timeout_);
-}  // namespace voxblox_gsm
+}
 
 Controller::~Controller() { viz_thread_.join(); }
-
-// TODO(ntonci): Move all sub, pub, etc., and helpers to inline header.
-void Controller::subscribeFeatureTopic(ros::Subscriber* feature_sub) {
-  CHECK_NOTNULL(feature_sub);
-  std::string feature_topic = "/rgbd_feature_node/features";
-  node_handle_private_->param<std::string>("feature_topic", feature_topic,
-                                           feature_topic);
-
-  // Large queue size to give slack to the
-  // pipeline and not lose any messages.
-  constexpr int kFeatureQueueSize = 2000;
-  *feature_sub = node_handle_private_->subscribe(
-      feature_topic, kFeatureQueueSize, &Controller::featureCallback, this);
-}
-
-void Controller::advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub) {
-  CHECK_NOTNULL(feature_block_pub);
-  std::string feature_block_topic = "feature_block_array";
-  node_handle_private_->param<std::string>(
-      "feature_block_topic", feature_block_topic, feature_block_topic);
-
-  constexpr int kFeatureBlockQueueSize = 2000;
-  *feature_block_pub =
-      node_handle_private_->advertise<visualization_msgs::MarkerArray>(
-          feature_block_topic, kFeatureBlockQueueSize, true);
-  feature_block_pub_ = feature_block_pub;
-}
 
 void Controller::subscribeSegmentPointCloudTopic(
     ros::Subscriber* segment_point_cloud_sub) {
@@ -411,35 +368,6 @@ void Controller::subscribeSegmentPointCloudTopic(
   *segment_point_cloud_sub = node_handle_private_->subscribe(
       segment_point_cloud_topic, kSegmentPointCloudQueueSize,
       &Controller::segmentPointCloudCallback, this);
-}
-
-void Controller::advertiseSegmentGsmUpdateTopic(
-    ros::Publisher* segment_gsm_update_pub) {
-  CHECK_NOTNULL(segment_gsm_update_pub);
-  std::string segment_gsm_update_topic = "gsm_update";
-  node_handle_private_->param<std::string>("segment_gsm_update_topic",
-                                           segment_gsm_update_topic,
-                                           segment_gsm_update_topic);
-  // TODO(ff): Reduce this value, once we know some reasonable limit.
-  constexpr int kGsmUpdateQueueSize = 2000;
-  *segment_gsm_update_pub =
-      node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
-          segment_gsm_update_topic, kGsmUpdateQueueSize, true);
-  segment_gsm_update_pub_ = segment_gsm_update_pub;
-}
-
-void Controller::advertiseSceneGsmUpdateTopic(
-    ros::Publisher* scene_gsm_update_pub) {
-  CHECK_NOTNULL(scene_gsm_update_pub);
-  std::string scene_gsm_update_topic = "scene";
-  node_handle_private_->param<std::string>(
-      "scene_gsm_update_topic", scene_gsm_update_topic, scene_gsm_update_topic);
-  constexpr int kGsmSceneQueueSize = 1;
-
-  *scene_gsm_update_pub =
-      node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
-          scene_gsm_update_topic, kGsmSceneQueueSize, true);
-  scene_gsm_update_pub_ = scene_gsm_update_pub;
 }
 
 void Controller::advertiseSegmentMeshTopic(ros::Publisher* segment_mesh_pub) {
@@ -466,30 +394,6 @@ void Controller::advertiseBboxTopic(ros::Publisher* bbox_pub) {
   bbox_pub_ = bbox_pub;
 }
 
-void Controller::advertisePublishSceneService(
-    ros::ServiceServer* publish_scene_srv) {
-  CHECK_NOTNULL(publish_scene_srv);
-  static const std::string kAdvertisePublishSceneServiceName = "publish_scene";
-  *publish_scene_srv = node_handle_private_->advertiseService(
-      kAdvertisePublishSceneServiceName, &Controller::publishSceneCallback,
-      this);
-}
-
-void Controller::validateMergedObjectService(
-    ros::ServiceServer* validate_merged_object_srv) {
-  CHECK_NOTNULL(validate_merged_object_srv);
-  static const std::string kValidateMergedObjectTopicRosParam =
-      "validate_merged_object";
-  std::string validate_merged_object_topic = "validate_merged_object";
-  node_handle_private_->param<std::string>(kValidateMergedObjectTopicRosParam,
-                                           validate_merged_object_topic,
-                                           validate_merged_object_topic);
-
-  *validate_merged_object_srv = node_handle_private_->advertiseService(
-      validate_merged_object_topic, &Controller::validateMergedObjectCallback,
-      this);
-}
-
 void Controller::advertiseGenerateMeshService(
     ros::ServiceServer* generate_mesh_srv) {
   CHECK_NOTNULL(generate_mesh_srv);
@@ -511,163 +415,8 @@ void Controller::advertiseExtractInstancesService(
       "extract_instances", &Controller::extractInstancesCallback, this);
 }
 
-void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
-  size_t descriptor_size;
-  std::string camera_frame;
-  ros::Time timestamp;
-  std::vector<Feature3D> features_C;
-
-  ros::WallTime start = ros::WallTime::now();
-
-  fromFeaturesMsgToFeature3D(features_msg, &descriptor_size, &camera_frame,
-                             &timestamp, &features_C);
-
-  if (!received_first_feature_ && features_C.size() > 0) {
-    received_first_feature_ = true;
-    feature_layer_->setDescriptorSize(descriptor_size);
-  }
-
-  if (camera_frame != camera_frame_) {
-    ROS_WARN_STREAM("Camera frame in the header ("
-                    << camera_frame
-                    << "), is not the same as specified rosparam camera frame ("
-                    << camera_frame_ << ").");
-  }
-
-  Transformation T_G_C;
-  if (lookupTransform(camera_frame, world_frame_, timestamp, &T_G_C)) {
-    feature_integrator_->integrateFeatures(T_G_C, features_C);
-  } else {
-    ROS_WARN_STREAM("Could not find the transform to "
-                    << camera_frame << ", at time " << timestamp.toSec()
-                    << ", in the tf tree.");
-  }
-
-  if (publish_feature_blocks_marker_) {
-    CHECK_NOTNULL(feature_block_pub_);
-    visualization_msgs::MarkerArray feature_blocks;
-    // TODO(ntonci): Make this a param.
-    constexpr size_t kMaxNumberOfFeatures = 500u;
-    createOccupancyBlocksFromFeatureLayer(
-        *feature_layer_, world_frame_, kMaxNumberOfFeatures, &feature_blocks);
-    feature_block_pub_->publish(feature_blocks);
-  }
-
-  ros::WallTime end = ros::WallTime::now();
-  ROS_INFO(
-      "Integrated %lu features in %f seconds. Total number of features: %lu.",
-      features_C.size(), (end - start).toSec(),
-      feature_layer_->getNumberOfFeatures());
-  ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
-}
-
-void Controller::segmentPointCloudCallback(
+void Controller::processSegment(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
-  // Message timestamps are used to detect when all
-  // segment messages from a certain frame have arrived.
-  // Since segments from the same frame all have the same timestamp,
-  // the start of a new frame is detected when the message timestamp changes.
-  // TODO(grinvalm): need additional check for the last frame to be
-  // integrated.
-  if (received_first_message_ &&
-      last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
-    ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
-
-    ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
-             ++integrated_frames_count_,
-             segment_point_cloud_msg->header.stamp.toSec());
-
-    if (segments_to_integrate_.size() > 0u) {
-      ros::WallTime start;
-      ros::WallTime end;
-
-      if (use_label_propagation_) {
-        start = ros::WallTime::now();
-        timing::Timer propagation_timer("label_propagation");
-
-        integrator_->decideLabelPointClouds(&segments_to_integrate_,
-                                            &segment_label_candidates,
-                                            &segment_merge_candidates_);
-        propagation_timer.Stop();
-        end = ros::WallTime::now();
-        ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
-                 segments_to_integrate_.size(), (end - start).toSec());
-      }
-
-      constexpr bool kIsFreespacePointcloud = false;
-
-      start = ros::WallTime::now();
-      timing::Timer integrate_timer("integrate_frame_pointclouds");
-      Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
-      Pointcloud point_cloud_all_segments_t;
-      for (Segment* segment : segments_to_integrate_) {
-        // Concatenate point clouds. (NOTE(ff): We should probably just use
-        // the original cloud here instead.)
-        Pointcloud::iterator it = point_cloud_all_segments_t.end();
-        point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
-                                          segment->points_C_.end());
-      }
-      Transformation T_Gicp_C = T_G_C;
-      if (label_tsdf_integrator_config_.enable_icp) {
-        T_Gicp_C =
-            integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
-      }
-
-      {
-        std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
-        for (Segment* segment : segments_to_integrate_) {
-          CHECK_NOTNULL(segment);
-          segment->T_G_C_ = T_Gicp_C;
-
-          integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
-                                           segment->colors_, segment->label_,
-                                           kIsFreespacePointcloud);
-        }
-      }
-
-      integrate_timer.Stop();
-      end = ros::WallTime::now();
-      ROS_INFO(
-          "Integrated %lu pointclouds in %f secs, have %lu tsdf "
-          "and %lu label blocks.",
-          segments_to_integrate_.size(), (end - start).toSec(),
-          map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks(),
-          map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks());
-
-      start = ros::WallTime::now();
-
-      integrator_->mergeLabels(&merges_to_publish_);
-      integrator_->getLabelsToPublish(&segment_labels_to_publish_);
-
-      end = ros::WallTime::now();
-      ROS_INFO(
-          "Merged segments and fetched the ones to publish in %f "
-          "seconds.",
-          (end - start).toSec());
-      start = ros::WallTime::now();
-
-      segment_merge_candidates_.clear();
-      segment_label_candidates.clear();
-      for (Segment* segment : segments_to_integrate_) {
-        delete segment;
-      }
-      segments_to_integrate_.clear();
-
-      end = ros::WallTime::now();
-      ROS_INFO("Cleared candidates and memory in %f seconds.",
-               (end - start).toSec());
-
-      if (publish_gsm_updates_ && publishObjects()) {
-        publishScene();
-      }
-    } else {
-      ROS_INFO("No segments to integrate.");
-    }
-  }
-  received_first_message_ = true;
-  last_update_received_ = ros::Time::now();
-  last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
-
   // Look up transform from camera frame to world frame.
   Transformation T_G_C;
   std::string from_frame = camera_frame_;
@@ -723,55 +472,110 @@ void Controller::segmentPointCloudCallback(
   }
 }
 
-bool Controller::publishSceneCallback(std_srvs::SetBool::Request& request,
-                                      std_srvs::SetBool::Response& response) {
-  bool save_scene_mesh = request.data;
-  if (save_scene_mesh) {
-    constexpr bool kClearMesh = true;
-    generateMesh(kClearMesh);
+void Controller::integrateFrame(ros::Time msg_timestamp) {
+  ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
+           ++integrated_frames_count_, msg_timestamp.toSec());
+  ros::WallTime start;
+  ros::WallTime end;
+
+  if (use_label_propagation_) {
+    start = ros::WallTime::now();
+    timing::Timer propagation_timer("label_propagation");
+
+    integrator_->decideLabelPointClouds(&segments_to_integrate_,
+                                        &segment_label_candidates,
+                                        &segment_merge_candidates_);
+    propagation_timer.Stop();
+    end = ros::WallTime::now();
+    ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
+             segments_to_integrate_.size(), (end - start).toSec());
   }
-  publishScene();
-  constexpr bool kPublishAllSegments = true;
-  publishObjects(kPublishAllSegments);
-  return true;
+
+  constexpr bool kIsFreespacePointcloud = false;
+
+  start = ros::WallTime::now();
+  timing::Timer integrate_timer("integrate_frame_pointclouds");
+  Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+  Pointcloud point_cloud_all_segments_t;
+  for (Segment* segment : segments_to_integrate_) {
+    // Concatenate point clouds. (NOTE(ff): We should probably just use
+    // the original cloud here instead.)
+    Pointcloud::iterator it = point_cloud_all_segments_t.end();
+    point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
+                                      segment->points_C_.end());
+  }
+  Transformation T_Gicp_C = T_G_C;
+  if (label_tsdf_integrator_config_.enable_icp) {
+    T_Gicp_C =
+        integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
+  }
+
+  {
+    std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
+    for (Segment* segment : segments_to_integrate_) {
+      CHECK_NOTNULL(segment);
+      segment->T_G_C_ = T_Gicp_C;
+
+      integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                       segment->colors_, segment->label_,
+                                       kIsFreespacePointcloud);
+    }
+  }
+
+  integrate_timer.Stop();
+  end = ros::WallTime::now();
+  ROS_INFO(
+      "Integrated %lu pointclouds in %f secs, have %lu tsdf "
+      "and %lu label blocks.",
+      segments_to_integrate_.size(), (end - start).toSec(),
+      map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks(),
+      map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks());
+
+  start = ros::WallTime::now();
+
+  integrator_->mergeLabels(&merges_to_publish_);
+  integrator_->getLabelsToPublish(&segment_labels_to_publish_);
+
+  end = ros::WallTime::now();
+  ROS_INFO(
+      "Merged segments and fetched the ones to publish in %f "
+      "seconds.",
+      (end - start).toSec());
+  start = ros::WallTime::now();
+
+  segment_merge_candidates_.clear();
+  segment_label_candidates.clear();
+  for (Segment* segment : segments_to_integrate_) {
+    delete segment;
+  }
+  segments_to_integrate_.clear();
+
+  end = ros::WallTime::now();
+  ROS_INFO("Cleared candidates and memory in %f seconds.",
+           (end - start).toSec());
 }
 
-bool Controller::validateMergedObjectCallback(
-    modelify_msgs::ValidateMergedObject::Request& request,
-    modelify_msgs::ValidateMergedObject::Response& response) {
-  typedef TsdfVoxel TsdfVoxelType;
-  typedef Layer<TsdfVoxelType> TsdfLayer;
-  // TODO(ff): Do the following afterwards in modelify.
-  // - Check if merged object agrees with whole map (at all poses).
-  // - If it doesn't agree at all poses try the merging again with the
-  // reduced set of objects.
-  // - Optionally put the one that doesn't agree with
-  // the others in a list not to merge with the other merged ones
+void Controller::segmentPointCloudCallback(
+    const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
+  // Message timestamps are used to detect when all
+  // segment messages from a certain frame have arrived.
+  // Since segments from the same frame all have the same timestamp,
+  // the start of a new frame is detected when the message timestamp changes.
+  // TODO(grinvalm): need additional check for the last frame to be
+  // integrated.
+  if (received_first_message_ &&
+      last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
+    if (segments_to_integrate_.size() > 0u) {
+      integrateFrame(segment_point_cloud_msg->header.stamp);
+    } else {
+      ROS_INFO("No segments to integrate.");
+    }
+  }
+  received_first_message_ = true;
+  last_update_received_ = ros::Time::now();
+  last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
 
-  // Extract TSDF layer of merged object.
-  std::shared_ptr<TsdfLayer> merged_object_layer_O;
-  CHECK(deserializeMsgToLayer(request.gsm_update.object.tsdf_layer,
-                              merged_object_layer_O.get()))
-      << "Deserializing of TSDF layer from merged object message failed.";
-
-  // Extract transformations.
-  std::vector<Transformation> transforms_W_O;
-  voxblox_gsm::transformMsgs2Transformations(
-      request.gsm_update.object.transforms, &transforms_W_O);
-
-  const utils::VoxelEvaluationMode voxel_evaluation_mode =
-      utils::VoxelEvaluationMode::kEvaluateAllVoxels;
-
-  std::vector<utils::VoxelEvaluationDetails> voxel_evaluation_details_vector;
-
-  evaluateLayerRmseAtPoses<TsdfVoxelType>(
-      voxel_evaluation_mode, map_->getTsdfLayer(),
-      *(merged_object_layer_O.get()), transforms_W_O,
-      &voxel_evaluation_details_vector);
-
-  voxblox_gsm::voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
-      voxel_evaluation_details_vector, &response.voxel_evaluation_details);
-  return true;
+  processSegment(segment_point_cloud_msg);
 }
 
 bool Controller::generateMeshCallback(
@@ -830,7 +634,7 @@ bool Controller::saveSegmentsAsMeshCallback(
 
 void Controller::extractSegmentLayers(
     const std::vector<Label>& labels,
-    std::unordered_map<Label, LayerTuple>* label_layers_map,
+    std::unordered_map<Label, LayerPair>* label_layers_map,
     bool labels_list_is_complete) {
   CHECK(label_layers_map);
 
@@ -840,14 +644,10 @@ void Controller::extractSegmentLayers(
                                     map_config_.voxels_per_side);
   Layer<LabelVoxel> label_layer_empty(map_config_.voxel_size,
                                       map_config_.voxels_per_side);
-  FeatureLayer<Feature3D> feature_layer_empty(
-      map_config_.voxel_size * map_config_.voxels_per_side,
-      feature_layer_->getDescriptorSize());
 
   for (const Label& label : labels) {
     label_layers_map->emplace(
-        label, std::make_tuple(tsdf_layer_empty, label_layer_empty,
-                               feature_layer_empty));
+        label, std::make_pair(tsdf_layer_empty, label_layer_empty));
   }
 
   BlockIndexList all_label_blocks;
@@ -858,8 +658,6 @@ void Controller::extractSegmentLayers(
         map_->getTsdfLayerPtr()->getBlockPtrByIndex(block_index);
     Block<LabelVoxel>::Ptr global_label_block =
         map_->getLabelLayerPtr()->getBlockPtrByIndex(block_index);
-    FeatureBlock<Feature3D>::Ptr global_feature_block =
-        feature_layer_->getBlockPtrByIndex(block_index);
 
     const size_t vps = global_label_block->voxels_per_side();
     for (size_t i = 0; i < vps * vps * vps; ++i) {
@@ -881,23 +679,16 @@ void Controller::extractSegmentLayers(
         continue;
       }
 
-      Layer<TsdfVoxel>& tsdf_layer =
-          std::get<LayerAccessor::kTsdfLayer>(it->second);
-      Layer<LabelVoxel>& label_layer =
-          std::get<LayerAccessor::kLabelLayer>(it->second);
-      FeatureLayer<Feature3D>& feature_layer =
-          std::get<LayerAccessor::kFeatureLayer>(it->second);
+      Layer<TsdfVoxel>& tsdf_layer = it->second.first;
+      Layer<LabelVoxel>& label_layer = it->second.second;
 
       Block<TsdfVoxel>::Ptr tsdf_block =
           tsdf_layer.allocateBlockPtrByIndex(block_index);
       Block<LabelVoxel>::Ptr label_block =
           label_layer.allocateBlockPtrByIndex(block_index);
-      FeatureBlock<Feature3D>::Ptr feature_block =
-          feature_layer.allocateBlockPtrByIndex(block_index);
 
       CHECK(tsdf_block);
       CHECK(label_block);
-      CHECK(feature_block);
 
       TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
       LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
@@ -907,10 +698,6 @@ void Controller::extractSegmentLayers(
 
       tsdf_voxel = global_tsdf_voxel;
       label_voxel = global_label_voxel;
-
-      if (global_feature_block != nullptr) {
-        feature_block->getFeatures() = global_feature_block->getFeatures();
-      }
     }
   }
 }
@@ -985,259 +772,6 @@ bool Controller::lookupTransform(const std::string& from_frame,
 // TODO(ff): Create this somewhere:
 // void serializeGsmAsMsg(const map&, const label&, const parent_labels&,
 // msg*);
-
-bool Controller::publishObjects(const bool publish_all) {
-  CHECK_NOTNULL(segment_gsm_update_pub_);
-  bool published_segment_label = false;
-  std::vector<Label> labels_to_publish;
-  getLabelsToPublish(publish_all, &labels_to_publish);
-
-  std::unordered_map<Label, LayerTuple> label_to_layers;
-  ros::Time start = ros::Time::now();
-  extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
-  ros::Time stop = ros::Time::now();
-  ros::Duration duration = stop - start;
-  LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";
-
-  for (const Label& label : labels_to_publish) {
-    auto it = label_to_layers.find(label);
-    CHECK(it != label_to_layers.end())
-        << "Layers for " << label << " could not be extracted.";
-
-    Layer<TsdfVoxel>& tsdf_layer =
-        std::get<LayerAccessor::kTsdfLayer>(it->second);
-    Layer<LabelVoxel>& label_layer =
-        std::get<LayerAccessor::kLabelLayer>(it->second);
-    FeatureLayer<Feature3D>& feature_layer =
-        std::get<LayerAccessor::kFeatureLayer>(it->second);
-
-    // TODO(ff): Check what a reasonable size is for this.
-    constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
-    if (tsdf_layer.getNumberOfAllocatedBlocks() <
-        kMinNumberOfAllocatedBlocksToPublish) {
-      continue;
-    }
-
-    // Convert to origin and extract translation.
-    Point origin_shifted_tsdf_layer_W;
-    utils::centerBlocksOfLayer<TsdfVoxel>(&tsdf_layer,
-                                          &origin_shifted_tsdf_layer_W);
-    // TODO(ff): If this is time consuming we can omit this step.
-    Point origin_shifted_label_layer_W;
-    utils::centerBlocksOfLayer<LabelVoxel>(&label_layer,
-                                           &origin_shifted_label_layer_W);
-    CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_label_layer_W);
-
-    // TODO(ntonci): Check that this is centered the same way as tsdf.
-    Point origin_shifted_feature_layer_W;
-    centerBlocksOfFeatureLayer<Feature3D>(&feature_layer,
-                                          &origin_shifted_feature_layer_W);
-    CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_feature_layer_W);
-
-    // Extract surfel cloud from layer.
-    MeshIntegratorConfig mesh_config;
-    node_handle_private_->param<float>(
-        "meshing/min_weight", mesh_config.min_weight, mesh_config.min_weight);
-    pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
-        new pcl::PointCloud<pcl::PointSurfel>());
-    convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
-
-    if (surfel_cloud->empty()) {
-      LOG(WARNING) << tsdf_layer.getNumberOfAllocatedBlocks()
-                   << " blocks didn't produce a surface.";
-      LOG(WARNING) << "Labelled segment does not contain enough data to "
-                      "extract a surface -> skipping!";
-      continue;
-    }
-
-    modelify_msgs::GsmUpdate gsm_update_msg;
-    constexpr bool kSerializeOnlyUpdated = false;
-    gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
-    gsm_update_msg.header.frame_id = world_frame_;
-    gsm_update_msg.is_scene = false;
-    serializeLayerAsMsg<TsdfVoxel>(tsdf_layer, kSerializeOnlyUpdated,
-                                   &gsm_update_msg.object.tsdf_layer);
-    // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
-    // yet, hence it doesn't work.
-    serializeLayerAsMsg<LabelVoxel>(label_layer, kSerializeOnlyUpdated,
-                                    &gsm_update_msg.object.label_layer);
-    // TODO(ntonci): Check action and maybe change convention to be in the same
-    // style as above.
-    feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
-                                      DeserializeAction::kUpdate,
-                                      &gsm_update_msg.object.feature_layer);
-    LOG(INFO) << "Extracted segment with " << surfel_cloud->points.size()
-              << " points and " << feature_layer.getNumberOfFeatures()
-              << " features.";
-
-    gsm_update_msg.object.label = label;
-    gsm_update_msg.object.semantic_label =
-        map_->getSemanticInstanceLabelFusionPtr()->getSemanticLabel(label);
-    gsm_update_msg.old_labels.clear();
-    geometry_msgs::Transform transform;
-    transform.translation.x = origin_shifted_tsdf_layer_W[0];
-    transform.translation.y = origin_shifted_tsdf_layer_W[1];
-    transform.translation.z = origin_shifted_tsdf_layer_W[2];
-    transform.rotation.w = 1.;
-    transform.rotation.x = 0.;
-    transform.rotation.y = 0.;
-    transform.rotation.z = 0.;
-    gsm_update_msg.object.transforms.clear();
-    gsm_update_msg.object.transforms.push_back(transform);
-    pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
-    gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
-
-    if (all_published_segments_.find(label) != all_published_segments_.end()) {
-      // Segment previously published, sending update message.
-      gsm_update_msg.old_labels.push_back(label);
-    } else {
-      // Segment never previously published, sending first type of message.
-    }
-    auto merged_label_it = merges_to_publish_.find(label);
-    if (merged_label_it != merges_to_publish_.end()) {
-      for (Label merged_label : merged_label_it->second) {
-        if (all_published_segments_.find(merged_label) !=
-            all_published_segments_.end()) {
-          gsm_update_msg.old_labels.push_back(merged_label);
-        }
-      }
-      merges_to_publish_.erase(merged_label_it);
-    }
-
-    if (compute_and_publish_bbox_) {
-      CHECK_NOTNULL(bbox_pub_);
-
-      Eigen::Vector3f bbox_translation;
-      Eigen::Quaternionf bbox_quaternion;
-      Eigen::Vector3f bbox_size;
-      computeAlignedBoundingBox(surfel_cloud, &bbox_translation,
-                                &bbox_quaternion, &bbox_size);
-
-      gsm_update_msg.object.bbox.pose.position.x =
-          origin_shifted_tsdf_layer_W[0] + bbox_translation(0);
-      gsm_update_msg.object.bbox.pose.position.y =
-          origin_shifted_tsdf_layer_W[1] + bbox_translation(1);
-      gsm_update_msg.object.bbox.pose.position.z =
-          origin_shifted_tsdf_layer_W[2] + bbox_translation(2);
-      gsm_update_msg.object.bbox.pose.orientation.x = bbox_quaternion.x();
-      gsm_update_msg.object.bbox.pose.orientation.y = bbox_quaternion.y();
-      gsm_update_msg.object.bbox.pose.orientation.z = bbox_quaternion.z();
-      gsm_update_msg.object.bbox.pose.orientation.w = bbox_quaternion.w();
-      gsm_update_msg.object.bbox.dimensions.x = bbox_size(0);
-      gsm_update_msg.object.bbox.dimensions.y = bbox_size(1);
-      gsm_update_msg.object.bbox.dimensions.z = bbox_size(2);
-
-      visualization_msgs::Marker marker;
-      marker.header.frame_id = world_frame_;
-      marker.header.stamp = ros::Time();
-      marker.id = gsm_update_msg.object.label;
-      marker.type = visualization_msgs::Marker::CUBE;
-      marker.action = visualization_msgs::Marker::ADD;
-      marker.pose.position.x =
-          origin_shifted_tsdf_layer_W[0] + bbox_translation(0);
-      marker.pose.position.y =
-          origin_shifted_tsdf_layer_W[1] + bbox_translation(1);
-      marker.pose.position.z =
-          origin_shifted_tsdf_layer_W[2] + bbox_translation(2);
-      marker.pose.orientation = gsm_update_msg.object.bbox.pose.orientation;
-      marker.scale = gsm_update_msg.object.bbox.dimensions;
-      marker.color.a = 0.3;
-      marker.color.r = 0.0;
-      marker.color.g = 1.0;
-      marker.color.b = 0.0;
-      marker.lifetime = ros::Duration();
-
-      bbox_pub_->publish(marker);
-
-      geometry_msgs::TransformStamped bbox_tf;
-      bbox_tf.header = gsm_update_msg.header;
-      bbox_tf.child_frame_id = std::to_string(gsm_update_msg.object.label);
-      bbox_tf.transform.translation.x = marker.pose.position.x;
-      bbox_tf.transform.translation.y = marker.pose.position.y;
-      bbox_tf.transform.translation.z = marker.pose.position.z;
-      bbox_tf.transform.rotation = marker.pose.orientation;
-
-      tf_broadcaster_.sendTransform(bbox_tf);
-    }
-
-    publishGsmUpdate(*segment_gsm_update_pub_, &gsm_update_msg);
-
-    if (publish_segment_mesh_) {
-      // TODO(ntonci): Why not call generateMesh?
-
-      // Generate mesh for visualization purposes.
-      std::shared_ptr<MeshLayer> mesh_layer;
-      mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
-      // mesh_layer.reset(new MeshLayer(map_->block_size()));
-      MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config;
-      label_tsdf_mesh_config.color_scheme =
-          MeshLabelIntegrator::ColorScheme::kColor;
-      MeshLabelIntegrator mesh_integrator(mesh_config_, label_tsdf_mesh_config,
-                                          tsdf_layer, label_layer,
-                                          mesh_layer.get());
-      constexpr bool only_mesh_updated_blocks = false;
-      constexpr bool clear_updated_flag = false;
-      mesh_integrator.generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
-
-      voxblox_msgs::Mesh segment_mesh_msg;
-      generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor, &segment_mesh_msg);
-      segment_mesh_msg.header.frame_id = world_frame_;
-      segment_mesh_pub_->publish(segment_mesh_msg);
-    }
-    all_published_segments_.insert(label);
-    published_segment_label = true;
-  }
-  segment_labels_to_publish_.clear();
-  return published_segment_label;
-}
-
-void Controller::publishScene() {
-  CHECK_NOTNULL(scene_gsm_update_pub_);
-  modelify_msgs::GsmUpdate gsm_update_msg;
-
-  // TODO(ntonci): Create a method that generalizes this part such that you dont
-  // need to do it twice, for objects and scene.
-  gsm_update_msg.header.stamp = last_segment_msg_timestamp_;
-  gsm_update_msg.header.frame_id = world_frame_;
-
-  constexpr bool kSerializeOnlyUpdated = false;
-  serializeLayerAsMsg<TsdfVoxel>(map_->getTsdfLayer(), kSerializeOnlyUpdated,
-                                 &gsm_update_msg.object.tsdf_layer);
-  // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
-  // yet, hence it doesn't work.
-  // TODO(ntonci): This seems to work?
-  serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(), kSerializeOnlyUpdated,
-                                  &gsm_update_msg.object.label_layer);
-  // TODO(ntonci): Also publish feature layer for scene.
-
-  // TODO(ntonci): This is done twice, rather do it in the beginning with all
-  // the other params.
-  MeshIntegratorConfig mesh_config;
-  node_handle_private_->param<float>(
-      "mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
-  pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
-      new pcl::PointCloud<pcl::PointSurfel>());
-  convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config,
-                               surfel_cloud.get());
-  pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
-  gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
-
-  gsm_update_msg.object.label = 0u;
-  gsm_update_msg.old_labels.clear();
-  gsm_update_msg.is_scene = true;
-  geometry_msgs::Transform transform;
-  transform.translation.x = 0.0;
-  transform.translation.y = 0.0;
-  transform.translation.z = 0.0;
-  transform.rotation.w = 1.0;
-  transform.rotation.x = 0.0;
-  transform.rotation.y = 0.0;
-  transform.rotation.z = 0.0;
-  gsm_update_msg.object.transforms.clear();
-  gsm_update_msg.object.transforms.push_back(transform);
-  publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
-}
 
 // TODO(ntonci): Generalize this and rename since this one is also publishing
 // and saving, not just generating.

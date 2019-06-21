@@ -1,5 +1,5 @@
-#ifndef VOXBLOX_GSM_CONVERSIONS_H_
-#define VOXBLOX_GSM_CONVERSIONS_H_
+#ifndef VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONVERSIONS_H_
+#define VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONVERSIONS_H_
 
 #include <vector>
 
@@ -123,4 +123,4 @@ bool convertLabelTsdfLayersToMesh(
 
 }  // namespace voxblox_gsm
 }  // namespace voxblox
-#endif  // VOXBLOX_GSM_CONVERSIONS_H_
+#endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONVERSIONS_H_

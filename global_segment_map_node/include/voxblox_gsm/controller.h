@@ -6,11 +6,7 @@
 #include <vector>
 
 #include <geometry_msgs/Transform.h>
-#include <global_feature_map/feature_block.h>
-#include <global_feature_map/feature_integrator.h>
-#include <global_feature_map/feature_layer.h>
-#include <global_feature_map/feature_types.h>
-#include <global_feature_map/feature_utils.h>
+
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
@@ -31,43 +27,22 @@
 namespace voxblox {
 namespace voxblox_gsm {
 
-typedef std::tuple<Layer<TsdfVoxel>, Layer<LabelVoxel>, FeatureLayer<Feature3D>>
-    LayerTuple;
-
-enum LayerAccessor {
-  kTsdfLayer = 0,
-  kLabelLayer = 1,
-  kFeatureLayer = 2,
-  kCount
-};
+typedef std::pair<Layer<TsdfVoxel>, Layer<LabelVoxel>> LayerPair;
 
 class Controller {
  public:
   Controller(ros::NodeHandle* node_handle);
 
-  ~Controller();
-
-  void subscribeFeatureTopic(ros::Subscriber* feature_sub);
-
-  void advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub);
+  virtual ~Controller();
 
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
-
-  void advertiseSegmentGsmUpdateTopic(ros::Publisher* segment_gsm_update_pub);
-
-  void advertiseSceneGsmUpdateTopic(ros::Publisher* scene_gsm_update_pub);
 
   void advertiseSegmentMeshTopic(ros::Publisher* segment_mesh_pub);
 
   void advertiseSceneMeshTopic(ros::Publisher* scene_mesh_pub);
 
   void advertiseBboxTopic(ros::Publisher* bbox_pub);
-
-  void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
-
-  void validateMergedObjectService(
-      ros::ServiceServer* validate_merged_object_srv);
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
@@ -77,16 +52,7 @@ class Controller {
   void advertiseExtractInstancesService(
       ros::ServiceServer* extract_instances_srv);
 
-  bool publishObjects(const bool publish_all = false);
-
-  void publishScene();
-
   bool noNewUpdatesReceived() const;
-
-  virtual void extractSegmentLayers(
-      const std::vector<Label>& labels,
-      std::unordered_map<Label, LayerTuple>* label_layers_map,
-      bool labels_list_is_complete = false);
 
   bool enable_semantic_instance_segmentation_;
 
@@ -95,24 +61,19 @@ class Controller {
   bool publish_scene_mesh_;
   bool publish_segment_mesh_;
   bool compute_and_publish_bbox_;
-  bool publish_feature_blocks_marker_;
 
   bool use_label_propagation_;
 
   double no_update_timeout_;
 
  protected:
-  virtual void featureCallback(const modelify_msgs::Features& features_msg);
+  void processSegment(
+      const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
+
+  void integrateFrame(ros::Time msg_timestamp);
 
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
-
-  virtual bool publishSceneCallback(std_srvs::SetBool::Request& request,
-                                    std_srvs::SetBool::Response& response);
-
-  bool validateMergedObjectCallback(
-      modelify_msgs::ValidateMergedObject::Request& request,
-      modelify_msgs::ValidateMergedObject::Response& response);
 
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
@@ -122,6 +83,11 @@ class Controller {
 
   bool extractInstancesCallback(std_srvs::Empty::Request& request,
                                 std_srvs::Empty::Response& response);
+
+  virtual void extractSegmentLayers(
+      const std::vector<Label>& labels,
+      std::unordered_map<Label, LayerPair>* label_layers_map,
+      bool labels_list_is_complete = false);
 
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
@@ -165,10 +131,6 @@ class Controller {
   std::shared_ptr<LabelTsdfMap> map_;
   std::shared_ptr<LabelTsdfIntegrator> integrator_;
 
-  bool received_first_feature_;
-  std::shared_ptr<FeatureLayer<Feature3D>> feature_layer_;
-  std::shared_ptr<FeatureIntegrator> feature_integrator_;
-
   MeshIntegratorConfig mesh_config_;
   MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config_;
   ros::Timer update_mesh_timer_;
@@ -202,7 +164,6 @@ class Controller {
   std::map<Label, std::set<Label>> merges_to_publish_;
   std::set<Label> all_published_segments_;
   ros::Publisher* bbox_pub_;
-  ros::Publisher* feature_block_pub_;
 
   std::thread viz_thread_;
   Visualizer* visualizer_;

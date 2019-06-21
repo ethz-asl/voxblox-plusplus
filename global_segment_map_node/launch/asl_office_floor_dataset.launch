@@ -18,7 +18,7 @@
 
   <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/asl_office_floor.yaml"/>
 
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+  <node name="gsm_node_iodb" pkg="gsm_node" type="gsm_node_iodb" output="screen">
     <rosparam command="load" file="$(arg gsm_node_params_name)" />
     <param name="meshing/visualize" value="$(arg visualize)"/>
     <param name="meshing/update_mesh_every_n_sec" value="0.0" unless="$(arg visualize)"/>
