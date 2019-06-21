@@ -1,4 +1,5 @@
-// Copyright 2017 Margarita Grinvald, ASL, ETH Zurich, Switzerland
+// Copyright (c) 2019, ASL, ETH Zurich, Switzerland
+// Licensed under the BSD 3-Clause License (see LICENSE for details)
 
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -24,19 +25,16 @@ int main(int argc, char** argv) {
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
-  ros::Publisher segment_mesh_publisher;
   if (controller->publish_segment_mesh_) {
-    controller->advertiseSegmentMeshTopic(&segment_mesh_publisher);
+    controller->advertiseSegmentMeshTopic();
   }
 
-  ros::Publisher scene_mesh_publisher;
   if (controller->publish_scene_mesh_) {
-    controller->advertiseSceneMeshTopic(&scene_mesh_publisher);
+    controller->advertiseSceneMeshTopic();
   }
 
-  ros::Publisher bbox_pub;
   if (controller->compute_and_publish_bbox_) {
-    controller->advertiseBboxTopic(&bbox_pub);
+    controller->advertiseBboxTopic();
   }
 
   ros::ServiceServer generate_mesh_srv;

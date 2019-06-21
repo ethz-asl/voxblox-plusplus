@@ -1,7 +1,8 @@
-// Copyright 2018 Margarita Grinvald, ASL, ETH Zurich, Switzerland
+// Copyright (c) 2019, ASL, ETH Zurich, Switzerland
+// Licensed under the BSD 3-Clause License (see LICENSE for details)
 
-#ifndef VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
-#define VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
+#ifndef VOXBLOX_GSM_CONTROLLER_H_
+#define VOXBLOX_GSM_CONTROLLER_H_
 
 #include <vector>
 
@@ -38,11 +39,11 @@ class Controller {
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
 
-  void advertiseSegmentMeshTopic(ros::Publisher* segment_mesh_pub);
+  void advertiseSegmentMeshTopic();
 
-  void advertiseSceneMeshTopic(ros::Publisher* scene_mesh_pub);
+  void advertiseSceneMeshTopic();
 
-  void advertiseBboxTopic(ros::Publisher* bbox_pub);
+  void advertiseBboxTopic();
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
@@ -175,4 +176,4 @@ class Controller {
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
-#endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_CONTROLLER_H_
+#endif  // VOXBLOX_GSM_CONTROLLER_H_

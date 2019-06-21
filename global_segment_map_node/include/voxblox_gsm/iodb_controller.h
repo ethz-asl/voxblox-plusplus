@@ -1,7 +1,8 @@
-// Copyright 2018 Margarita Grinvald, ASL, ETH Zurich, Switzerland
+// Copyright (c) 2019, ASL, ETH Zurich, Switzerland
+// Licensed under the BSD 3-Clause License (see LICENSE for details)
 
-#ifndef VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_IODB_CONTROLLER_H_
-#define VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_IODB_CONTROLLER_H_
+#ifndef VOXBLOX_GSM_IODB_CONTROLLER_H_
+#define VOXBLOX_GSM_IODB_CONTROLLER_H_
 
 #include <global_feature_map/feature_block.h>
 #include <global_feature_map/feature_integrator.h>
@@ -29,11 +30,11 @@ class IodbController : public Controller {
 
   void subscribeFeatureTopic(ros::Subscriber* feature_sub);
 
-  void advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub);
+  void advertiseFeatureBlockTopic();
 
-  void advertiseSegmentGsmUpdateTopic(ros::Publisher* segment_gsm_update_pub);
+  void advertiseSegmentGsmUpdateTopic();
 
-  void advertiseSceneGsmUpdateTopic(ros::Publisher* scene_gsm_update_pub);
+  void advertiseSceneGsmUpdateTopic();
 
   void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
@@ -74,4 +75,4 @@ class IodbController : public Controller {
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
-#endif  // VOXBLOX_GSM_INCLUDE_VOXBLOX_GSM_IODB_CONTROLLER_H_
+#endif  // VOXBLOX_GSM_IODB_CONTROLLER_H_

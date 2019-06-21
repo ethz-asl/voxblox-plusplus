@@ -1,4 +1,5 @@
-// Copyright 2018 Margarita Grinvald, ASL, ETH Zurich, Switzerland
+// Copyright (c) 2019, ASL, ETH Zurich, Switzerland
+// Licensed under the BSD 3-Clause License (see LICENSE for details)
 
 // TODO(ntonci): Fix file extension. These files in global_segment_map_node have
 // cpp extension and all others have cc.
@@ -370,28 +371,19 @@ void Controller::subscribeSegmentPointCloudTopic(
       &Controller::segmentPointCloudCallback, this);
 }
 
-void Controller::advertiseSegmentMeshTopic(ros::Publisher* segment_mesh_pub) {
-  CHECK_NOTNULL(segment_mesh_pub);
-  *segment_mesh_pub = node_handle_private_->advertise<voxblox_msgs::Mesh>(
+void Controller::advertiseSegmentMeshTopic() {
+  *segment_mesh_pub_ = node_handle_private_->advertise<voxblox_msgs::Mesh>(
       "segment_mesh", 1, true);
-
-  segment_mesh_pub_ = segment_mesh_pub;
 }
 
-void Controller::advertiseSceneMeshTopic(ros::Publisher* scene_mesh_pub) {
-  CHECK_NOTNULL(scene_mesh_pub);
-  *scene_mesh_pub =
+void Controller::advertiseSceneMeshTopic() {
+  *scene_mesh_pub_ =
       node_handle_private_->advertise<voxblox_msgs::Mesh>("mesh", 1, true);
-
-  scene_mesh_pub_ = scene_mesh_pub;
 }
 
-void Controller::advertiseBboxTopic(ros::Publisher* bbox_pub) {
-  CHECK_NOTNULL(bbox_pub);
-  *bbox_pub = node_handle_private_->advertise<visualization_msgs::Marker>(
+void Controller::advertiseBboxTopic() {
+  *bbox_pub_ = node_handle_private_->advertise<visualization_msgs::Marker>(
       "bbox", 1, true);
-
-  bbox_pub_ = bbox_pub;
 }
 
 void Controller::advertiseGenerateMeshService(

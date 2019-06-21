@@ -1,4 +1,5 @@
-// Copyright 2018 Margarita Grinvald, ASL, ETH Zurich, Switzerland
+// Copyright (c) 2019, ASL, ETH Zurich, Switzerland
+// Licensed under the BSD 3-Clause License (see LICENSE for details)
 
 #include "voxblox_gsm/iodb_controller.h"
 
@@ -43,54 +44,44 @@ void IodbController::subscribeFeatureTopic(ros::Subscriber* feature_sub) {
   node_handle_private_->param<std::string>("feature_topic", feature_topic,
                                            feature_topic);
 
-  // Large queue size to give slack to the
-  // pipeline and not lose any messages.
+  // Large queue size to give slack to the pipeline and not lose any messages.
   constexpr int kFeatureQueueSize = 2000;
   *feature_sub = node_handle_private_->subscribe(
       feature_topic, kFeatureQueueSize, &IodbController::featureCallback, this);
 }
 
-void IodbController::advertiseFeatureBlockTopic(
-    ros::Publisher* feature_block_pub) {
-  CHECK_NOTNULL(feature_block_pub);
+void IodbController::advertiseFeatureBlockTopic() {
   std::string feature_block_topic = "feature_block_array";
   node_handle_private_->param<std::string>(
       "feature_block_topic", feature_block_topic, feature_block_topic);
 
   constexpr int kFeatureBlockQueueSize = 2000;
-  *feature_block_pub =
+  *feature_block_pub_ =
       node_handle_private_->advertise<visualization_msgs::MarkerArray>(
           feature_block_topic, kFeatureBlockQueueSize, true);
-  feature_block_pub_ = feature_block_pub;
 }
 
-void IodbController::advertiseSegmentGsmUpdateTopic(
-    ros::Publisher* segment_gsm_update_pub) {
-  CHECK_NOTNULL(segment_gsm_update_pub);
+void IodbController::advertiseSegmentGsmUpdateTopic() {
   std::string segment_gsm_update_topic = "gsm_update";
   node_handle_private_->param<std::string>("segment_gsm_update_topic",
                                            segment_gsm_update_topic,
                                            segment_gsm_update_topic);
   // TODO(ff): Reduce this value, once we know some reasonable limit.
   constexpr int kGsmUpdateQueueSize = 2000;
-  *segment_gsm_update_pub =
+  *segment_gsm_update_pub_ =
       node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
           segment_gsm_update_topic, kGsmUpdateQueueSize, true);
-  segment_gsm_update_pub_ = segment_gsm_update_pub;
 }
 
-void IodbController::advertiseSceneGsmUpdateTopic(
-    ros::Publisher* scene_gsm_update_pub) {
-  CHECK_NOTNULL(scene_gsm_update_pub);
+void IodbController::advertiseSceneGsmUpdateTopic() {
   std::string scene_gsm_update_topic = "scene";
   node_handle_private_->param<std::string>(
       "scene_gsm_update_topic", scene_gsm_update_topic, scene_gsm_update_topic);
   constexpr int kGsmSceneQueueSize = 1;
 
-  *scene_gsm_update_pub =
+  *scene_gsm_update_pub_ =
       node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
           scene_gsm_update_topic, kGsmSceneQueueSize, true);
-  scene_gsm_update_pub_ = scene_gsm_update_pub;
 }
 
 void IodbController::advertisePublishSceneService(
