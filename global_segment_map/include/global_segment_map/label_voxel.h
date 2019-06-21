@@ -1,6 +1,9 @@
 #ifndef GLOBAL_SEGMENT_MAP_LABEL_VOXEL_H_
 #define GLOBAL_SEGMENT_MAP_LABEL_VOXEL_H_
 
+#include <cstdint>
+#include <string>
+
 #include <voxblox/core/voxel.h>
 
 #include "global_segment_map/common.h"

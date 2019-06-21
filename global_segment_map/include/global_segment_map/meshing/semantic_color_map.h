@@ -1,6 +1,9 @@
 #ifndef GLOBAL_SEGMENT_MAP_MESHING_SEMANTIC_COLOR_MAP_H_
 #define GLOBAL_SEGMENT_MAP_MESHING_SEMANTIC_COLOR_MAP_H_
 
+#include <array>
+#include <vector>
+
 #include <voxblox/core/color.h>
 
 #include "global_segment_map/common.h"
