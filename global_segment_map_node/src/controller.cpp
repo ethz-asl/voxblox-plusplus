@@ -565,6 +565,7 @@ void Controller::segmentPointCloudCallback(
   // the start of a new frame is detected when the message timestamp changes.
   // TODO(grinvalm): need additional check for the last frame to be
   // integrated.
+
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
@@ -663,6 +664,7 @@ void Controller::segmentPointCloudCallback(
       ROS_INFO("No segments to integrate.");
     }
   }
+
   received_first_message_ = true;
   last_update_received_ = ros::Time::now();
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
@@ -1080,6 +1082,9 @@ bool Controller::publishObjects(const bool publish_all) {
     gsm_update_msg.object.transforms.push_back(transform);
     pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
     gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
+    constexpr size_t kNoGTLabel = 0u;
+    gsm_update_msg.object.ground_truth_labels.clear();
+    gsm_update_msg.object.ground_truth_labels.push_back(kNoGTLabel);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
@@ -1087,6 +1092,7 @@ bool Controller::publishObjects(const bool publish_all) {
     } else {
       // Segment never previously published, sending first type of message.
     }
+
     auto merged_label_it = merges_to_publish_.find(label);
     if (merged_label_it != merges_to_publish_.end()) {
       for (Label merged_label : merged_label_it->second) {
