@@ -9,7 +9,7 @@ endif()
 find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
-option(WITH_APPROXMVBB "Build with approxMVBB library for bounding box support." FALSE)
+set(WITH_APPROXMVBB OFF)
 
 if (WITH_APPROXMVBB)
   if(${CMAKE_VERSION} VERSION_LESS "3.8.0")
