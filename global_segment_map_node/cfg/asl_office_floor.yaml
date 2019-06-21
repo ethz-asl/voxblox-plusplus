@@ -17,6 +17,9 @@ pairwise_confidence_merging:
   merging_min_overlap_ratio: 0.15
   merging_min_frame_count: 3
 
+object_database:
+  publish_gsm_updates: true
+
 semantic_instance_segmentation:
   enable_semantic_instance_segmentation: true
 

@@ -1177,13 +1177,18 @@ bool Controller::publishObjects(const bool publish_all) {
                                           mesh_layer.get());
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = false;
-      mesh_integrator.generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
+      {
+        std::lock_guard<std::mutex> label_tsdf_layers_lock(
+            label_tsdf_layers_mutex_);
+        mesh_integrator.generateMesh(only_mesh_updated_blocks,
+                                     clear_updated_flag);
 
-      voxblox_msgs::Mesh segment_mesh_msg;
-      generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor, &segment_mesh_msg);
-      segment_mesh_msg.header.frame_id = world_frame_;
-      segment_mesh_pub_->publish(segment_mesh_msg);
+        voxblox_msgs::Mesh segment_mesh_msg;
+        generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor,
+                               &segment_mesh_msg);
+        segment_mesh_msg.header.frame_id = world_frame_;
+        segment_mesh_pub_->publish(segment_mesh_msg);
+      }
     }
     all_published_segments_.insert(label);
     published_segment_label = true;
@@ -1361,8 +1366,8 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   if (publish_scene_mesh_) {
     timing::Timer publish_mesh_timer("mesh/publish");
     voxblox_msgs::Mesh mesh_msg;
-    // TODO(margaritaG) : this function cleans up empty meshes, and this seems
-    // to trouble the visualizer. Investigate.
+    // TODO(margaritaG) : this function cleans up empty meshes, and this
+    // seems to trouble the visualizer. Investigate.
     generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
     mesh_msg.header.frame_id = world_frame_;
     scene_mesh_pub_->publish(mesh_msg);
