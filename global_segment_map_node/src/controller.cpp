@@ -237,7 +237,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   //   mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
   // } else if (mesh_color_scheme.compare("instance_label") == 0) {
   //   mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
-  // } else if (mesh_color_scheme.compare("geometric_instance_label") == 0) {
+  // } else if (mesh_color_scheme.compare("geometric_instance_label") == 0)
+  // {
   //   mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
   // } else if (mesh_color_scheme.compare("confidence") == 0) {
   //   mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
@@ -263,6 +264,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       "icp/keep_track_of_icp_correction",
       label_tsdf_integrator_config_.keep_track_of_icp_correction,
       label_tsdf_integrator_config_.keep_track_of_icp_correction);
+
+  // tsdf_integrator_config_.integrator_threads = 1u;
 
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
