@@ -20,8 +20,26 @@ namespace voxblox_gsm {
 
 IodbController::IodbController(ros::NodeHandle* node_handle)
     : Controller(node_handle),
+      publish_gsm_updates_(false),
+      no_update_timeout_(0.0),
+      min_number_of_allocated_blocks_to_publish_(10),
       received_first_feature_(false),
       publish_feature_blocks_marker_(false) {
+  node_handle_private_->param<int>(
+      "object_database/max_segment_age",
+      label_tsdf_integrator_config_.max_segment_age,
+      label_tsdf_integrator_config_.max_segment_age);
+
+  node_handle_private_->param<bool>("object_database/publish_gsm_updates",
+                                    publish_gsm_updates_, publish_gsm_updates_);
+
+  node_handle_private_->param<bool>("meshing/publish_segment_mesh",
+                                    publish_segment_mesh_,
+                                    publish_segment_mesh_);
+
+  node_handle_private_->param<double>("object_database/no_update_timeout",
+                                      no_update_timeout_, no_update_timeout_);
+
   const double kBlockSize =
       map_config_.voxel_size * map_config_.voxels_per_side;
   feature_layer_.reset(new FeatureLayer<Feature3D>(kBlockSize));
@@ -35,6 +53,11 @@ IodbController::IodbController(ros::NodeHandle* node_handle)
   node_handle_private_->param<bool>("publish_feature_blocks_marker",
                                     publish_feature_blocks_marker_,
                                     publish_feature_blocks_marker_);
+
+  node_handle_private_->param<int>(
+      "object_database/min_number_of_allocated_blocks_to_publish",
+      min_number_of_allocated_blocks_to_publish_,
+      min_number_of_allocated_blocks_to_publish_);
 }
 
 // TODO(ntonci): Move all sub, pub, etc., and helpers to inline header.
@@ -50,38 +73,45 @@ void IodbController::subscribeFeatureTopic(ros::Subscriber* feature_sub) {
       feature_topic, kFeatureQueueSize, &IodbController::featureCallback, this);
 }
 
+void IodbController::advertiseSegmentMeshTopic() {
+  segment_mesh_pub_ =
+      new ros::Publisher(node_handle_private_->advertise<voxblox_msgs::Mesh>(
+          "segment_mesh", 1, true));
+}
+
 void IodbController::advertiseFeatureBlockTopic() {
   std::string feature_block_topic = "feature_block_array";
   node_handle_private_->param<std::string>(
       "feature_block_topic", feature_block_topic, feature_block_topic);
 
   constexpr int kFeatureBlockQueueSize = 2000;
-  *feature_block_pub_ =
+  feature_block_pub_ = new ros::Publisher(
       node_handle_private_->advertise<visualization_msgs::MarkerArray>(
-          feature_block_topic, kFeatureBlockQueueSize, true);
+          feature_block_topic, kFeatureBlockQueueSize, true));
 }
 
 void IodbController::advertiseSegmentGsmUpdateTopic() {
   std::string segment_gsm_update_topic = "gsm_update";
-  node_handle_private_->param<std::string>("segment_gsm_update_topic",
-                                           segment_gsm_update_topic,
-                                           segment_gsm_update_topic);
+  node_handle_private_->param<std::string>(
+      "object_database/segment_gsm_update_topic", segment_gsm_update_topic,
+      segment_gsm_update_topic);
   // TODO(ff): Reduce this value, once we know some reasonable limit.
   constexpr int kGsmUpdateQueueSize = 2000;
-  *segment_gsm_update_pub_ =
+  segment_gsm_update_pub_ = new ros::Publisher(
       node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
-          segment_gsm_update_topic, kGsmUpdateQueueSize, true);
+          segment_gsm_update_topic, kGsmUpdateQueueSize, true));
 }
 
 void IodbController::advertiseSceneGsmUpdateTopic() {
   std::string scene_gsm_update_topic = "scene";
   node_handle_private_->param<std::string>(
-      "scene_gsm_update_topic", scene_gsm_update_topic, scene_gsm_update_topic);
+      "object_database/scene_gsm_update_topic", scene_gsm_update_topic,
+      scene_gsm_update_topic);
   constexpr int kGsmSceneQueueSize = 1;
 
-  *scene_gsm_update_pub_ =
+  scene_gsm_update_pub_ = new ros::Publisher(
       node_handle_private_->advertise<modelify_msgs::GsmUpdate>(
-          scene_gsm_update_topic, kGsmSceneQueueSize, true);
+          scene_gsm_update_topic, kGsmSceneQueueSize, true));
 }
 
 void IodbController::advertisePublishSceneService(
@@ -96,12 +126,10 @@ void IodbController::advertisePublishSceneService(
 void IodbController::validateMergedObjectService(
     ros::ServiceServer* validate_merged_object_srv) {
   CHECK_NOTNULL(validate_merged_object_srv);
-  static const std::string kValidateMergedObjectTopicRosParam =
-      "validate_merged_object";
   std::string validate_merged_object_topic = "validate_merged_object";
-  node_handle_private_->param<std::string>(kValidateMergedObjectTopicRosParam,
-                                           validate_merged_object_topic,
-                                           validate_merged_object_topic);
+  node_handle_private_->param<std::string>(
+      "object_database/validate_merged_object", validate_merged_object_topic,
+      validate_merged_object_topic);
 
   *validate_merged_object_srv = node_handle_private_->advertiseService(
       validate_merged_object_topic,
@@ -206,7 +234,7 @@ bool IodbController::publishObjects(const bool publish_all) {
   extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
-  LOG(INFO) << "Extracting segment layers took " << duration.toSec() << "s";
+  ROS_INFO_STREAM("Extracting segment layers took " << duration.toSec() << "s");
 
   for (const Label& label : labels_to_publish) {
     auto it = label_to_layers.find(label);
@@ -220,10 +248,8 @@ bool IodbController::publishObjects(const bool publish_all) {
     FeatureLayer<Feature3D>& feature_layer =
         std::get<LayerAccessor::kFeatureLayer>(it->second);
 
-    // TODO(ff): Check what a reasonable size is for this.
-    constexpr size_t kMinNumberOfAllocatedBlocksToPublish = 10u;
     if (tsdf_layer.getNumberOfAllocatedBlocks() <
-        kMinNumberOfAllocatedBlocksToPublish) {
+        min_number_of_allocated_blocks_to_publish_) {
       continue;
     }
 
@@ -275,9 +301,9 @@ bool IodbController::publishObjects(const bool publish_all) {
     feature_layer.serializeLayerAsMsg(kSerializeOnlyUpdated,
                                       DeserializeAction::kUpdate,
                                       &gsm_update_msg.object.feature_layer);
-    LOG(INFO) << "Extracted segment with " << surfel_cloud->points.size()
-              << " points and " << feature_layer.getNumberOfFeatures()
-              << " features.";
+    ROS_INFO_STREAM("Extracted segment with "
+                    << surfel_cloud->points.size() << " points and "
+                    << feature_layer.getNumberOfFeatures() << " features.");
 
     gsm_update_msg.object.label = label;
     gsm_update_msg.object.semantic_label =
@@ -295,6 +321,9 @@ bool IodbController::publishObjects(const bool publish_all) {
     gsm_update_msg.object.transforms.push_back(transform);
     pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
     gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
+    constexpr size_t kNoGTLabel = 0u;
+    gsm_update_msg.object.ground_truth_labels.clear();
+    gsm_update_msg.object.ground_truth_labels.push_back(kNoGTLabel);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
@@ -386,8 +415,11 @@ bool IodbController::publishObjects(const bool publish_all) {
                                           mesh_layer.get());
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = false;
-      mesh_integrator.generateMesh(only_mesh_updated_blocks,
-                                   clear_updated_flag);
+      {
+        std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
+        mesh_integrator.generateMesh(only_mesh_updated_blocks,
+                                     clear_updated_flag);
+      }
 
       voxblox_msgs::Mesh segment_mesh_msg;
       generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor, &segment_mesh_msg);
@@ -448,6 +480,14 @@ void IodbController::publishScene() {
   publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
 }
 
+bool IodbController::noNewUpdatesReceived() const {
+  if (received_first_message_ && no_update_timeout_ != 0.0) {
+    return (ros::Time::now() - last_update_received_).toSec() >
+           no_update_timeout_;
+  }
+  return false;
+}
+
 void IodbController::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Message timestamps are used to detect when all
@@ -490,13 +530,6 @@ void IodbController::featureCallback(
   if (!received_first_feature_ && features_C.size() > 0) {
     received_first_feature_ = true;
     feature_layer_->setDescriptorSize(descriptor_size);
-  }
-
-  if (camera_frame != camera_frame_) {
-    ROS_WARN_STREAM("Camera frame in the header ("
-                    << camera_frame
-                    << "), is not the same as specified rosparam camera frame ("
-                    << camera_frame_ << ").");
   }
 
   Transformation T_G_C;
@@ -576,6 +609,11 @@ bool IodbController::validateMergedObjectCallback(
   voxblox_gsm::voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
       voxel_evaluation_details_vector, &response.voxel_evaluation_details);
   return true;
+}
+
+void IodbController::publishGsmUpdate(const ros::Publisher& publisher,
+                                      modelify_msgs::GsmUpdate* gsm_update) {
+  publisher.publish(*gsm_update);
 }
 
 }  // namespace voxblox_gsm

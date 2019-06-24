@@ -43,6 +43,10 @@ int main(int argc, char** argv) {
     controller->advertiseSceneGsmUpdateTopic();
   }
 
+  if (controller->publish_segment_mesh_) {
+    controller->advertiseSegmentMeshTopic();
+  }
+
   if (controller->publish_feature_blocks_marker_) {
     controller->advertiseFeatureBlockTopic();
   }

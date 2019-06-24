@@ -23,7 +23,6 @@ semantic_instance_segmentation:
 meshing:
   visualize: true
   update_mesh_every_n_sec: 2.0
-  mesh_color_scheme: "geometric_instance_label"
   publish_segment_mesh: false
   publish_scene_mesh: false
   mesh_filename: "gsm_mobmi_mesh.ply"

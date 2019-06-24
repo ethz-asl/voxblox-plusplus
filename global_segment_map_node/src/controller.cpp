@@ -128,8 +128,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrated_frames_count_(0u),
       tf_listener_(ros::Duration(500)),
       world_frame_("world"),
-      no_update_timeout_(0.0),
-      publish_gsm_updates_(false),
       publish_scene_mesh_(false),
       received_first_message_(false),
       updated_mesh_(false),
@@ -213,11 +211,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   enable_semantic_instance_segmentation_ =
       label_tsdf_integrator_config_.enable_semantic_instance_segmentation;
-
-  node_handle_private_->param<int>(
-      "object_database/max_segment_age",
-      label_tsdf_integrator_config_.max_segment_age,
-      label_tsdf_integrator_config_.max_segment_age);
 
   // TODO(margaritaG) : this is not used, remove?
   // std::string mesh_color_scheme("label");
@@ -306,9 +299,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     viz_thread_ = std::thread(&Visualizer::visualizeMesh, visualizer_);
   }
 
-  node_handle_private_->param<bool>("meshing/publish_segment_mesh",
-                                    publish_segment_mesh_,
-                                    publish_segment_mesh_);
   node_handle_private_->param<bool>("meshing/publish_scene_mesh",
                                     publish_scene_mesh_, publish_scene_mesh_);
   node_handle_private_->param<bool>("meshing/compute_and_publish_bbox",
@@ -341,12 +331,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   node_handle_private_->param<std::string>("meshing/mesh_filename",
                                            mesh_filename_, mesh_filename_);
-
-  node_handle_private_->param<bool>("object_database/publish_gsm_updates",
-                                    publish_gsm_updates_, publish_gsm_updates_);
-
-  node_handle_private_->param<double>("object_database/no_update_timeout",
-                                      no_update_timeout_, no_update_timeout_);
 }
 
 Controller::~Controller() { viz_thread_.join(); }
@@ -369,19 +353,15 @@ void Controller::subscribeSegmentPointCloudTopic(
       &Controller::segmentPointCloudCallback, this);
 }
 
-void Controller::advertiseSegmentMeshTopic() {
-  *segment_mesh_pub_ = node_handle_private_->advertise<voxblox_msgs::Mesh>(
-      "segment_mesh", 1, true);
-}
-
 void Controller::advertiseSceneMeshTopic() {
-  *scene_mesh_pub_ =
-      node_handle_private_->advertise<voxblox_msgs::Mesh>("mesh", 1, true);
+  scene_mesh_pub_ = new ros::Publisher(
+      node_handle_private_->advertise<voxblox_msgs::Mesh>("mesh", 1, true));
 }
 
 void Controller::advertiseBboxTopic() {
-  *bbox_pub_ = node_handle_private_->advertise<visualization_msgs::Marker>(
-      "bbox", 1, true);
+  bbox_pub_ = new ros::Publisher(
+      node_handle_private_->advertise<visualization_msgs::Marker>("bbox", 1,
+                                                                  true));
 }
 
 void Controller::advertiseGenerateMeshService(
@@ -565,7 +545,6 @@ void Controller::segmentPointCloudCallback(
     }
   }
   received_first_message_ = true;
-  last_update_received_ = ros::Time::now();
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
 
   processSegment(segment_point_cloud_msg);
@@ -732,7 +711,18 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
     }
   }
   return true;
-}  // namespace voxblox_gsm
+}
+
+void Controller::getLabelsToPublish(const bool get_all,
+                                    std::vector<Label>* labels) {
+  CHECK_NOTNULL(labels);
+  if (get_all) {
+    *labels = map_->getLabelList();
+    ROS_INFO("Publishing all segments");
+  } else {
+    *labels = segment_labels_to_publish_;
+  }
+}
 
 bool Controller::lookupTransform(const std::string& from_frame,
                                  const std::string& to_frame,
@@ -887,30 +877,6 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       scene_mesh_pub_->publish(mesh_msg);
       publish_mesh_timer.Stop();
     }
-  }
-}
-
-bool Controller::noNewUpdatesReceived() const {
-  if (received_first_message_ && no_update_timeout_ != 0.0) {
-    return (ros::Time::now() - last_update_received_).toSec() >
-           no_update_timeout_;
-  }
-  return false;
-}
-
-void Controller::publishGsmUpdate(const ros::Publisher& publisher,
-                                  modelify_msgs::GsmUpdate* gsm_update) {
-  publisher.publish(*gsm_update);
-}
-
-void Controller::getLabelsToPublish(const bool get_all,
-                                    std::vector<Label>* labels) {
-  CHECK_NOTNULL(labels);
-  if (get_all) {
-    *labels = map_->getLabelList();
-    ROS_INFO("Publishing all segments");
-  } else {
-    *labels = segment_labels_to_publish_;
   }
 }
 

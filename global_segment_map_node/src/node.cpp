@@ -25,10 +25,6 @@ int main(int argc, char** argv) {
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
-  if (controller->publish_segment_mesh_) {
-    controller->advertiseSegmentMeshTopic();
-  }
-
   if (controller->publish_scene_mesh_) {
     controller->advertiseSceneMeshTopic();
   }

@@ -9,6 +9,9 @@
 #include <global_feature_map/feature_layer.h>
 #include <global_feature_map/feature_types.h>
 #include <global_feature_map/feature_utils.h>
+#include <modelify_msgs/Features.h>
+#include <modelify_msgs/GsmUpdate.h>
+#include <modelify_msgs/ValidateMergedObject.h>
 #include <voxblox_gsm/controller.h>
 
 namespace voxblox {
@@ -30,6 +33,8 @@ class IodbController : public Controller {
 
   void subscribeFeatureTopic(ros::Subscriber* feature_sub);
 
+  void advertiseSegmentMeshTopic();
+
   void advertiseFeatureBlockTopic();
 
   void advertiseSegmentGsmUpdateTopic();
@@ -50,7 +55,13 @@ class IodbController : public Controller {
 
   void publishScene();
 
+  bool noNewUpdatesReceived() const;
+
+  bool publish_gsm_updates_;
+  bool publish_segment_mesh_;
   bool publish_feature_blocks_marker_;
+
+  double no_update_timeout_;
 
  protected:
   virtual void segmentPointCloudCallback(
@@ -65,11 +76,26 @@ class IodbController : public Controller {
       modelify_msgs::ValidateMergedObject::Request& request,
       modelify_msgs::ValidateMergedObject::Response& response);
 
+  virtual void publishGsmUpdate(const ros::Publisher& publisher,
+                                modelify_msgs::GsmUpdate* gsm_update);
+
+  ros::Publisher* scene_gsm_update_pub_;
+  ros::Publisher* segment_gsm_update_pub_;
+  std::set<Label> all_published_segments_;
+
+  ros::Publisher* segment_mesh_pub_;
+
+  int min_number_of_allocated_blocks_to_publish_;
+
   bool received_first_feature_;
   std::shared_ptr<FeatureLayer<Feature3D>> feature_layer_;
   std::shared_ptr<FeatureIntegrator> feature_integrator_;
 
   ros::Publisher* feature_block_pub_;
+
+  // Shutdown logic: if no messages are received for X amount of time,
+  // shut down node.
+  ros::Time last_update_received_;
 };
 
 }  // namespace voxblox_gsm

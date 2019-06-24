@@ -125,7 +125,7 @@ void SlidingWindowController::publishGsmUpdate(
   pose.header.stamp = current_window_timestamp_;
 
   gsm_update->sliding_window_pose = pose;
-  Controller::publishGsmUpdate(publisher, gsm_update);
+  IodbController::publishGsmUpdate(publisher, gsm_update);
 }
 
 void SlidingWindowController::publishWindowTrajectory(const Point& position) {

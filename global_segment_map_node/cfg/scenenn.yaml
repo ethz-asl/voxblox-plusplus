@@ -26,8 +26,8 @@ semantic_instance_segmentation:
 object_database:
   publish_gsm_updates: false
   max_segment_age: 6
-  scene_gsm_update_topic: "scene_updates"
-  segment_gsm_update_topic: "gsm_updates"
+  scene_gsm_update_topic: "scene_update"
+  segment_gsm_update_topic: "gsm_update"
   validate_merged_object: "validate_merged_object"
 
 meshing:
