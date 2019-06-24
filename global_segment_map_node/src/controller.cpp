@@ -38,6 +38,7 @@
 namespace voxblox {
 namespace voxblox_gsm {
 
+// TODO(ntonci): Move this to a separate header.
 std::string classes[81] = {"BG",
                            "person",
                            "bicycle",
@@ -127,7 +128,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrated_frames_count_(0u),
       tf_listener_(ros::Duration(500)),
       world_frame_("world"),
-      camera_frame_(""),
       no_update_timeout_(0.0),
       publish_gsm_updates_(false),
       publish_scene_mesh_(false),
@@ -140,8 +140,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
-  node_handle_private_->param<std::string>("camera_frame_id", camera_frame_,
-                                           camera_frame_);
 
   // Workaround for OS X on mac mini not having specializations for float
   // for some reason.
@@ -250,11 +248,11 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask::kCoco80;
   }
 
-  node_handle_private_->param<bool>("enable_icp",
+  node_handle_private_->param<bool>("icp/enable_icp",
                                     label_tsdf_integrator_config_.enable_icp,
                                     label_tsdf_integrator_config_.enable_icp);
   node_handle_private_->param<bool>(
-      "keep_track_of_icp_correction",
+      "icp/keep_track_of_icp_correction",
       label_tsdf_integrator_config_.keep_track_of_icp_correction,
       label_tsdf_integrator_config_.keep_track_of_icp_correction);
 
@@ -411,10 +409,7 @@ void Controller::processSegment(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Look up transform from camera frame to world frame.
   Transformation T_G_C;
-  std::string from_frame = camera_frame_;
-  if (camera_frame_.empty()) {
-    from_frame = segment_point_cloud_msg->header.frame_id;
-  }
+  std::string from_frame = segment_point_cloud_msg->header.frame_id;
   if (lookupTransform(from_frame, world_frame_,
                       segment_point_cloud_msg->header.stamp, &T_G_C)) {
     // Convert the PCL pointcloud into voxblox format.
@@ -434,13 +429,16 @@ void Controller::processSegment(
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_semantic_instance);
       segment = new Segment(point_cloud_semantic_instance, T_G_C);
     } else if (use_label_propagation_) {
-      pcl::PointCloud<voxblox::PointLabelType> point_cloud_label;
-      pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_label);
-      segment = new Segment(point_cloud_label, T_G_C);
-    } else {
+      // TODO(ntonci): maybe rename use_label_propagation_ to something like
+      // use_voxblox_plus_plus_lables_ or change the order and call it
+      // use_external_labels_
       pcl::PointCloud<voxblox::PointType> point_cloud;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
       segment = new Segment(point_cloud, T_G_C);
+    } else {
+      pcl::PointCloud<voxblox::PointLabelType> point_cloud_label;
+      pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_label);
+      segment = new Segment(point_cloud_label, T_G_C);
     }
     CHECK_NOTNULL(segment);
     segments_to_integrate_.push_back(segment);
@@ -498,6 +496,9 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
   }
   Transformation T_Gicp_C = T_G_C;
   if (label_tsdf_integrator_config_.enable_icp) {
+    // TODO(ntonci): Make icp config members ros params.
+    // integrator_->icp_.reset(new
+    // ICP(getICPConfigFromRosParam(nh_private)));
     T_Gicp_C =
         integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
   }

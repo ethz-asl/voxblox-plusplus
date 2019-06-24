@@ -1,6 +1,5 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "world"
-camera_frame_id: "scenenn_camera_frame"
 
 voxblox:
   voxel_size: 0.01
@@ -27,8 +26,8 @@ semantic_instance_segmentation:
 object_database:
   publish_gsm_updates: false
   max_segment_age: 6
-  scene_gsm_update_topic: "scene_update"
-  segment_gsm_update_topic: "gsm_update"
+  scene_gsm_update_topic: "scene_updates"
+  segment_gsm_update_topic: "gsm_updates"
   validate_merged_object: "validate_merged_object"
 
 meshing:

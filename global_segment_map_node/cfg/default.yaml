@@ -1,6 +1,7 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "map"
-camera_frame_id: "camera0"
+publish_feature_blocks_marker: false
+use_label_propagation: true
 
 voxblox:
   voxel_size: 0.02
@@ -11,12 +12,12 @@ voxblox:
 
 pairwise_confidence_merging:
   enable_pairwise_confidence_merging: true
-  merging_min_overlap_ratio: 0.15
-  merging_min_frame_count: 1
+  merging_min_overlap_ratio: 0.1
+  merging_min_frame_count: 2
 
 object_database:
   publish_gsm_updates: true
-  max_segment_age: 5
+  max_segment_age: 10
   scene_gsm_update_topic: "gsm_updates"
   segment_gsm_update_topic: "gsm_updates"
   validate_merged_object: "validate_merged_object"
@@ -24,8 +25,9 @@ object_database:
 meshing:
   publish_segment_mesh: true
   publish_scene_mesh: true
-  mesh_filename: "monstah_mesh.ply"
+  mesh_filename: "mesh.ply"
   update_mesh_every_n_sec: 0.0
+  compute_and_publish_bbox: false
 
 sliding_window:
   is_on: false
@@ -39,3 +41,10 @@ sliding_window:
 
 mesh_config:
   min_weight: 3
+
+icp:
+  enable_icp: false
+  keep_track_of_icp_correction: true
+
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: false
