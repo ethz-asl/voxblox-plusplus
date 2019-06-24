@@ -263,9 +263,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     label_tsdf_mesh_config_.class_task = SemanticColorMap::ClassTask::kCoco80;
   }
 
-  node_handle_private_->param<bool>("icp/enable_icp",
-                                    label_tsdf_integrator_config_.enable_icp,
-                                    label_tsdf_integrator_config_.enable_icp);
+  node_handle_private_->param<bool>("icp/enable_icp", enable_icp_, enable_icp_);
   node_handle_private_->param<bool>(
       "icp/keep_track_of_icp_correction",
       label_tsdf_integrator_config_.keep_track_of_icp_correction,

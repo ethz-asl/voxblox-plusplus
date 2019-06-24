@@ -1,6 +1,5 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "map"
-enable_icp: false
 
 voxblox:
   voxel_size: 0.02

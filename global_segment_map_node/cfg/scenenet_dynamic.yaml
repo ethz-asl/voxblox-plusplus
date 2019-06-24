@@ -2,7 +2,6 @@ segment_point_cloud_topic: "/scenenet_node/object_segment"
 world_frame_id: "world"
 camera_frame_id: "scenenet_camera_frame"
 enable_icp: true
-
 voxblox:
   voxel_size: 0.02
   voxels_per_side: 8
@@ -18,6 +17,10 @@ pairwise_confidence_merging:
 
 semantic_instance_segmentation:
   enable_semantic_instance_segmentation: false
+
+icp:
+  enable_icp: true
+  keep_track_of_icp_correction: true
 
 object_database:
   publish_gsm_updates: false
