@@ -8,7 +8,7 @@
     <param name="~visualization" value="$(arg visualize)" />
   </node>
 
-  <arg name="depth_segmentation_node_params_name" default="$(find depth_segmentation)/cfg/mobmi_config.yaml"/>
+  <arg name="depth_segmentation_node_params_name" default="$(find depth_segmentation)/cfg/asl_office_floor_config.yaml"/>
 
   <node name="depth_segmentation_node" pkg="depth_segmentation" type="depth_segmentation_node" output="screen">
     <rosparam command="load" file="$(arg depth_segmentation_node_params_name)" />
@@ -16,7 +16,7 @@
     <param name="label_display" value="$(arg visualize)"/>
   </node>
 
-  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/mobmi_online.yaml"/>
+  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/asl_office_floor.yaml"/>
 
   <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
     <rosparam command="load" file="$(arg gsm_node_params_name)" />
@@ -24,7 +24,7 @@
     <param name="meshing/update_mesh_every_n_sec" value="0.0" unless="$(arg visualize)"/>
   </node>
 
-  <node name="bag" pkg="rosbag" type="play" output="screen" args="-l $(arg bag_file)" if="$(arg play_bag)">
+  <node name="bag" pkg="rosbag" type="play" output="screen" args="--delay 5 $(arg bag_file)" if="$(arg play_bag)">
     <remap from="/ps_front/rgb/image_raw" to="/camera/rgb/image_raw" />
     <remap from="/ps_front/rgb/camera_info" to="/camera/rgb/camera_info" />
     <remap from="/ps_front/depth_registered/image_raw" to="/camera/depth/image_raw" />

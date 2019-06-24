@@ -76,6 +76,7 @@ template <typename FeatureType>
 void mergeFeatureLayerAintoFeatureLayerB(
     const FeatureLayer<FeatureType>& layer_A, const Transformation& T_B_A,
     FeatureLayer<FeatureType>* layer_B) {
+  CHECK_NOTNULL(layer_B);
   FeatureLayer<FeatureType> layer_A_transformed(layer_B->block_size(),
                                                 layer_B->getDescriptorSize());
 

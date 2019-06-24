@@ -167,7 +167,6 @@ class Controller {
   size_t integrated_frames_count_;
 
   std::string world_frame_;
-  std::string camera_frame_;
 
   // TODO(margaritaG): make this optional.
   // Shutdown logic: if no messages are received for X amount of time,
@@ -236,6 +235,8 @@ class Controller {
   std::mutex updated_mesh_mutex_;
   bool updated_mesh_;
   bool need_full_remesh_;
+
+  int min_number_of_allocated_blocks_to_publish_;
 };
 
 }  // namespace voxblox_gsm

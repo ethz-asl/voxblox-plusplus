@@ -88,8 +88,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void getLabelsToPublish(
       std::vector<voxblox::Label>* segment_labels_to_publish);
 
-  LabelTsdfConfig getLabelTsdfConfig() const { return label_tsdf_config_; }
-
   Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
                                      const Pointcloud& point_cloud);
 

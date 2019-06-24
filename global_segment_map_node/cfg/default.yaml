@@ -1,6 +1,7 @@
 segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "map"
-camera_frame_id: "camera0"
+publish_feature_blocks_marker: false
+use_label_propagation: true
 
 voxblox:
   voxel_size: 0.02
@@ -9,11 +10,10 @@ voxblox:
   voxel_carving_enabled: false
   max_ray_length_m: 3.5
 
-
 pairwise_confidence_merging:
-  enable_pairwise_confidence_merging: false
-  merging_min_overlap_ratio: 0.2
-  merging_min_frame_count: 30
+  enable_pairwise_confidence_merging: true
+  merging_min_overlap_ratio: 0.1
+  merging_min_frame_count: 2
 
 object_database:
   publish_gsm_updates: true
@@ -23,9 +23,11 @@ object_database:
   validate_merged_object: "validate_merged_object"
 
 meshing:
-  publish_segment_mesh: false
-  publish_scene_mesh: false
-  mesh_filename: "monstah_mesh.ply"
+  publish_segment_mesh: true
+  publish_scene_mesh: true
+  mesh_filename: "mesh.ply"
+  update_mesh_every_n_sec: 0.0
+  compute_and_publish_bbox: false
 
 sliding_window:
   is_on: false
@@ -36,3 +38,13 @@ sliding_window:
   # is larger than this fraction times the window radius, the window is updated
   # and its position is set equal the camera position.
   update_fraction: 0.5
+
+mesh_config:
+  min_weight: 3
+
+icp:
+  enable_icp: false
+  keep_track_of_icp_correction: true
+
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: false
