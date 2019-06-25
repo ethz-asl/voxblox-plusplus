@@ -402,7 +402,7 @@ void Controller::subscribeSegmentPointCloudTopic(
 void Controller::advertiseSegmentGsmUpdateTopic(
     ros::Publisher* segment_gsm_update_pub) {
   CHECK_NOTNULL(segment_gsm_update_pub);
-  std::string segment_gsm_update_topic = "gsm_update";
+  std::string segment_gsm_update_topic = "gsm_updates";
   node_handle_private_->param<std::string>(
       "object_database/segment_gsm_update_topic", segment_gsm_update_topic,
       segment_gsm_update_topic);
@@ -547,6 +547,7 @@ void Controller::segmentPointCloudCallback(
   // the start of a new frame is detected when the message timestamp changes.
   // TODO(grinvalm): need additional check for the last frame to be
   // integrated.
+
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
@@ -645,6 +646,7 @@ void Controller::segmentPointCloudCallback(
       ROS_INFO("No segments to integrate.");
     }
   }
+
   received_first_message_ = true;
   last_update_received_ = ros::Time::now();
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
@@ -671,6 +673,9 @@ void Controller::segmentPointCloudCallback(
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_semantic_instance);
       segment = new Segment(point_cloud_semantic_instance, T_G_C);
     } else if (use_label_propagation_) {
+      // TODO(ntonci): maybe rename use_label_propagation_ to something like
+      // use_voxblox_plus_plus_lables_ or change the order and call it
+      // use_external_labels_
       pcl::PointCloud<voxblox::PointType> point_cloud;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
       segment = new Segment(point_cloud, T_G_C);
@@ -1062,6 +1067,9 @@ bool Controller::publishObjects(const bool publish_all) {
     gsm_update_msg.object.transforms.push_back(transform);
     pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
     gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
+    constexpr size_t kNoGTLabel = 0u;
+    gsm_update_msg.object.ground_truth_labels.clear();
+    gsm_update_msg.object.ground_truth_labels.push_back(kNoGTLabel);
 
     if (all_published_segments_.find(label) != all_published_segments_.end()) {
       // Segment previously published, sending update message.
@@ -1069,6 +1077,7 @@ bool Controller::publishObjects(const bool publish_all) {
     } else {
       // Segment never previously published, sending first type of message.
     }
+
     auto merged_label_it = merges_to_publish_.find(label);
     if (merged_label_it != merges_to_publish_.end()) {
       for (Label merged_label : merged_label_it->second) {
@@ -1142,6 +1151,7 @@ bool Controller::publishObjects(const bool publish_all) {
       // TODO(ntonci): Why not call generateMesh?
 
       // Generate mesh for visualization purposes.
+
       std::shared_ptr<MeshLayer> mesh_layer;
       mesh_layer.reset(new MeshLayer(tsdf_layer.block_size()));
       // mesh_layer.reset(new MeshLayer(map_->block_size()));
