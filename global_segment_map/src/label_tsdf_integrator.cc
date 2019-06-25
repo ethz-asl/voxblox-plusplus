@@ -447,8 +447,6 @@ LabelVoxel* LabelTsdfIntegrator::allocateStorageAndGetLabelVoxelPtr(
     }
   }
 
-  (*last_block)->updated() = true;
-
   const VoxelIndex local_voxel_idx =
       getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
 

@@ -101,6 +101,7 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   // construction time.
   bool remesh_ = false;
   std::map<Label, InstanceLabel> label_instance_map_;
+  std::shared_timed_mutex label_instance_map_mutex_;
 
   LabelColorMap label_color_map_;
   SemanticColorMap semantic_color_map_;

@@ -51,7 +51,6 @@ void Visualizer::visualizeMesh() {
   }
 
   while (true) {
-    LOG(ERROR) << "Start spinning";
     for (int index = 0; index < n_visualizers; ++index) {
       constexpr int kUpdateIntervalMs = 1000;
       pcl_visualizers[index]->spinOnce(kUpdateIntervalMs);
@@ -60,7 +59,6 @@ void Visualizer::visualizeMesh() {
     meshes.resize(n_visualizers);
 
     if (mesh_layer_mutex_ptr_->try_lock()) {
-      LOG(ERROR) << "Getting mesh";
       if (*mesh_layer_updated_) {
         for (int index = 0; index < n_visualizers; index++) {
           mesh_layers_[index]->getMesh(&meshes[index]);
@@ -68,12 +66,10 @@ void Visualizer::visualizeMesh() {
         refresh = true;
         *mesh_layer_updated_ = false;
       }
-      LOG(ERROR) << "Done getting mesh";
       mesh_layer_mutex_ptr_->unlock();
     }
 
     if (refresh) {
-      LOG(ERROR) << "Refreshing";
       for (int index = 0; index < n_visualizers; index++) {
         pointclouds[index].points.clear();
       }
@@ -126,7 +122,6 @@ void Visualizer::visualizeMesh() {
       frame_count_++;
 
       refresh = false;
-      LOG(ERROR) << "Done refreshing";
     }
   }
 }

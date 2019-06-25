@@ -71,16 +71,19 @@ bool MeshLabelIntegrator::generateMesh(bool only_mesh_updated_blocks,
          "label layers!";
 
   BlockIndexList all_tsdf_blocks;
-  // BlockIndexList all_label_blocks;
+
   if (only_mesh_updated_blocks) {
+    BlockIndexList all_label_blocks;
     sdf_layer_const_->getAllUpdatedBlocks(&all_tsdf_blocks);
-    // TODO(grinvalm) unique union of block indices here.
-    // label_layer_mutable_ptr_->getAllUpdatedBlocks(&all_label_blocks);
-    if (all_tsdf_blocks.size() == 0u) {
+    label_layer_mutable_ptr_->getAllUpdatedBlocks(&all_label_blocks);
+    if (all_tsdf_blocks.size() == 0u && all_label_blocks.size() == 0u) {
       return false;
     }
-    // all_tsdf_blocks.insert(all_tsdf_blocks.end(), all_label_blocks.begin(),
-    //                        all_label_blocks.end());
+    LOG(ERROR) << "NEW TSDF blocks: " << all_tsdf_blocks.size();
+    LOG(ERROR) << "NEW Label blocks: " << all_label_blocks.size();
+
+    all_tsdf_blocks.insert(all_tsdf_blocks.end(), all_label_blocks.begin(),
+                           all_label_blocks.end());
   } else {
     sdf_layer_const_->getAllAllocatedBlocks(&all_tsdf_blocks);
   }
@@ -93,7 +96,6 @@ bool MeshLabelIntegrator::generateMesh(bool only_mesh_updated_blocks,
   std::unique_ptr<ThreadSafeIndex> index_getter(
       new MixedThreadSafeIndex(all_tsdf_blocks.size()));
 
-  LOG(ERROR) << "Generate 1";
   std::list<std::thread> integration_threads;
   for (size_t i = 0u; i < config_.integrator_threads; ++i) {
     integration_threads.emplace_back(
@@ -101,13 +103,9 @@ bool MeshLabelIntegrator::generateMesh(bool only_mesh_updated_blocks,
         clear_updated_flag, index_getter.get());
   }
 
-  LOG(ERROR) << "Generate 2";
-
   for (std::thread& thread : integration_threads) {
     thread.join();
   }
-
-  LOG(ERROR) << "Generate 3";
 
   return true;
 }
@@ -137,9 +135,7 @@ void MeshLabelIntegrator::generateMeshBlocksFunction(
           label_layer_mutable_ptr_->getBlockPtrByIndex(block_idx);
 
       tsdf_block->updated() = false;
-      // TODO(margaritaG): enable when generateMesh() takes union of TSDF and
-      // label updated voxels.
-      // label_block->updated() = false;
+      label_block->updated() = false;
     }
   }
 }
@@ -151,13 +147,20 @@ InstanceLabel MeshLabelIntegrator::getInstanceLabel(const Label& label) {
   InstanceLabel instance_label =
       semantic_instance_label_fusion_ptr_->getInstanceLabel(
           label, kFramesCountThresholdFactor);
+  std::map<Label, InstanceLabel>::iterator prev_instance_it;
+  {
+    std::shared_lock<std::shared_timed_mutex> readerLock(
+        label_instance_map_mutex_);
+    prev_instance_it = label_instance_map_.find(label);
+  }
 
-  auto prev_instance_it = label_instance_map_.find(label);
   if (prev_instance_it != label_instance_map_.end()) {
     if (prev_instance_it->second != instance_label) {
       *remesh_ptr_ = true;
     }
   }
+  std::lock_guard<std::shared_timed_mutex> writerLock(
+      label_instance_map_mutex_);
   label_instance_map_[label] = instance_label;
   return instance_label;
 }

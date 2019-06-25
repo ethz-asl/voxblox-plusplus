@@ -570,7 +570,6 @@ void Controller::segmentPointCloudCallback(
   // integrated.
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
-    LOG(ERROR) << "Maybe here";
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
 
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
@@ -615,11 +614,9 @@ void Controller::segmentPointCloudCallback(
         T_Gicp_C =
             integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
       }
-      LOG(ERROR) << "About to get lock for integrating";
       {
         std::lock_guard<std::mutex> label_tsdf_layers_lock(
             label_tsdf_layers_mutex_);
-        LOG(ERROR) << "Start integrating";
         for (Segment* segment : segments_to_integrate_) {
           CHECK_NOTNULL(segment);
           segment->T_G_C_ = T_Gicp_C;
@@ -628,7 +625,6 @@ void Controller::segmentPointCloudCallback(
                                            segment->colors_, segment->label_,
                                            kIsFreespacePointcloud);
         }
-        LOG(ERROR) << "end integrating";
       }
 
       integrate_timer.Stop();
@@ -670,7 +666,6 @@ void Controller::segmentPointCloudCallback(
       ROS_INFO("No segments to integrate.");
     }
   }
-  LOG(ERROR) << "HERE!";
   received_first_message_ = true;
   last_update_received_ = ros::Time::now();
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
@@ -724,7 +719,6 @@ void Controller::segmentPointCloudCallback(
     }
 
     ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
-    LOG(ERROR) << "Here2";
   }
 }
 
@@ -1335,35 +1329,28 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
   {
     std::lock_guard<std::mutex> label_tsdf_layers_lock(
         label_tsdf_layers_mutex_);
-    LOG(ERROR) << "Updating mesh";
     timing::Timer generate_mesh_timer("mesh/update");
     bool only_mesh_updated_blocks = true;
     if (need_full_remesh_) {
       only_mesh_updated_blocks = false;
       need_full_remesh_ = false;
     }
-    LOG(ERROR) << "I AM HERE 1";
 
     if (enable_semantic_instance_segmentation_) {
       bool clear_updated_flag = false;
       mesh_layer_updated_ |= mesh_merged_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
-      LOG(ERROR) << "I AM HERE 1.1";
       mesh_layer_updated_ |= mesh_instance_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
-      LOG(ERROR) << "I AM HERE 1.2";
       mesh_layer_updated_ |= mesh_semantic_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
     }
-    LOG(ERROR) << "I AM HERE 2";
 
     bool clear_updated_flag = true;
     // TODO(ntonci): Why not calling generateMesh instead?
     mesh_layer_updated_ |= mesh_label_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
-    LOG(ERROR) << "I AM HERE 3";
     generate_mesh_timer.Stop();
-    LOG(ERROR) << "Done updating mesh";
   }
 
   if (publish_scene_mesh_) {
