@@ -79,8 +79,6 @@ bool MeshLabelIntegrator::generateMesh(bool only_mesh_updated_blocks,
     if (all_tsdf_blocks.size() == 0u && all_label_blocks.size() == 0u) {
       return false;
     }
-    LOG(ERROR) << "NEW TSDF blocks: " << all_tsdf_blocks.size();
-    LOG(ERROR) << "NEW Label blocks: " << all_label_blocks.size();
 
     all_tsdf_blocks.insert(all_tsdf_blocks.end(), all_label_blocks.begin(),
                            all_label_blocks.end());

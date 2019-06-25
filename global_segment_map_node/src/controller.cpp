@@ -227,25 +227,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config_.max_segment_age,
       label_tsdf_integrator_config_.max_segment_age);
 
-  // TODO(margaritaG) : this is not used, remove?
-  // std::string mesh_color_scheme("label");
-  // node_handle_private_->param<std::string>(
-  //     "meshing/mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
-  // if (mesh_color_scheme.compare("label") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
-  // } else if (mesh_color_scheme.compare("semantic_label") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
-  // } else if (mesh_color_scheme.compare("instance_label") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
-  // } else if (mesh_color_scheme.compare("geometric_instance_label") == 0)
-  // {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
-  // } else if (mesh_color_scheme.compare("confidence") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
-  // } else {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
-  // }
-
   std::string class_task("coco80");
   node_handle_private_->param<std::string>(
       "semantic_instance_segmentation/class_task", class_task, class_task);
@@ -264,8 +245,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       "icp/keep_track_of_icp_correction",
       label_tsdf_integrator_config_.keep_track_of_icp_correction,
       label_tsdf_integrator_config_.keep_track_of_icp_correction);
-
-  // tsdf_integrator_config_.integrator_threads = 1u;
 
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));

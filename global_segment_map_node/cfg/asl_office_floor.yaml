@@ -17,15 +17,12 @@ pairwise_confidence_merging:
   merging_min_overlap_ratio: 0.15
   merging_min_frame_count: 3
 
-object_database:
-  publish_gsm_updates: false
-
 semantic_instance_segmentation:
   enable_semantic_instance_segmentation: true
 
 meshing:
   visualize: true
-  update_mesh_every_n_sec: 1.0
+  update_mesh_every_n_sec: 2.0
   mesh_color_scheme: "geometric_instance_label"
   publish_segment_mesh: false
   publish_scene_mesh: false
