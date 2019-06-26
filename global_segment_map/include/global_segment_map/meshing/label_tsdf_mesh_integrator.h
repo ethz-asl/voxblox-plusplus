@@ -5,7 +5,6 @@
 #include <cmath>
 #include <list>
 #include <map>
-#include <vector>
 
 #include <glog/logging.h>
 #include <voxblox/core/color.h>

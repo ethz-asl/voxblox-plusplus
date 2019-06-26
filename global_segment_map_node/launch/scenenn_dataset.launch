@@ -3,7 +3,7 @@
   <arg name="bag_file" default="/path/to/data.bag"/>
   <arg name="visualize" default="true" />
 
-  <node name="mask_rcnn" pkg="mask_rcnn_ros" type="mask_rcnn_node.py" output="screen">
+  <node name="mask_rcnn" pkg="mask_rcnn_ros" type="mask_rcnn_node.py" output="log">
       <remap from="~input" to="/camera/rgb/image_raw" />
       <param name="~visualization" value="$(arg visualize)" />
   </node>
@@ -18,7 +18,7 @@
 
   <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/scenenn.yaml"/>
 
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen" launch-prefix="xterm -e gdb --args">
     <rosparam command="load" file="$(arg gsm_node_params_name)" />
     <param name="meshing/visualize" value="$(arg visualize)"/>
     <param name="meshing/update_mesh_every_n_sec" value="0.0" unless="$(arg visualize)"/>

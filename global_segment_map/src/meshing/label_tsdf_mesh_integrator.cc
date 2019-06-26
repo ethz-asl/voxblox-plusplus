@@ -121,10 +121,6 @@ void MeshLabelIntegrator::generateMeshBlocksFunction(
   size_t list_idx;
   while (index_getter->getNextIndex(&list_idx)) {
     const BlockIndex& block_idx = all_tsdf_blocks[list_idx];
-    typename Block<TsdfVoxel>::Ptr tsdf_block =
-        sdf_layer_mutable_->getBlockPtrByIndex(block_idx);
-    typename Block<LabelVoxel>::Ptr label_block =
-        label_layer_mutable_ptr_->getBlockPtrByIndex(block_idx);
     updateMeshForBlock(block_idx);
     if (clear_updated_flag) {
       typename Block<TsdfVoxel>::Ptr tsdf_block =
