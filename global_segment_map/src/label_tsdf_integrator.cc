@@ -711,7 +711,7 @@ void LabelTsdfIntegrator::swapLabels(const Label& old_label,
     Block<LabelVoxel>::Ptr label_block =
         label_layer_->getBlockPtrByIndex(block_index);
     size_t vps = label_block->voxels_per_side();
-    for (int i = 0u; i < vps * vps * vps; i++) {
+    for (size_t i = 0u; i < vps * vps * vps; i++) {
       LabelVoxel& voxel = label_block->getVoxelByLinearIndex(i);
       Label previous_label = voxel.label;
 
