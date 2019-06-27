@@ -1206,7 +1206,7 @@ void Controller::publishScene() {
   // the other params.
   MeshIntegratorConfig mesh_config;
   node_handle_private_->param<float>(
-      "mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
+      "meshing/min_weight", mesh_config.min_weight, mesh_config.min_weight);
   pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
       new pcl::PointCloud<pcl::PointSurfel>());
   convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config,
