@@ -30,5 +30,20 @@ If you use **Voxblox++** in your research, please cite the following publication
 }
 ```
 
+If you use **Voxblox++** without the semantic instance-aware segmentation enabled, please additionally cite:
+```bibtex
+@INPROCEEDINGS{8594391,
+  author={F. {Furrer} and T. {Novkovic} and M. {Fehr} and A. {Gawel} and M. {Grinvald} and T. {Sattler} and R. {Siegwart} and J. {Nieto}},
+  booktitle={2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  title={{Incremental Object Database: Building 3D Models from Multiple Partial Observations}},
+  year={2018},
+  pages={6835-6842},
+  keywords={feature extraction;image colour analysis;image reconstruction;image representation;image segmentation;mobile agents;object detection;solid modelling;multiple partial observations;incremental object database;indoor scenes;merged models;object model;observed instances;segmented RGB-D images;global segmentation map;3D models;mobile agent;Image segmentation;Databases;Three-dimensional displays;GSM;Shape;Image reconstruction;Solid modeling},
+  doi={10.1109/IROS.2018.8594391},
+  ISSN={2153-0866},
+  month={Oct},}
+}
+```
+
 ## License
 The code is available under the [BSD-3-Clause license](https://github.com/ethz-asl/voxblox-plusplus/blob/master/LICENSE).
