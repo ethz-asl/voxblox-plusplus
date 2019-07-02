@@ -71,16 +71,17 @@ bool MeshLabelIntegrator::generateMesh(bool only_mesh_updated_blocks,
          "label layers!";
 
   BlockIndexList all_tsdf_blocks;
-  // BlockIndexList all_label_blocks;
+
   if (only_mesh_updated_blocks) {
+    BlockIndexList all_label_blocks;
     sdf_layer_const_->getAllUpdatedBlocks(&all_tsdf_blocks);
-    // TODO(grinvalm) unique union of block indices here.
-    // label_layer_mutable_ptr_->getAllUpdatedBlocks(&all_label_blocks);
-    if (all_tsdf_blocks.size() == 0u) {
+    label_layer_mutable_ptr_->getAllUpdatedBlocks(&all_label_blocks);
+    if (all_tsdf_blocks.size() == 0u && all_label_blocks.size() == 0u) {
       return false;
     }
-    // all_tsdf_blocks.insert(all_tsdf_blocks.end(), all_label_blocks.begin(),
-    //                        all_label_blocks.end());
+
+    all_tsdf_blocks.insert(all_tsdf_blocks.end(), all_label_blocks.begin(),
+                           all_label_blocks.end());
   } else {
     sdf_layer_const_->getAllAllocatedBlocks(&all_tsdf_blocks);
   }
@@ -120,11 +121,6 @@ void MeshLabelIntegrator::generateMeshBlocksFunction(
   size_t list_idx;
   while (index_getter->getNextIndex(&list_idx)) {
     const BlockIndex& block_idx = all_tsdf_blocks[list_idx];
-    typename Block<TsdfVoxel>::Ptr tsdf_block =
-        sdf_layer_mutable_->getBlockPtrByIndex(block_idx);
-    typename Block<LabelVoxel>::Ptr label_block =
-        label_layer_mutable_ptr_->getBlockPtrByIndex(block_idx);
-
     updateMeshForBlock(block_idx);
     if (clear_updated_flag) {
       typename Block<TsdfVoxel>::Ptr tsdf_block =
@@ -133,9 +129,7 @@ void MeshLabelIntegrator::generateMeshBlocksFunction(
           label_layer_mutable_ptr_->getBlockPtrByIndex(block_idx);
 
       tsdf_block->updated() = false;
-      // TODO(margaritaG): enable when generateMesh() takes union of TSDF and
-      // label updated voxels.
-      // label_block->updated() = false;
+      label_block->updated() = false;
     }
   }
 }
@@ -147,13 +141,20 @@ InstanceLabel MeshLabelIntegrator::getInstanceLabel(const Label& label) {
   InstanceLabel instance_label =
       semantic_instance_label_fusion_ptr_->getInstanceLabel(
           label, kFramesCountThresholdFactor);
+  std::map<Label, InstanceLabel>::iterator prev_instance_it;
+  {
+    std::shared_lock<std::shared_timed_mutex> readerLock(
+        label_instance_map_mutex_);
+    prev_instance_it = label_instance_map_.find(label);
+  }
 
-  auto prev_instance_it = label_instance_map_.find(label);
   if (prev_instance_it != label_instance_map_.end()) {
     if (prev_instance_it->second != instance_label) {
       *remesh_ptr_ = true;
     }
   }
+  std::lock_guard<std::shared_timed_mutex> writerLock(
+      label_instance_map_mutex_);
   label_instance_map_[label] = instance_label;
   return instance_label;
 }
@@ -178,7 +179,6 @@ void MeshLabelIntegrator::updateMeshForBlock(const BlockIndex& block_index) {
   // } else if (!(tsdf_block && label_block)) {
   //   LOG(FATAL) << "Block allocation differs between the two layers.";
   // }
-
   extractBlockMesh(tsdf_block, mesh_block);
   // Update colors if needed.
   if (config_.use_color) {

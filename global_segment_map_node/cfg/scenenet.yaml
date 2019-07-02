@@ -17,6 +17,5 @@ pairwise_confidence_merging:
 meshing:
   visualize: true
   update_mesh_every_n_sec: 1.0
-  publish_segment_mesh: false
   publish_scene_mesh: false
   mesh_filename: "gsm_scenenet_mesh.ply"

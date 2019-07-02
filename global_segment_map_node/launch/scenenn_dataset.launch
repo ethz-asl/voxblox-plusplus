@@ -3,7 +3,7 @@
   <arg name="bag_file" default="/path/to/data.bag"/>
   <arg name="visualize" default="true" />
 
-  <node name="mask_rcnn" pkg="mask_rcnn_ros" type="mask_rcnn_node.py" output="screen">
+  <node name="mask_rcnn" pkg="mask_rcnn_ros" type="mask_rcnn_node.py" output="log">
       <remap from="~input" to="/camera/rgb/image_raw" />
       <param name="~visualization" value="$(arg visualize)" />
   </node>
