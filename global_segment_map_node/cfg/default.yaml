@@ -28,6 +28,7 @@ meshing:
   mesh_filename: "mesh.ply"
   update_mesh_every_n_sec: 0.0
   compute_and_publish_bbox: false
+  min_weight: 3
 
 sliding_window:
   is_on: false
@@ -38,9 +39,6 @@ sliding_window:
   # is larger than this fraction times the window radius, the window is updated
   # and its position is set equal the camera position.
   update_fraction: 0.5
-
-mesh_config:
-  min_weight: 3
 
 icp:
   enable_icp: false

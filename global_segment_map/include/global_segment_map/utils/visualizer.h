@@ -11,14 +11,14 @@ namespace voxblox {
 class Visualizer {
  public:
   Visualizer(const std::vector<std::shared_ptr<MeshLayer>>& mesh_layers,
-             bool* updated_mesh, std::mutex* updated_mesh_mutex_ptr);
+             bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr);
 
   void visualizeMesh();
 
   std::vector<std::shared_ptr<MeshLayer>> mesh_layers_;
 
-  std::mutex* updated_mesh_mutex_ptr_;
-  bool* updated_mesh_;
+  std::mutex* mesh_layer_mutex_ptr_;
+  bool* mesh_layer_updated_;
 
   size_t frame_count_;
 };

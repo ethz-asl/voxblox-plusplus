@@ -141,7 +141,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       publish_scene_mesh_(false),
       received_first_message_(false),
       received_first_feature_(false),
-      updated_mesh_(false),
+      mesh_layer_updated_(false),
       need_full_remesh_(false),
       enable_semantic_instance_segmentation_(true),
       compute_and_publish_bbox_(false),
@@ -234,24 +234,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config_.max_segment_age,
       label_tsdf_integrator_config_.max_segment_age);
 
-  // TODO(margaritaG) : this is not used, remove?
-  // std::string mesh_color_scheme("label");
-  // node_handle_private_->param<std::string>(
-  //     "meshing/mesh_color_scheme", mesh_color_scheme, mesh_color_scheme);
-  // if (mesh_color_scheme.compare("label") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
-  // } else if (mesh_color_scheme.compare("semantic_label") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::SemanticColor;
-  // } else if (mesh_color_scheme.compare("instance_label") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::InstanceColor;
-  // } else if (mesh_color_scheme.compare("geometric_instance_label") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::GeometricInstanceColor;
-  // } else if (mesh_color_scheme.compare("confidence") == 0) {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::ConfidenceColor;
-  // } else {
-  //   mesh_color_scheme_ = MeshLabelIntegrator::LabelColor;
-  // }
-
   std::string class_task("coco80");
   node_handle_private_->param<std::string>(
       "semantic_instance_segmentation/class_task", class_task, class_task);
@@ -321,7 +303,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       mesh_layers.push_back(mesh_merged_layer_);
     }
     visualizer_ =
-        new Visualizer(mesh_layers, &updated_mesh_, &updated_mesh_mutex_);
+        new Visualizer(mesh_layers, &mesh_layer_updated_, &mesh_layer_mutex_);
     viz_thread_ = std::thread(&Visualizer::visualizeMesh, visualizer_);
   }
 
@@ -667,7 +649,8 @@ void Controller::segmentPointCloudCallback(
 
       constexpr bool kIsFreespacePointcloud = false;
       {
-        std::lock_guard<std::mutex> updatedMeshLock(updated_mesh_mutex_);
+        std::lock_guard<std::mutex> label_tsdf_layers_lock(
+            label_tsdf_layers_mutex_);
         start = ros::WallTime::now();
         timing::Timer integrate_timer("integrate_frame_pointclouds");
 
@@ -1263,14 +1246,17 @@ bool Controller::publishObjects(const bool publish_all) {
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = false;
       {
-        std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
+        std::lock_guard<std::mutex> label_tsdf_layers_lock(
+            label_tsdf_layers_mutex_);
         mesh_integrator.generateMesh(only_mesh_updated_blocks,
                                      clear_updated_flag);
+
+        voxblox_msgs::Mesh segment_mesh_msg;
+        generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor,
+                               &segment_mesh_msg);
+        segment_mesh_msg.header.frame_id = world_frame_;
+        segment_mesh_pub_->publish(segment_mesh_msg);
       }
-      voxblox_msgs::Mesh segment_mesh_msg;
-      generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor, &segment_mesh_msg);
-      segment_mesh_msg.header.frame_id = world_frame_;
-      segment_mesh_pub_->publish(segment_mesh_msg);
     }
     all_published_segments_.insert(label);
     published_segment_label = true;
@@ -1302,7 +1288,7 @@ void Controller::publishScene() {
   // the other params.
   MeshIntegratorConfig mesh_config;
   node_handle_private_->param<float>(
-      "mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
+      "meshing/min_weight", mesh_config.min_weight, mesh_config.min_weight);
   pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
       new pcl::PointCloud<pcl::PointSurfel>());
   convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config,
@@ -1329,46 +1315,47 @@ void Controller::publishScene() {
 // TODO(ntonci): Generalize this and rename since this one is also publishing
 // and saving, not just generating.
 void Controller::generateMesh() {  // NOLINT
-  voxblox::timing::Timer generate_mesh_timer("mesh/generate");
   {
-    const bool clear_mesh = true;
-    std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
-    if (clear_mesh) {
-      constexpr bool only_mesh_updated_blocks = false;
-      constexpr bool clear_updated_flag = true;
-      mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
-                                           clear_updated_flag);
-      if (enable_semantic_instance_segmentation_) {
-        all_semantic_labels_.clear();
-        mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+    std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
+    voxblox::timing::Timer generate_mesh_timer("mesh/generate");
+    {
+      std::lock_guard<std::mutex> label_tsdf_layers_lock(
+          label_tsdf_layers_mutex_);
+      const bool clear_mesh = true;
+      if (clear_mesh) {
+        constexpr bool only_mesh_updated_blocks = false;
+        constexpr bool clear_updated_flag = true;
+        mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
+                                             clear_updated_flag);
+        if (enable_semantic_instance_segmentation_) {
+          all_semantic_labels_.clear();
+          mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+          mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+          mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
                                                 clear_updated_flag);
-        for (auto sl : all_semantic_labels_) {
-          LOG(ERROR) << classes[(unsigned)sl];
         }
-        mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                clear_updated_flag);
-        mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                              clear_updated_flag);
-      }
 
-    } else {
-      constexpr bool only_mesh_updated_blocks = true;
-      constexpr bool clear_updated_flag = true;
-      mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
-                                           clear_updated_flag);
+      } else {
+        constexpr bool only_mesh_updated_blocks = true;
+        constexpr bool clear_updated_flag = true;
+        mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
+                                             clear_updated_flag);
 
-      if (enable_semantic_instance_segmentation_) {
-        mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+        if (enable_semantic_instance_segmentation_) {
+          mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+          mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
+                                                  clear_updated_flag);
+          mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
                                                 clear_updated_flag);
-        mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                clear_updated_flag);
-        mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
-                                              clear_updated_flag);
+        }
       }
+      generate_mesh_timer.Stop();
     }
-    generate_mesh_timer.Stop();
 
-    updated_mesh_ = true;
+    mesh_layer_updated_ = true;
 
     if (publish_scene_mesh_) {
       timing::Timer publish_mesh_timer("mesh/publish");
@@ -1407,35 +1394,33 @@ void Controller::generateMesh() {  // NOLINT
 }
 
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
-  std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
-  timing::Timer generate_mesh_timer("mesh/update");
-  bool only_mesh_updated_blocks = true;
-  if (need_full_remesh_) {
-    only_mesh_updated_blocks = false;
-    need_full_remesh_ = false;
-  }
+  std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    timing::Timer generate_mesh_timer("mesh/update");
+    bool only_mesh_updated_blocks = true;
+    if (need_full_remesh_) {
+      only_mesh_updated_blocks = false;
+      need_full_remesh_ = false;
+    }
 
-  if (enable_semantic_instance_segmentation_) {
-    bool clear_updated_flag = false;
-    updated_mesh_ |= mesh_label_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
+    if (enable_semantic_instance_segmentation_) {
+      bool clear_updated_flag = false;
+      mesh_layer_updated_ |= mesh_merged_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
+      mesh_layer_updated_ |= mesh_instance_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
+      mesh_layer_updated_ |= mesh_semantic_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
+    }
 
-    updated_mesh_ |= mesh_merged_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
-
-    updated_mesh_ |= mesh_instance_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
-
-    clear_updated_flag = true;
-    updated_mesh_ |= mesh_semantic_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
-  } else {
     bool clear_updated_flag = true;
     // TODO(ntonci): Why not calling generateMesh instead?
-    updated_mesh_ |= mesh_label_integrator_->generateMesh(
+    mesh_layer_updated_ |= mesh_label_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
+    generate_mesh_timer.Stop();
   }
-  generate_mesh_timer.Stop();
 
   if (publish_scene_mesh_) {
     timing::Timer publish_mesh_timer("mesh/publish");
