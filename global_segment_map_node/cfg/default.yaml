@@ -29,6 +29,7 @@ meshing:
   publish_scene_mesh: true
   mesh_filename: "mesh.ply"
   compute_and_publish_bbox: false
+  min_weight: 3
 
 mesh_config:
   min_weight: 3

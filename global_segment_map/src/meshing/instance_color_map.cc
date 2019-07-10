@@ -7,8 +7,11 @@ namespace voxblox {
 void InstanceColorMap::getColor(const InstanceLabel& instance_label,
                                 Color* color) {
   CHECK_NOTNULL(color);
-
-  auto instance_color_map_it = color_map_.find(instance_label);
+  std::map<InstanceLabel, Color>::iterator instance_color_map_it;
+  {
+    std::shared_lock<std::shared_timed_mutex> readerLock(color_map_mutex_);
+    instance_color_map_it = color_map_.find(instance_label);
+  }
 
   if (instance_color_map_it != color_map_.end()) {
     *color = instance_color_map_it->second;
@@ -21,7 +24,7 @@ void InstanceColorMap::getColor(const InstanceLabel& instance_label,
     } else {
       *color = randomColor();
     }
-
+    std::lock_guard<std::shared_timed_mutex> writerLock(color_map_mutex_);
     color_map_.insert(std::pair<InstanceLabel, Color>(instance_label, *color));
   }
 }

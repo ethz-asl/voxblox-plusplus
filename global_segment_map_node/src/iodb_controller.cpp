@@ -223,6 +223,10 @@ void IodbController::extractSegmentLayers(
   }
 }
 
+// TODO(ff): Create this somewhere:
+// void serializeGsmAsMsg(const map&, const label&, const parent_labels&,
+// msg*);
+
 bool IodbController::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
@@ -416,15 +420,17 @@ bool IodbController::publishObjects(const bool publish_all) {
       constexpr bool only_mesh_updated_blocks = false;
       constexpr bool clear_updated_flag = false;
       {
-        std::lock_guard<std::mutex> updateMeshLock(updated_mesh_mutex_);
+        std::lock_guard<std::mutex> label_tsdf_layers_lock(
+            label_tsdf_layers_mutex_);
         mesh_integrator.generateMesh(only_mesh_updated_blocks,
                                      clear_updated_flag);
-      }
 
-      voxblox_msgs::Mesh segment_mesh_msg;
-      generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor, &segment_mesh_msg);
-      segment_mesh_msg.header.frame_id = world_frame_;
-      segment_mesh_pub_->publish(segment_mesh_msg);
+        voxblox_msgs::Mesh segment_mesh_msg;
+        generateVoxbloxMeshMsg(mesh_layer, ColorMode::kColor,
+                               &segment_mesh_msg);
+        segment_mesh_msg.header.frame_id = world_frame_;
+        segment_mesh_pub_->publish(segment_mesh_msg);
+      }
     }
     all_published_segments_.insert(label);
     published_segment_label = true;

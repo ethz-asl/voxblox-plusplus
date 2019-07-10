@@ -4,10 +4,10 @@ namespace voxblox {
 
 Visualizer::Visualizer(
     const std::vector<std::shared_ptr<MeshLayer>>& mesh_layers,
-    bool* updated_mesh, std::mutex* updated_mesh_mutex_ptr)
+    bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr)
     : mesh_layers_(mesh_layers),
-      updated_mesh_(CHECK_NOTNULL(updated_mesh)),
-      updated_mesh_mutex_ptr_(CHECK_NOTNULL(updated_mesh_mutex_ptr)),
+      mesh_layer_updated_(CHECK_NOTNULL(mesh_layer_updated)),
+      mesh_layer_mutex_ptr_(CHECK_NOTNULL(mesh_layer_mutex_ptr)),
       frame_count_(0u) {}
 
 // TODO(grinvalm): make it more efficient by only updating the
@@ -58,15 +58,15 @@ void Visualizer::visualizeMesh() {
     meshes.clear();
     meshes.resize(n_visualizers);
 
-    if (updated_mesh_mutex_ptr_->try_lock()) {
-      if (*updated_mesh_) {
+    if (mesh_layer_mutex_ptr_->try_lock()) {
+      if (*mesh_layer_updated_) {
         for (int index = 0; index < n_visualizers; index++) {
           mesh_layers_[index]->getMesh(&meshes[index]);
         }
         refresh = true;
-        *updated_mesh_ = false;
+        *mesh_layer_updated_ = false;
       }
-      updated_mesh_mutex_ptr_->unlock();
+      mesh_layer_mutex_ptr_->unlock();
     }
 
     if (refresh) {

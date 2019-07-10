@@ -447,8 +447,6 @@ LabelVoxel* LabelTsdfIntegrator::allocateStorageAndGetLabelVoxelPtr(
     }
   }
 
-  (*last_block)->updated() = true;
-
   const VoxelIndex local_voxel_idx =
       getLocalFromGlobalVoxelIndex(global_voxel_idx, voxels_per_side_);
 
@@ -709,11 +707,12 @@ void LabelTsdfIntegrator::swapLabels(const Label& old_label,
   label_layer_->getAllAllocatedBlocks(&all_label_blocks);
 
   for (const BlockIndex& block_index : all_label_blocks) {
-    Block<LabelVoxel>::Ptr block =
+    Block<TsdfVoxel>::Ptr tsdf_block = layer_->getBlockPtrByIndex(block_index);
+    Block<LabelVoxel>::Ptr label_block =
         label_layer_->getBlockPtrByIndex(block_index);
-    size_t vps = block->voxels_per_side();
-    for (int i = 0u; i < vps * vps * vps; i++) {
-      LabelVoxel& voxel = block->getVoxelByLinearIndex(i);
+    size_t vps = label_block->voxels_per_side();
+    for (size_t i = 0u; i < vps * vps * vps; i++) {
+      LabelVoxel& voxel = label_block->getVoxelByLinearIndex(i);
       Label previous_label = voxel.label;
 
       LabelConfidence old_label_confidence = 0u;
@@ -741,7 +740,9 @@ void LabelTsdfIntegrator::swapLabels(const Label& old_label,
         changeLabelCount(updated_label, 1);
 
         changeLabelCount(previous_label, -1);
-        block->updated() = true;
+        if (!tsdf_block->updated()) {
+          label_block->updated() = true;
+        }
       }
     }
   }
