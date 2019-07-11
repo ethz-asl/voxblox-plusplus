@@ -231,11 +231,16 @@ bool IodbController::publishObjects(const bool publish_all) {
   CHECK_NOTNULL(segment_gsm_update_pub_);
   bool published_segment_label = false;
   std::vector<Label> labels_to_publish;
-  getLabelsToPublish(publish_all, &labels_to_publish);
-
   std::unordered_map<Label, LayerTuple> label_to_layers;
-  ros::Time start = ros::Time::now();
-  extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
+  ros::Time start;
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    getLabelsToPublish(publish_all, &labels_to_publish);
+
+    start = ros::Time::now();
+    extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
+  }
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
   ROS_INFO_STREAM("Extracting segment layers took " << duration.toSec() << "s");
@@ -449,24 +454,32 @@ void IodbController::publishScene() {
   gsm_update_msg.header.frame_id = world_frame_;
 
   constexpr bool kSerializeOnlyUpdated = false;
-  serializeLayerAsMsg<TsdfVoxel>(map_->getTsdfLayer(), kSerializeOnlyUpdated,
-                                 &gsm_update_msg.object.tsdf_layer);
-  // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
-  // yet, hence it doesn't work.
-  // TODO(ntonci): This seems to work?
-  serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(), kSerializeOnlyUpdated,
-                                  &gsm_update_msg.object.label_layer);
-  // TODO(ntonci): Also publish feature layer for scene.
-
-  // TODO(ntonci): This is done twice, rather do it in the beginning with all
-  // the other params.
-  MeshIntegratorConfig mesh_config;
-  node_handle_private_->param<float>(
-      "mesh_config/min_weight", mesh_config.min_weight, mesh_config.min_weight);
   pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
       new pcl::PointCloud<pcl::PointSurfel>());
-  convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config,
-                               surfel_cloud.get());
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    serializeLayerAsMsg<TsdfVoxel>(map_->getTsdfLayer(), kSerializeOnlyUpdated,
+                                   &gsm_update_msg.object.tsdf_layer);
+    // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
+    // yet, hence it doesn't work.
+    // TODO(ntonci): This seems to work?
+    serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(),
+                                    kSerializeOnlyUpdated,
+                                    &gsm_update_msg.object.label_layer);
+
+    // TODO(ntonci): Also publish feature layer for scene.
+
+    // TODO(ntonci): This is done twice, rather do it in the beginning with all
+    // the other params.
+    MeshIntegratorConfig mesh_config;
+    node_handle_private_->param<float>("mesh_config/min_weight",
+                                       mesh_config.min_weight,
+                                       mesh_config.min_weight);
+
+    convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config,
+                                 surfel_cloud.get());
+  }
   pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
   gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
 

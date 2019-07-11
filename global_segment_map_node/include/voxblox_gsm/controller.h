@@ -73,11 +73,6 @@ class Controller {
   bool extractInstancesCallback(std_srvs::Empty::Request& request,
                                 std_srvs::Empty::Response& response);
 
-  virtual void extractSegmentLayers(
-      const std::vector<Label>& labels,
-      std::unordered_map<Label, LayerPair>* label_layers_map,
-      bool labels_list_is_complete = false);
-
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
                        Transformation* transform);
