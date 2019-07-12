@@ -1,13 +1,13 @@
 #ifndef VOXBLOX_GSM_SLIDING_WINDOW_CONTROLLER_H
 #define VOXBLOX_GSM_SLIDING_WINDOW_CONTROLLER_H
 
-#include "controller.h"
+#include "iodb_controller.h"
 
 #include <tf/transform_broadcaster.h>
 
 namespace voxblox {
 namespace voxblox_gsm {
-class SlidingWindowController : public Controller {
+class SlidingWindowController : public IodbController {
  public:
   explicit SlidingWindowController(ros::NodeHandle* node_handle);
 
@@ -21,8 +21,8 @@ class SlidingWindowController : public Controller {
    */
   void extractSegmentLayers(
       const std::vector<Label>& labels,
-      std::unordered_map<Label, LayerTuple>* label_layers_map,
-      bool labels_list_is_complete = false) override;
+      std::unordered_map<Label, LayerPair>* label_layers_map,
+      bool labels_list_is_complete = false);
 
  private:
   /**
@@ -84,7 +84,7 @@ class SlidingWindowController : public Controller {
   Transformation current_window_pose_;
   ros::Time current_window_timestamp_;
 
-  std::unordered_map<Label, LayerTuple> label_to_layers_;
+  std::unordered_map<Label, LayerPair> label_to_layers_;
   std::vector<Label> removed_segments_;
   FloatingPoint window_radius_ = 1.0f;
   FloatingPoint update_fraction_ = 0.5f;

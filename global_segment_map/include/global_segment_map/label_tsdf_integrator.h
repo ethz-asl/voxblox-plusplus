@@ -35,7 +35,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     size_t min_label_voxel_count = 20u;
     size_t max_num_icp_updates = 15u;
     // Truncation distance factor for label propagation.
-    float label_propagation_td_factor = 1.0;
+    float label_propagation_td_factor = 1.0f;
 
     // Pairwise confidence-based segment merging logic.
     bool enable_pairwise_confidence_merging = true;

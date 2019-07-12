@@ -8,7 +8,7 @@ namespace voxblox {
 namespace voxblox_gsm {
 
 SlidingWindowController::SlidingWindowController(ros::NodeHandle* node_handle)
-    : Controller(CHECK_NOTNULL(node_handle)) {
+    : IodbController(CHECK_NOTNULL(node_handle)) {
   node_handle_private_->param<float>("sliding_window/radius_m", window_radius_,
                                      window_radius_);
   node_handle_private_->param<float>("sliding_window/update_fraction",
@@ -30,14 +30,13 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(
 
   for (const Label& label : all_labels) {
     auto it = label_to_layers_.find(label);
-    LayerTuple& layers = it->second;
+    LayerPair& layer_pair = it->second;
 
     // Iterate over all blocks of segment. If one of the blocks is inside the
     // window radius, the whole segment is valid. Otherwise, the blocks
     // containing the segment are removed from the GSM
     BlockIndexList blocks_of_label;
-    (std::get<LayerAccessor::kTsdfLayer>(layers))
-        .getAllAllocatedBlocks(&blocks_of_label);
+    layer_pair.first.getAllAllocatedBlocks(&blocks_of_label);
     bool has_block_within_radius = false;
     for (const BlockIndex& block_index : blocks_of_label) {
       Point center_block = getCenterPointFromGridIndex(
@@ -62,13 +61,14 @@ void SlidingWindowController::removeSegmentsOutsideOfRadius(
 
 void SlidingWindowController::extractSegmentLayers(
     const std::vector<Label>& labels,
-    std::unordered_map<Label, LayerTuple>* label_layers_map,
+    std::unordered_map<Label, LayerPair>* label_layers_map,
     bool labels_list_is_complete) {
   CHECK_NOTNULL(label_layers_map);
   if (!label_to_layers_.empty()) {
     *label_layers_map = label_to_layers_;
   } else {
-    extractSegmentLayers(labels, label_layers_map, labels_list_is_complete);
+    map_->extractSegmentLayers(labels, label_layers_map,
+                               labels_list_is_complete);
   }
 }
 
@@ -126,7 +126,7 @@ void SlidingWindowController::publishGsmUpdate(
   pose.header.stamp = current_window_timestamp_;
 
   gsm_update->sliding_window_pose = pose;
-  Controller::publishGsmUpdate(publisher, gsm_update);
+  IodbController::publishGsmUpdate(publisher, gsm_update);
 }
 
 void SlidingWindowController::publishWindowTrajectory(const Point& position) {
