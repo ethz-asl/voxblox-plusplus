@@ -81,9 +81,6 @@ class Controller {
 
   void updateMeshEvent(const ros::TimerEvent& e);
 
-  virtual void getLabelsToPublish(const bool get_all,
-                                  std::vector<Label>* labels);
-
   void computeAlignedBoundingBox(
       const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
       Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,

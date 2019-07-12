@@ -147,7 +147,7 @@ void SlidingWindowController::publishWindowTrajectory(const Point& position) {
 void SlidingWindowController::getLabelsToPublish(const bool get_all,
                                                  std::vector<Label>* labels) {
   CHECK_NOTNULL(labels);
-  Controller::getLabelsToPublish(get_all, labels);
+  IodbController::getLabelsToPublish(get_all, labels);
   for (const Label& label : removed_segments_) {
     labels->erase(std::remove(labels->begin(), labels->end(), label));
   }
