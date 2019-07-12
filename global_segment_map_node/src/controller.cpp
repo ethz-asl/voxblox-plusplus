@@ -634,17 +634,6 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
   return true;
 }
 
-void Controller::getLabelsToPublish(const bool get_all,
-                                    std::vector<Label>* labels) {
-  CHECK_NOTNULL(labels);
-  if (get_all) {
-    *labels = map_->getLabelList();
-    ROS_INFO("Publishing all segments");
-  } else {
-    *labels = segment_labels_to_publish_;
-  }
-}
-
 bool Controller::lookupTransform(const std::string& from_frame,
                                  const std::string& to_frame,
                                  const ros::Time& timestamp,

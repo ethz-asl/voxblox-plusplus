@@ -223,6 +223,17 @@ void IodbController::extractSegmentLayers(
   }
 }
 
+void IodbController::getLabelsToPublish(const bool get_all,
+                                        std::vector<Label>* labels) {
+  CHECK_NOTNULL(labels);
+  if (get_all) {
+    *labels = map_->getLabelList();
+    ROS_INFO("Publishing all segments");
+  } else {
+    *labels = segment_labels_to_publish_;
+  }
+}
+
 // TODO(ff): Create this somewhere:
 // void serializeGsmAsMsg(const map&, const label&, const parent_labels&,
 // msg*);
