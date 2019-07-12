@@ -76,6 +76,9 @@ class IodbController : public Controller {
       modelify_msgs::ValidateMergedObject::Request& request,
       modelify_msgs::ValidateMergedObject::Response& response);
 
+  virtual void getLabelsToPublish(const bool get_all,
+                                  std::vector<Label>* labels);
+
   virtual void publishGsmUpdate(const ros::Publisher& publisher,
                                 modelify_msgs::GsmUpdate* gsm_update);
 
