@@ -202,6 +202,7 @@ class Controller {
   std::set<Label> all_published_segments_;
   ros::Publisher* bbox_pub_;
   ros::Publisher* feature_block_pub_;
+  int max_block_features_for_visualization_;
 
   std::thread viz_thread_;
   Visualizer* visualizer_;
@@ -211,6 +212,7 @@ class Controller {
   bool need_full_remesh_;
 
   int min_number_of_allocated_blocks_to_publish_;
+  int min_number_of_points_to_publish_;
 };
 
 }  // namespace voxblox_gsm

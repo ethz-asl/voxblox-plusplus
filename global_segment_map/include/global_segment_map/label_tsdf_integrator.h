@@ -33,7 +33,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // TODO(margaritaG): maybe use a relative measure, not absolue voxel count.
     // Minimum number of label voxels count for label propagation.
     size_t min_label_voxel_count = 20u;
-    size_t max_num_icp_updates = 15u;
     // Truncation distance factor for label propagation.
     float label_propagation_td_factor = 1.0;
 
@@ -59,6 +58,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // ICP params.
     bool enable_icp = false;
     bool keep_track_of_icp_correction = false;
+    size_t max_num_icp_updates = 15u;
   };
 
   LabelTsdfIntegrator(const Config& tsdf_config,

@@ -141,7 +141,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       compute_and_publish_bbox_(false),
       publish_feature_blocks_marker_(false),
       use_label_propagation_(true),
-      min_number_of_allocated_blocks_to_publish_(10) {
+      min_number_of_allocated_blocks_to_publish_(10),
+      min_number_of_points_to_publish_(10),
+      max_block_features_for_visualization_(500) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
@@ -169,6 +171,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   tsdf_integrator_config_.allow_clear = true;
   FloatingPoint truncation_distance_factor = 5.0f;
   tsdf_integrator_config_.max_ray_length_m = 4.0f;
+  tsdf_integrator_config_.use_const_weight = false;
 
   node_handle_private_->param<bool>(
       "voxblox/voxel_carving_enabled",
@@ -177,6 +180,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("voxblox/allow_clear",
                                     tsdf_integrator_config_.allow_clear,
                                     tsdf_integrator_config_.allow_clear);
+  node_handle_private_->param<bool>("voxblox/use_const_weight",
+                                    tsdf_integrator_config_.use_const_weight,
+                                    tsdf_integrator_config_.use_const_weight);
   node_handle_private_->param<FloatingPoint>(
       "voxblox/truncation_distance_factor", truncation_distance_factor,
       truncation_distance_factor);
@@ -251,6 +257,9 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
   mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
 
+  mesh_config_.min_weight = 1e-4;
+  node_handle_private_->param<float>(
+      "meshing/min_weight", mesh_config_.min_weight, mesh_config_.min_weight);
   label_tsdf_mesh_config_.color_scheme =
       MeshLabelIntegrator::ColorScheme::kLabel;
   mesh_label_integrator_.reset(new MeshLabelIntegrator(
@@ -350,6 +359,15 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       "object_database/min_number_of_allocated_blocks_to_publish",
       min_number_of_allocated_blocks_to_publish_,
       min_number_of_allocated_blocks_to_publish_);
+
+  node_handle_private_->param<int>(
+      "object_database/min_number_of_points_to_publish",
+      min_number_of_points_to_publish_, min_number_of_points_to_publish_);
+
+  node_handle_private_->param<int>("max_block_features_for_visualization",
+                                   max_block_features_for_visualization_,
+                                   max_block_features_for_visualization_);
+
 }  // namespace voxblox_gsm
 
 Controller::~Controller() { viz_thread_.join(); }
@@ -524,10 +542,9 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
   if (publish_feature_blocks_marker_) {
     CHECK_NOTNULL(feature_block_pub_);
     visualization_msgs::MarkerArray feature_blocks;
-    // TODO(ntonci): Make this a param.
-    constexpr size_t kMaxNumberOfFeatures = 500u;
-    createOccupancyBlocksFromFeatureLayer(
-        *feature_layer_, world_frame_, kMaxNumberOfFeatures, &feature_blocks);
+    createOccupancyBlocksFromFeatureLayer(*feature_layer_, world_frame_,
+                                          max_block_features_for_visualization_,
+                                          &feature_blocks);
     feature_block_pub_->publish(feature_blocks);
   }
 
@@ -935,7 +952,7 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
     }
   }
   return true;
-}  // namespace voxblox_gsm
+}
 
 bool Controller::lookupTransform(const std::string& from_frame,
                                  const std::string& to_frame,
@@ -996,6 +1013,11 @@ bool Controller::publishObjects(const bool publish_all) {
 
     if (tsdf_layer.getNumberOfAllocatedBlocks() <
         min_number_of_allocated_blocks_to_publish_) {
+      ROS_WARN_STREAM("Segment " << label << " contains only "
+                                 << tsdf_layer.getNumberOfAllocatedBlocks()
+                                 << " allocated blocks (minimum: "
+                                 << min_number_of_allocated_blocks_to_publish_
+                                 << "). Skipping it!");
       continue;
     }
 
@@ -1016,18 +1038,16 @@ bool Controller::publishObjects(const bool publish_all) {
     CHECK_EQ(origin_shifted_tsdf_layer_W, origin_shifted_feature_layer_W);
 
     // Extract surfel cloud from layer.
-    MeshIntegratorConfig mesh_config;
-    node_handle_private_->param<float>(
-        "meshing/min_weight", mesh_config.min_weight, mesh_config.min_weight);
     pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
         new pcl::PointCloud<pcl::PointSurfel>());
-    convertVoxelGridToPointCloud(tsdf_layer, mesh_config, surfel_cloud.get());
+    convertVoxelGridToPointCloud(tsdf_layer, mesh_config_, surfel_cloud.get());
 
-    if (surfel_cloud->empty()) {
-      LOG(WARNING) << tsdf_layer.getNumberOfAllocatedBlocks()
-                   << " blocks didn't produce a surface.";
-      LOG(WARNING) << "Labelled segment does not contain enough data to "
-                      "extract a surface -> skipping!";
+    if (surfel_cloud->points.size() < min_number_of_points_to_publish_) {
+      ROS_WARN_STREAM("Segment " << label << " contains only "
+                                 << surfel_cloud->points.size()
+                                 << " points in the point cloud (minimum: "
+                                 << min_number_of_points_to_publish_
+                                 << "). Skipping it!");
       continue;
     }
 
@@ -1202,14 +1222,9 @@ void Controller::publishScene() {
                                   &gsm_update_msg.object.label_layer);
   // TODO(ntonci): Also publish feature layer for scene.
 
-  // TODO(ntonci): This is done twice, rather do it in the beginning with all
-  // the other params.
-  MeshIntegratorConfig mesh_config;
-  node_handle_private_->param<float>(
-      "meshing/min_weight", mesh_config.min_weight, mesh_config.min_weight);
   pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
       new pcl::PointCloud<pcl::PointSurfel>());
-  convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config,
+  convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config_,
                                surfel_cloud.get());
   pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
   gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
@@ -1372,10 +1387,15 @@ void Controller::getLabelsToPublish(const bool get_all,
   CHECK_NOTNULL(labels);
   if (get_all) {
     *labels = map_->getLabelList();
-    ROS_INFO("Publishing all segments");
   } else {
     *labels = segment_labels_to_publish_;
   }
+
+  std::stringstream ss;
+  for (const Label& label : *labels) {
+    ss << label << " ";
+  }
+  ROS_INFO_STREAM("Publishing segments: \n" << ss.str());
 }
 
 void Controller::computeAlignedBoundingBox(
