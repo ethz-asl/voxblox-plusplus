@@ -45,6 +45,9 @@ int main(int argc, char** argv) {
     controller->advertiseBboxTopic();
   }
 
+  ros::ServiceServer move_object_srv;
+  controller->advertiseMoveObjectService(&move_object_srv);
+
   ros::ServiceServer generate_mesh_srv;
   controller->advertiseGenerateMeshService(&generate_mesh_srv);
 

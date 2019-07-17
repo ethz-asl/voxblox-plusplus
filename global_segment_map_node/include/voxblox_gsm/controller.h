@@ -63,6 +63,8 @@ class Controller {
   void advertiseExtractInstancesService(
       ros::ServiceServer* extract_instances_srv);
 
+  void advertiseMoveObjectService(ros::ServiceServer* move_object_srv);
+
   void dynamicReconfigureCallback(gsm_node::InteractiveSliderConfig& config,
                                   uint32_t level);
 
