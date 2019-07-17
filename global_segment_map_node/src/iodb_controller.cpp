@@ -594,8 +594,7 @@ bool IodbController::publishSceneCallback(
     std_srvs::SetBool::Response& response) {
   bool save_scene_mesh = request.data;
   if (save_scene_mesh) {
-    constexpr bool kClearMesh = true;
-    generateMesh(kClearMesh);
+    generateMesh();
   }
   publishScene();
   constexpr bool kPublishAllSegments = true;
