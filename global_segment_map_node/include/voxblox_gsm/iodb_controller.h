@@ -46,7 +46,7 @@ class IodbController : public Controller {
   void validateMergedObjectService(
       ros::ServiceServer* validate_merged_object_srv);
 
-  virtual void extractSegmentLayers(
+  void extractSegmentLayers(
       const std::vector<Label>& labels,
       std::unordered_map<Label, LayerTuple>* label_layers_map,
       bool labels_list_is_complete = false);
@@ -75,6 +75,9 @@ class IodbController : public Controller {
   bool validateMergedObjectCallback(
       modelify_msgs::ValidateMergedObject::Request& request,
       modelify_msgs::ValidateMergedObject::Response& response);
+
+  virtual void getLabelsToPublish(const bool get_all,
+                                  std::vector<Label>* labels);
 
   virtual void publishGsmUpdate(const ros::Publisher& publisher,
                                 modelify_msgs::GsmUpdate* gsm_update);

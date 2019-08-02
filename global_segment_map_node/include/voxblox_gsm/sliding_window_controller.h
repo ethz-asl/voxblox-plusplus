@@ -22,7 +22,7 @@ class SlidingWindowController : public IodbController {
   void extractSegmentLayers(
       const std::vector<Label>& labels,
       std::unordered_map<Label, LayerPair>* label_layers_map,
-      bool labels_list_is_complete = false) override;
+      bool labels_list_is_complete = false);
 
  private:
   /**

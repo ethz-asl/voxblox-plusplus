@@ -67,7 +67,8 @@ void SlidingWindowController::extractSegmentLayers(
   if (!label_to_layers_.empty()) {
     *label_layers_map = label_to_layers_;
   } else {
-    extractSegmentLayers(labels, label_layers_map, labels_list_is_complete);
+    map_->extractSegmentLayers(labels, label_layers_map,
+                               labels_list_is_complete);
   }
 }
 
@@ -146,7 +147,7 @@ void SlidingWindowController::publishWindowTrajectory(const Point& position) {
 void SlidingWindowController::getLabelsToPublish(const bool get_all,
                                                  std::vector<Label>* labels) {
   CHECK_NOTNULL(labels);
-  Controller::getLabelsToPublish(get_all, labels);
+  IodbController::getLabelsToPublish(get_all, labels);
   for (const Label& label : removed_segments_) {
     labels->erase(std::remove(labels->begin(), labels->end(), label));
   }
