@@ -28,6 +28,7 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
+#include <voxblox/integrator/merge_integration.h>
 
 #include <voxblox/io/sdf_ply.h>
 
@@ -405,6 +406,13 @@ void Controller::advertiseExtractInstancesService(
       "extract_instances", &Controller::extractInstancesCallback, this);
 }
 
+void Controller::advertiseMoveObjectService(
+    ros::ServiceServer* move_object_srv) {
+  CHECK_NOTNULL(move_object_srv);
+  *move_object_srv = node_handle_private_->advertiseService(
+      "move_object", &Controller::moveObjectCallback, this);
+}
+
 void Controller::processSegment(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Look up transform from camera frame to world frame.
@@ -591,8 +599,10 @@ bool Controller::saveSegmentsAsMeshCallback(
     labels = map_->getLabelList();
 
     // Extract the TSDF and label layers corresponding to each segment.
+    constexpr bool kRemoveSegmentsFromMap = false;
     constexpr bool kLabelsListIsComplete = true;
-    map_->extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
+    map_->extractSegmentLayers(labels, &label_to_layers, kRemoveSegmentsFromMap,
+                               kLabelsListIsComplete);
   }
 
   const char* kSegmentFolder = "gsm_segments";
@@ -670,6 +680,40 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
       ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
     }
   }
+  return true;
+}
+
+bool Controller::moveObjectCallback(std_srvs::Empty::Request& request,
+                                    std_srvs::Empty::Response& response) {
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    voxblox::timing::Timer extract_segment_layer("extract_segment_layers");
+    Labels labels;
+    std::unordered_map<Label, LabelTsdfMap::LayerPair> label_to_layers;
+    Label segment_to_move = 2u;
+    labels.push_back(segment_to_move);
+
+    constexpr bool kRemoveSegmentsFromMap = true;
+    constexpr bool kLabelsListIsComplete = false;
+    map_->extractSegmentLayers(labels, &label_to_layers, kRemoveSegmentsFromMap,
+                               kLabelsListIsComplete);
+    extract_segment_layer.Stop();
+
+    voxblox::timing::Timer insert_segment_layer("insert_segment_layers");
+
+    constexpr bool kUseNaiveMethod = false;
+    Transformation T_out_in;
+    // mergeLayerAintoLayerB<TsdfVoxel>(label_to_layers.at(segment_to_move).first,
+    //                                  map_->getTsdfLayerPtr());
+    // mergeLayerAintoLayerB<LabelVoxel>(
+    //     label_to_layers.at(segment_to_move).second,
+    //     map_->getLabelLayerPtr());
+
+    insert_segment_layer.Stop();
+  }
+
+  ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
   return true;
 }
 

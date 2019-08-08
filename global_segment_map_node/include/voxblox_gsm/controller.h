@@ -52,9 +52,6 @@ class Controller {
 
   void advertisePublishSceneService(ros::ServiceServer* publish_scene_srv);
 
-  void validateMergedObjectService(
-      ros::ServiceServer* validate_merged_object_srv);
-
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
   void advertiseSaveSegmentsAsMeshService(
@@ -67,10 +64,6 @@ class Controller {
 
   void dynamicReconfigureCallback(gsm_node::InteractiveSliderConfig& config,
                                   uint32_t level);
-
-  void publishTsdfSlice();
-  void publishTsdf();
-  void publishLabelTsdf();
 
   bool enable_semantic_instance_segmentation_;
 
@@ -99,6 +92,9 @@ class Controller {
   bool extractInstancesCallback(std_srvs::Empty::Request& request,
                                 std_srvs::Empty::Response& response);
 
+  bool moveObjectCallback(std_srvs::Empty::Request& request,
+                          std_srvs::Empty::Response& response);
+
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
                        Transformation* transform);
@@ -111,6 +107,10 @@ class Controller {
       const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
       Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
       Eigen::Vector3f* bbox_size);
+
+  void publishTsdfSlice();
+  void publishTsdf();
+  void publishLabelTsdf();
 
   ros::NodeHandle* node_handle_private_;
 
