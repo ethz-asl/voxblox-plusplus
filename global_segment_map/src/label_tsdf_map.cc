@@ -70,6 +70,16 @@ void LabelTsdfMap::extractSegmentLayers(
         continue;
       }
 
+      bool observed = false;
+      for (int j = 0; j < 35; ++j) {
+        if (global_label_voxel.label_count[j].label != 0u) {
+          observed = true;
+        }
+      }
+      if (!observed) {
+        LOG(FATAL) << "Some voxel in map has label set but no counts!";
+      }
+
       auto it = label_layers_map->find(global_label_voxel.label);
       if (it == label_layers_map->end()) {
         if (labels_list_is_complete) {
@@ -106,8 +116,11 @@ void LabelTsdfMap::extractSegmentLayers(
       label_voxel = global_label_voxel;
 
       if (remove_segments_from_map) {
+        // TODO(grinvalm): What should be done with these voxels and blocks?
         global_tsdf_voxel = TsdfVoxel();
         global_label_voxel = LabelVoxel();
+
+        global_tsdf_block->updated() = true;
       }
     }
   }

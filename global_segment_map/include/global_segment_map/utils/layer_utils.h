@@ -3,7 +3,7 @@
 
 #include <voxblox/utils/layer_utils.h>
 
-#include "global_segment_map/lable_voxel.h"
+#include "global_segment_map/label_voxel.h"
 
 namespace voxblox {
 namespace utils {

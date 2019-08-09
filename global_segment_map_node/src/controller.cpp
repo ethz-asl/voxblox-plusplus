@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <geometry_msgs/TransformStamped.h>
+#include <global_segment_map/label_interpolator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/file_utils.h>
@@ -23,7 +24,6 @@
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 
-#include <minkindr_conversions/kindr_tf.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/alignment/icp.h>
@@ -461,25 +461,25 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
   ros::WallTime start;
   ros::WallTime end;
 
-  if (enable_icp_) {
-    Pointcloud point_cloud_all_segments_t;
-    Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
-    Transformation T_G_C_icp = T_G_C;
-
-    for (const auto& segment : segments_to_integrate_) {
-      // Concatenate point clouds. (NOTE(ff): We should probably just use
-      // the original cloud here instead.)
-      Pointcloud::iterator it = point_cloud_all_segments_t.end();
-      point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
-                                        segment->points_C_.end());
-    }
-    T_G_C_icp =
-        integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
-
-    for (const auto& segment : segments_to_integrate_) {
-      segment->T_G_C_ = T_G_C_icp;
-    }
-  }
+  // if (enable_icp_) {
+  //   Pointcloud point_cloud_all_segments_t;
+  //   Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+  //   Transformation T_G_C_icp = T_G_C;
+  //
+  //   for (const auto& segment : segments_to_integrate_) {
+  //     // Concatenate point clouds. (NOTE(ff): We should probably just use
+  //     // the original cloud here instead.)
+  //     Pointcloud::iterator it = point_cloud_all_segments_t.end();
+  //     point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
+  //                                       segment->points_C_.end());
+  //   }
+  //   T_G_C_icp =
+  //       integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
+  //
+  //   for (const auto& segment : segments_to_integrate_) {
+  //     segment->T_G_C_ = T_G_C_icp;
+  //   }
+  // }
 
   if (use_label_propagation_) {
     timing::Timer label_candidates_timer("compute_label_candidates");
@@ -506,6 +506,37 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
     ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
              segments_to_integrate_.size(), (end - start).toSec());
   }
+
+  // if (enable_icp_) {
+  //   for (Segment* segment : segments_to_integrate_) {
+  //     if (segment->label_ == 2u) {
+  //       CHECK_NOTNULL(segment);
+  //
+  //       Labels labels;
+  //       std::unordered_map<Label, LabelTsdfMap::LayerPair> label_to_layers;
+  //       Label label = segment->label_;
+  //       labels.push_back(label);
+  //
+  //       constexpr bool kRemoveSegmentsFromMap = false;
+  //       constexpr bool kLabelsListIsComplete = false;
+  //       map_->extractSegmentLayers(labels, &label_to_layers,
+  //                                  kRemoveSegmentsFromMap,
+  //                                  kLabelsListIsComplete);
+  //
+  //       Transformation T_S_S_icp;
+  //       T_S_S_icp = integrator_->getIcpRefined_T_S_S(
+  //           segment->T_G_C_, label_to_layers.at(label).first,
+  //           segment->points_C_);
+  //
+  //       mergeLayerAintoLayerB<TsdfVoxel>(label_to_layers.at(label).first,
+  //                                        T_S_S_icp, map_->getTsdfLayerPtr());
+  //
+  //       mergeLayerAintoLayerB<LabelVoxel>(label_to_layers.at(label).second,
+  //                                         T_S_S_icp,
+  //                                         map_->getLabelLayerPtr());
+  //     }
+  //   }
+  // }
 
   constexpr bool kIsFreespacePointcloud = false;
 
@@ -703,12 +734,16 @@ bool Controller::moveObjectCallback(std_srvs::Empty::Request& request,
     voxblox::timing::Timer insert_segment_layer("insert_segment_layers");
 
     constexpr bool kUseNaiveMethod = false;
+
     Transformation T_out_in;
-    // mergeLayerAintoLayerB<TsdfVoxel>(label_to_layers.at(segment_to_move).first,
-    //                                  map_->getTsdfLayerPtr());
-    // mergeLayerAintoLayerB<LabelVoxel>(
-    //     label_to_layers.at(segment_to_move).second,
-    //     map_->getLabelLayerPtr());
+    T_out_in.setRandom();
+
+    mergeLayerAintoLayerB<TsdfVoxel>(label_to_layers.at(segment_to_move).first,
+                                     T_out_in, map_->getTsdfLayerPtr());
+
+    mergeLayerAintoLayerB<LabelVoxel>(
+        label_to_layers.at(segment_to_move).second, T_out_in,
+        map_->getLabelLayerPtr());
 
     insert_segment_layer.Stop();
   }

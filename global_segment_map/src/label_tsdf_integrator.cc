@@ -1,5 +1,7 @@
 #include "global_segment_map/label_tsdf_integrator.h"
 
+#include "global_segment_map/utils/label_voxel_utils.h"
+
 namespace voxblox {
 
 LabelTsdfIntegrator::LabelTsdfIntegrator(
@@ -125,56 +127,6 @@ Label LabelTsdfIntegrator::getNextUnassignedLabel(
     voxel_label = voxel.label;
   }
   return voxel_label;
-}
-
-void LabelTsdfIntegrator::updateVoxelLabelAndConfidence(
-    LabelVoxel* label_voxel, const Label& preferred_label) {
-  CHECK_NOTNULL(label_voxel);
-  Label max_label = 0u;
-  LabelConfidence max_confidence = 0u;
-  for (const LabelCount& label_count : label_voxel->label_count) {
-    if (label_count.label_confidence > max_confidence ||
-        (label_count.label == preferred_label && preferred_label != 0u &&
-         label_count.label_confidence == max_confidence)) {
-      max_confidence = label_count.label_confidence;
-      max_label = label_count.label;
-    }
-  }
-  label_voxel->label = max_label;
-  label_voxel->label_confidence = max_confidence;
-}
-
-void LabelTsdfIntegrator::addVoxelLabelConfidence(
-    const Label& label, const LabelConfidence& confidence,
-    LabelVoxel* label_voxel) {
-  CHECK_NOTNULL(label_voxel);
-  bool updated = false;
-  for (LabelCount& label_count : label_voxel->label_count) {
-    if (label_count.label == label) {
-      // Label already observed in this voxel.
-      label_count.label_confidence = label_count.label_confidence + confidence;
-      updated = true;
-      break;
-    }
-  }
-  if (updated == false) {
-    for (LabelCount& label_count : label_voxel->label_count) {
-      if (label_count.label == 0u) {
-        // This is the first allocated but unused index in the map
-        // in which the new entry should be added.
-        label_count.label = label;
-        label_count.label_confidence = confidence;
-        updated = true;
-        break;
-      }
-    }
-  }
-  if (updated == false) {
-    // TODO(margaritaG): handle this nicely or remove.
-    // LOG(FATAL) << "Out-of-memory for storing labels and confidences for this
-    // "
-    //               " voxel. Please increse size of array.";
-  }
 }
 
 void LabelTsdfIntegrator::computeSegmentLabelCandidates(
@@ -483,8 +435,8 @@ void LabelTsdfIntegrator::updateLabelVoxel(const Point& point_G,
 
   // label_voxel->semantic_label = semantic_label;
   Label previous_label = label_voxel->label;
-  addVoxelLabelConfidence(label, confidence, label_voxel);
-  updateVoxelLabelAndConfidence(label_voxel, label);
+  utils::addVoxelLabelConfidence(label, confidence, label_voxel);
+  utils::updateVoxelLabelAndConfidence(label_voxel, label);
   Label new_label = label_voxel->label;
 
   // This old semantic stuff per voxel was not thread safe.
@@ -730,12 +682,12 @@ void LabelTsdfIntegrator::swapLabels(const Label& old_label,
       }
       if (old_label_confidence > 0u) {
         // Add old_label confidence, if any, to new_label confidence.
-        addVoxelLabelConfidence(new_label, old_label_confidence, &voxel);
+        utils::addVoxelLabelConfidence(new_label, old_label_confidence, &voxel);
       }
       // TODO(grinvalm) calling update with different preferred labels
       // can result in different assigned labels to the voxel, and
       // can trigger an update of a segment.
-      updateVoxelLabelAndConfidence(&voxel, new_label);
+      utils::updateVoxelLabelAndConfidence(&voxel, new_label);
       Label updated_label = voxel.label;
 
       if (updated_label != previous_label) {
@@ -962,6 +914,27 @@ Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
 
   icp_timer.Stop();
   return T_G_C_icp;
+}
+
+Transformation LabelTsdfIntegrator::getIcpRefined_T_S_S(
+    const Transformation& T_G_S_init, const Layer<TsdfVoxel>& tsdf_layer,
+    const Pointcloud& point_cloud) {
+  Transformation T_G_S_icp;
+  Transformation T_S_S_icp;
+  const size_t num_icp_updates =
+      icp_->runICP(tsdf_layer, point_cloud, T_G_S_init, &T_G_S_icp);
+  if (num_icp_updates == 0u || num_icp_updates > 800u) {
+    LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
+               << num_icp_updates << ", using T_G_C_init.";
+    return T_G_S_init;
+  }
+  LOG(ERROR) << "ICP refinement performed " << num_icp_updates
+             << " successful update steps.";
+
+  T_S_S_icp = T_G_S_icp * T_G_S_init.inverse();
+  LOG(ERROR) << "Current ICP refinement offset: T_Gicp_G: " << T_S_S_icp;
+
+  return T_S_S_icp;
 }
 
 }  // namespace voxblox

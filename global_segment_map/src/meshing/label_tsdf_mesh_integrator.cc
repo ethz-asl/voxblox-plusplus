@@ -75,7 +75,7 @@ bool MeshLabelIntegrator::generateMesh(bool only_mesh_updated_blocks,
   if (only_mesh_updated_blocks) {
     BlockIndexList all_label_blocks;
     sdf_layer_const_->getAllUpdatedBlocks(&all_tsdf_blocks);
-    label_layer_mutable_ptr_->getAllUpdatedBlocks(&all_label_blocks);
+    label_layer_const_ptr_->getAllUpdatedBlocks(&all_label_blocks);
     if (all_tsdf_blocks.size() == 0u && all_label_blocks.size() == 0u) {
       return false;
     }
@@ -128,8 +128,12 @@ void MeshLabelIntegrator::generateMeshBlocksFunction(
       typename Block<LabelVoxel>::Ptr label_block =
           label_layer_mutable_ptr_->getBlockPtrByIndex(block_idx);
 
-      tsdf_block->updated() = false;
-      label_block->updated() = false;
+      if (tsdf_block) {
+        tsdf_block->updated() = false;
+      }
+      if (label_block) {
+        label_block->updated() = false;
+      }
     }
   }
 }
@@ -169,23 +173,24 @@ void MeshLabelIntegrator::updateMeshForBlock(const BlockIndex& block_index) {
   Block<LabelVoxel>::ConstPtr label_block =
       label_layer_const_ptr_->getBlockPtrByIndex(block_index);
 
+  if (tsdf_block && label_block) {
+    extractBlockMesh(tsdf_block, mesh_block);
+    // Update colors if needed.
+    if (config_.use_color) {
+      updateMeshBlockColor(tsdf_block, label_block, mesh_block.get());
+    }
+
+    mesh_block->updated = true;
+  }
   if (!tsdf_block && !label_block) {
     LOG(ERROR) << "Trying to mesh a non-existent block at index: "
                << block_index.transpose();
-    return;
   }
   // TODO(margaritaG): this is actually possible because with voxel carving we
   // do not allocate labels along the ray, just nearby surfaces.
   // } else if (!(tsdf_block && label_block)) {
   //   LOG(FATAL) << "Block allocation differs between the two layers.";
   // }
-  extractBlockMesh(tsdf_block, mesh_block);
-  // Update colors if needed.
-  if (config_.use_color) {
-    updateMeshBlockColor(tsdf_block, label_block, mesh_block.get());
-  }
-
-  mesh_block->updated = true;
 }
 
 void MeshLabelIntegrator::updateMeshBlockColor(

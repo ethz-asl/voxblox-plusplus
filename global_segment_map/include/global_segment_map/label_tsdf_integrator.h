@@ -91,6 +91,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
                                      const Pointcloud& point_cloud);
 
+  Transformation getIcpRefined_T_S_S(const Transformation& T_G_S_init,
+                                     const Layer<TsdfVoxel>& tsdf_layer,
+                                     const Pointcloud& point_cloud);
+
  protected:
   // Label propagation.
   // Fetch the next segment label pair which has overall
@@ -117,15 +121,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   void increasePairwiseConfidenceCount(
       const std::vector<Label>& merge_candidates);
-
-  void updateVoxelLabelAndConfidence(LabelVoxel* label_voxel,
-                                     const Label& preferred_label = 0u);
-
-  void addVoxelLabelConfidence(const Label& label,
-                               const LabelConfidence& confidence,
-                               LabelVoxel* label_voxel);
-
-  void increaseLabelFramesCount(const Label& label);
 
   // Increase or decrease the voxel count for a label.
   void changeLabelCount(const Label& label, const int count);

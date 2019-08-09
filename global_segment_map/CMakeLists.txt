@@ -12,7 +12,6 @@ catkin_simple(ALL_DEPS_REQUIRED)
 cs_add_library(${PROJECT_NAME}
   src/label_block_serialization.cc
   src/semantic_instance_label_fusion.cc
-  src/label_merge_integrator.cc
   src/label_tsdf_integrator.cc
   src/label_tsdf_map.cc
   src/meshing/label_tsdf_mesh_integrator.cc
@@ -20,6 +19,7 @@ cs_add_library(${PROJECT_NAME}
   src/meshing/instance_color_map.cc
   src/meshing/semantic_color_map.cc
   src/segment.cc
+  src/utils/label_voxel_utils.cc
   src/utils/icp_utils.cc
   src/utils/visualizer.cc
   src/label_tsdf_map.cc
