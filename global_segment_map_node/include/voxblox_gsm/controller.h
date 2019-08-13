@@ -19,6 +19,7 @@
 #include <std_srvs/SetBool.h>
 #include <tf/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <voxblox/alignment/icp.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
 
@@ -169,6 +170,14 @@ class Controller {
 
   // Pose tracking.
   bool enable_icp_;
+
+  // ICP variables.
+  std::shared_ptr<ICP> icp_;
+  Transformation T_G_G_icp_;
+  bool keep_track_of_icp_correction_;
+
+  // Object tracking.
+  bool enable_object_tracking_;
 
   std::thread viz_thread_;
   Visualizer* visualizer_;

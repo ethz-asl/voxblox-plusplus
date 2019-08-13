@@ -20,6 +20,7 @@
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/file_utils.h>
+#include <global_segment_map/utils/icp_utils.h>
 #include <global_segment_map/utils/visualization.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
@@ -142,7 +143,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       enable_semantic_instance_segmentation_(true),
       compute_and_publish_bbox_(false),
       publish_pointclouds_(false),
-      use_label_propagation_(true) {
+      use_label_propagation_(true),
+      icp_(new ICP(getICPConfigFromGflags())) {
   CHECK_NOTNULL(node_handle_private_);
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
@@ -232,10 +234,15 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   }
 
   node_handle_private_->param<bool>("icp/enable_icp", enable_icp_, enable_icp_);
-  node_handle_private_->param<bool>(
-      "icp/keep_track_of_icp_correction",
-      label_tsdf_integrator_config_.keep_track_of_icp_correction,
-      label_tsdf_integrator_config_.keep_track_of_icp_correction);
+  node_handle_private_->param<bool>("icp/keep_track_of_icp_correction",
+                                    keep_track_of_icp_correction_,
+                                    keep_track_of_icp_correction_);
+
+  T_G_G_icp_.setIdentity();
+
+  node_handle_private_->param<bool>("object_tracking/enable_tracking",
+                                    enable_object_tracking_,
+                                    enable_object_tracking_);
 
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
@@ -461,25 +468,26 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
   ros::WallTime start;
   ros::WallTime end;
 
-  // if (enable_icp_) {
-  //   Pointcloud point_cloud_all_segments_t;
-  //   Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
-  //   Transformation T_G_C_icp = T_G_C;
-  //
-  //   for (const auto& segment : segments_to_integrate_) {
-  //     // Concatenate point clouds. (NOTE(ff): We should probably just use
-  //     // the original cloud here instead.)
-  //     Pointcloud::iterator it = point_cloud_all_segments_t.end();
-  //     point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
-  //                                       segment->points_C_.end());
-  //   }
-  //   T_G_C_icp =
-  //       integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
-  //
-  //   for (const auto& segment : segments_to_integrate_) {
-  //     segment->T_G_C_ = T_G_C_icp;
-  //   }
-  // }
+  if (enable_icp_) {
+    Pointcloud scene_point_cloud;
+    Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
+    Transformation T_G_C_icp = T_G_C;
+
+    for (const auto& segment : segments_to_integrate_) {
+      // Concatenate all segment point clouds from the current frame.
+      Pointcloud::iterator it = scene_point_cloud.end();
+      scene_point_cloud.insert(it, segment->points_C_.begin(),
+                               segment->points_C_.end());
+    }
+
+    Transformation T_G_G;
+    if (refinePointCloudLayerTransform(map_->getTsdfLayer(), scene_point_cloud,
+                                       T_G_C, icp_.get(), &T_G_C_icp, &T_G_G)) {
+      for (const auto& segment : segments_to_integrate_) {
+        segment->T_G_C_ = T_G_C_icp;
+      }
+    }
+  }
 
   if (use_label_propagation_) {
     timing::Timer label_candidates_timer("compute_label_candidates");
@@ -507,36 +515,60 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
              segments_to_integrate_.size(), (end - start).toSec());
   }
 
-  // if (enable_icp_) {
-  //   for (Segment* segment : segments_to_integrate_) {
-  //     if (segment->label_ == 2u) {
-  //       CHECK_NOTNULL(segment);
-  //
-  //       Labels labels;
-  //       std::unordered_map<Label, LabelTsdfMap::LayerPair> label_to_layers;
-  //       Label label = segment->label_;
-  //       labels.push_back(label);
-  //
-  //       constexpr bool kRemoveSegmentsFromMap = false;
-  //       constexpr bool kLabelsListIsComplete = false;
-  //       map_->extractSegmentLayers(labels, &label_to_layers,
-  //                                  kRemoveSegmentsFromMap,
-  //                                  kLabelsListIsComplete);
-  //
-  //       Transformation T_S_S_icp;
-  //       T_S_S_icp = integrator_->getIcpRefined_T_S_S(
-  //           segment->T_G_C_, label_to_layers.at(label).first,
-  //           segment->points_C_);
-  //
-  //       mergeLayerAintoLayerB<TsdfVoxel>(label_to_layers.at(label).first,
-  //                                        T_S_S_icp, map_->getTsdfLayerPtr());
-  //
-  //       mergeLayerAintoLayerB<LabelVoxel>(label_to_layers.at(label).second,
-  //                                         T_S_S_icp,
-  //                                         map_->getLabelLayerPtr());
-  //     }
-  //   }
-  // }
+  if (enable_object_tracking_) {
+    for (Segment* segment : segments_to_integrate_) {
+      if (segment->label_ == 2u) {
+        CHECK_NOTNULL(segment);
+
+        Labels labels;
+        std::unordered_map<Label, LabelTsdfMap::LayerPair> label_to_layers;
+        Label label = segment->label_;
+        labels.push_back(label);
+
+        constexpr bool kRemoveSegmentsFromMap = false;
+        constexpr bool kLabelsListIsComplete = false;
+        map_->extractSegmentLayers(labels, &label_to_layers,
+                                   kRemoveSegmentsFromMap,
+                                   kLabelsListIsComplete);
+
+        Transformation T_G_C_icp, T_G_G_icp;
+
+        if (refinePointCloudLayerTransform(
+                label_to_layers.at(label).first, segment->points_C_,
+                segment->T_G_C_, icp_.get(), &T_G_C_icp, &T_G_G_icp)) {
+          // T_G_G_icp.setIdentity();
+
+          // clang-format off
+          // Eigen::Matrix<FloatingPoint, 4, 4> T_B_A;
+          // // T_B_A <<  0.959292,  0.233991, 0.158138, -0.0627464,
+          // //          -0.277701,  0.883428, 0.377407,  0.126472,
+          // //          -0.051394, -0.405959, 0.912445, -0.0506717,
+          // //           0.      ,  0.      , 0.      ,  1.;
+          // T_B_A << 00000.99999, -0.00442385, 00000000000, -0.00130439,
+          //          00.00442385, 00000.99999, 00000000000, 00.00439841,
+          //          00000000000, 00000000000, 00000000001, 0.000560403,
+          //          00000000000, 00000000000, 00000000000, 00000000001;
+          //
+          // // clang-format on
+          // T_G_G_icp = Transformation(T_B_A);
+
+          LOG(ERROR) << "ICP refinement for this pointcloud: T_G_G_icp:\n"
+                     << T_G_G_icp;
+
+          mergeLayerAintoLayerB<TsdfVoxel>(label_to_layers.at(label).first,
+                                           T_G_G_icp, map_->getTsdfLayerPtr());
+
+          mergeLayerAintoLayerB<LabelVoxel>(label_to_layers.at(label).second,
+                                            T_G_G_icp,
+                                            map_->getLabelLayerPtr());
+        }
+        // refinePointCloudLayerTransform(icp, label_to_layers.at(label).first)
+        // T_S_S_icp = integrator_->getIcpRefined_T_S_S(
+        //     segment->T_G_C_, label_to_layers.at(label).first,
+        //     segment->points_C_);
+      }
+    }
+  }
 
   constexpr bool kIsFreespacePointcloud = false;
 

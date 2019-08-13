@@ -14,10 +14,8 @@ LabelTsdfIntegrator::LabelTsdfIntegrator(
       highest_label_ptr_(CHECK_NOTNULL(map->getHighestLabelPtr())),
       highest_instance_ptr_(CHECK_NOTNULL(map->getHighestInstancePtr())),
       semantic_instance_label_fusion_ptr_(
-          map->getSemanticInstanceLabelFusionPtr()),
-      icp_(new ICP(getICPConfigFromGflags())) {
+          map->getSemanticInstanceLabelFusionPtr()) {
   CHECK(label_layer_);
-  T_G_G_icp_.setIdentity();
 }
 
 void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(
@@ -871,70 +869,25 @@ void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
   }
 }
 
-// Pose tracking.
-Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
-    const Transformation& T_G_C_init, const Pointcloud& point_cloud) {
-  // TODO(ff): We should actually check here how many blocks are in the camera
-  // frustum.
-  if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
-    return T_G_C_init;
-  }
-  Transformation T_G_C_icp;
-  timing::Timer icp_timer("icp");
-  if (!label_tsdf_config_.keep_track_of_icp_correction) {
-    T_G_G_icp_.setIdentity();
-  }
-
-  const size_t num_icp_updates =
-      icp_->runICP(*layer_, point_cloud, T_G_G_icp_ * T_G_C_init, &T_G_C_icp);
-  if (num_icp_updates == 0u || num_icp_updates > 800u) {
-    LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
-               << num_icp_updates << ", using T_G_C_init.";
-    return T_G_C_init;
-  }
-  LOG(ERROR) << "ICP refinement performed " << num_icp_updates
-             << " successful update steps.";
-  T_G_G_icp_ = T_G_C_icp * T_G_C_init.inverse();
-
-  if (!label_tsdf_config_.keep_track_of_icp_correction) {
-    LOG(ERROR) << "Current ICP refinement offset: T_Gicp_G: " << T_G_G_icp_;
-  } else {
-    LOG(ERROR) << "ICP refinement for this pointcloud: T_Gicp_G: "
-               << T_G_G_icp_;
-  }
-
-  if (!icp_->refiningRollPitch()) {
-    // its already removed internally but small floating point errors can
-    // build up if accumulating transforms
-    Transformation::Vector6 vec_T_Gicp_G = T_G_G_icp_.log();
-    vec_T_Gicp_G[3] = 0.0;
-    vec_T_Gicp_G[4] = 0.0;
-    T_G_G_icp_ = Transformation::exp(vec_T_Gicp_G);
-  }
-
-  icp_timer.Stop();
-  return T_G_C_icp;
-}
-
-Transformation LabelTsdfIntegrator::getIcpRefined_T_S_S(
-    const Transformation& T_G_S_init, const Layer<TsdfVoxel>& tsdf_layer,
-    const Pointcloud& point_cloud) {
-  Transformation T_G_S_icp;
-  Transformation T_S_S_icp;
-  const size_t num_icp_updates =
-      icp_->runICP(tsdf_layer, point_cloud, T_G_S_init, &T_G_S_icp);
-  if (num_icp_updates == 0u || num_icp_updates > 800u) {
-    LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
-               << num_icp_updates << ", using T_G_C_init.";
-    return T_G_S_init;
-  }
-  LOG(ERROR) << "ICP refinement performed " << num_icp_updates
-             << " successful update steps.";
-
-  T_S_S_icp = T_G_S_icp * T_G_S_init.inverse();
-  LOG(ERROR) << "Current ICP refinement offset: T_Gicp_G: " << T_S_S_icp;
-
-  return T_S_S_icp;
-}
+// Transformation LabelTsdfIntegrator::getIcpRefined_T_S_S(
+//     const Transformation& T_G_S_init, const Layer<TsdfVoxel>& tsdf_layer,
+//     const Pointcloud& point_cloud) {
+//   Transformation T_G_S_icp;
+//   Transformation T_S_S_icp;
+//   const size_t num_icp_updates =
+//       icp_->runICP(tsdf_layer, point_cloud, T_G_S_init, &T_G_S_icp);
+//   if (num_icp_updates == 0u || num_icp_updates > 800u) {
+//     LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
+//                << num_icp_updates << ", using T_G_C_init.";
+//     return T_G_S_init;
+//   }
+//   LOG(ERROR) << "ICP refinement performed " << num_icp_updates
+//              << " successful update steps.";
+//
+//   T_S_S_icp = T_G_S_icp * T_G_S_init.inverse();
+//   LOG(ERROR) << "Current ICP refinement offset: T_Gicp_G: " << T_S_S_icp;
+//
+//   return T_S_S_icp;
+// }
 
 }  // namespace voxblox

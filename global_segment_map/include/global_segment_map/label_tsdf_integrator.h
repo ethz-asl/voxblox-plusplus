@@ -5,7 +5,7 @@
 #include <vector>
 
 #include <glog/logging.h>
-#include <voxblox/alignment/icp.h>
+
 #include <voxblox/core/layer.h>
 #include <voxblox/core/voxel.h>
 #include <voxblox/integrator/integrator_utils.h>
@@ -16,7 +16,6 @@
 #include "global_segment_map/label_tsdf_map.h"
 #include "global_segment_map/segment.h"
 #include "global_segment_map/semantic_instance_label_fusion.h"
-#include "global_segment_map/utils/icp_utils.h"
 
 namespace voxblox {
 
@@ -33,7 +32,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     // TODO(margaritaG): maybe use a relative measure, not absolue voxel count.
     // Minimum number of label voxels count for label propagation.
     size_t min_label_voxel_count = 20u;
-    size_t max_num_icp_updates = 15u;
+    // size_t max_num_icp_updates = 15u;
     // Truncation distance factor for label propagation.
     float label_propagation_td_factor = 1.0f;
 
@@ -56,8 +55,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     float lognormal_weight_sigma = 1.8f;
     float lognormal_weight_offset = 0.7f;
 
-    // ICP params.
-    bool keep_track_of_icp_correction = true;
+    // // ICP params.
+    // bool keep_track_of_icp_correction = true;
   };
 
   LabelTsdfIntegrator(const Config& tsdf_config,
@@ -88,12 +87,12 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void getLabelsToPublish(
       std::vector<voxblox::Label>* segment_labels_to_publish);
 
-  Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
-                                     const Pointcloud& point_cloud);
-
-  Transformation getIcpRefined_T_S_S(const Transformation& T_G_S_init,
-                                     const Layer<TsdfVoxel>& tsdf_layer,
-                                     const Pointcloud& point_cloud);
+  // Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
+  //                                    const Pointcloud& point_cloud);
+  //
+  // Transformation getIcpRefined_T_S_S(const Transformation& T_G_S_init,
+  //                                    const Layer<TsdfVoxel>& tsdf_layer,
+  //                                    const Pointcloud& point_cloud);
 
  protected:
   // Label propagation.
@@ -236,10 +235,6 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   // Object database.
   LMap labels_to_publish_;
-
-  // ICP variables.
-  std::shared_ptr<ICP> icp_;
-  Transformation T_G_G_icp_;
 };
 
 }  // namespace voxblox

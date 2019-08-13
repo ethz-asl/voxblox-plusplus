@@ -42,4 +42,57 @@ ICP::Config getICPConfigFromGflags() {
   return icp_config;
 }
 
+bool refinePointCloudLayerTransform(const Layer<TsdfVoxel>& tsdf_layer,
+                                    const Pointcloud& point_cloud,
+                                    const Transformation& T_init, ICP* icp_p,
+                                    Transformation* T_icp_p,
+                                    Transformation* T_offset_p) {
+  if (tsdf_layer.getNumberOfAllocatedBlocks() <= 0u) {
+    LOG(ERROR) << "TSDF layer is empty, cannot refine pointcloud-to-layer "
+                  "alignment.";
+    return false;
+  }
+  timing::Timer icp_timer("ICP");
+
+  // TODO(margaritaG) : account for correction.
+  // if (!label_tsdf_config_.keep_track_of_icp_correction) {
+  //   T_G_G_icp_.setIdentity();
+  // }
+  // const size_t num_icp_updates = icp_->runICP(
+  //     tsdf_layer, point_cloud, T_G_G_icp_ * T_G_C_init, &T_G_C_icp);
+
+  const size_t num_icp_updates =
+      icp_p->runICP(tsdf_layer, point_cloud, T_init, T_icp_p);
+
+  // if (num_icp_updates == 0u || num_icp_updates > 800u) {
+  //   LOG(ERROR) << "Resulting num_icp_updates is too high or 0: "
+  //              << num_icp_updates << ", using T_G_C_init.";
+  //   return T_G_C_init;
+  // }
+
+  LOG(ERROR) << "ICP refinement performed " << num_icp_updates
+             << " successful update steps.";
+  *T_offset_p = *T_icp_p * T_init.inverse();
+
+  if (!icp_p->refiningRollPitch()) {
+    // It is already removed internally but small floating point errors can
+    // build up if accumulating transforms.
+    Transformation::Vector6 vec_T_offset = T_offset_p->log();
+    vec_T_offset[3] = 0.0;
+    vec_T_offset[4] = 0.0;
+    *T_offset_p = Transformation::exp(vec_T_offset);
+  }
+
+  // if (!label_tsdf_config_.keep_track_of_icp_correction) {
+  //   LOG(ERROR) << "Current ICP refinement offset: T_Gicp_G: " << T_G_G_icp_;
+  // } else {
+  //   LOG(ERROR) << "ICP refinement for this pointcloud: T_Gicp_G: "
+  //              << T_G_G_icp_;
+  // }
+
+  icp_timer.Stop();
+
+  return true;
+}
+
 }  // namespace voxblox
