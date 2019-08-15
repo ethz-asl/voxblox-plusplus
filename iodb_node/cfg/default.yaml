@@ -25,10 +25,32 @@ semantic_instance_segmentation:
 meshing:
   visualize: false
   update_mesh_every_n_sec: 0.0
+  publish_segment_mesh: false
   publish_scene_mesh: true
   mesh_filename: "mesh.ply"
   compute_and_publish_bbox: false
+  min_weight: 3
+
+mesh_config:
+  min_weight: 3
 
 icp:
   enable_icp: false
   keep_track_of_icp_correction: true
+
+object_database:
+  publish_gsm_updates: false
+  max_segment_age: 10
+  scene_gsm_update_topic: "gsm_update"
+  segment_gsm_update_topic: "gsm_update"
+  validate_merged_object: "validate_merged_object"
+
+sliding_window:
+  is_on: false
+  radius_m: 1.0
+  imu_frame_id: imu
+
+  # Between 0 and 1. As soon as the distance between sliding window and camera
+  # is larger than this fraction times the window radius, the window is updated
+  # and its position is set equal the camera position.
+  update_fraction: 0.5
