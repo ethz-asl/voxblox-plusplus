@@ -5,9 +5,9 @@
 #include <glog/logging.h>
 #include <ros/ros.h>
 
-#include "voxblox_gsm/controller.h"
-#include "voxblox_gsm/iodb_controller.h"
-#include "voxblox_gsm/sliding_window_controller.h"
+#include <global_segment_map_node/controller.h>
+#include <iodb_node/iodb_controller.h>
+#include <iodb_node/sliding_window_controller.h>
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "iodb_node");

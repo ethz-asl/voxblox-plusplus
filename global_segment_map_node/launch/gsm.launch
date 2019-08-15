@@ -2,7 +2,7 @@
   <arg name="gsm_node_params_file" default="$(find gsm_node)/cfg/default.yaml"/>
   <arg name="sensor_topics_file" default="$(find depth_segmentation)/cfg/default_topics.yaml"/>
 
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="log">
+  <node name="iodb_node" pkg="iodb_node" type="iodb_node" output="log">
     <rosparam command="load" file="$(arg sensor_topics_file)" />
     <rosparam command="load" file="$(arg gsm_node_params_file)" />
   </node>

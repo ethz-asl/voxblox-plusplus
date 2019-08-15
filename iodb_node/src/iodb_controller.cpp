@@ -1,16 +1,18 @@
 // Copyright (c) 2019, ASL, ETH Zurich, Switzerland
 // Licensed under the BSD 3-Clause License (see LICENSE for details)
 
-#include "voxblox_gsm/iodb_controller.h"
+#include "iodb_node/iodb_controller.h"
 
 #include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
+
+#include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
+#include <global_segment_map_node/feature_ros_tools.h>
+#include <iodb_node/conversions.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/mesh_vis.h>
-#include "voxblox_gsm/conversions.h"
-#include "voxblox_gsm/feature_ros_tools.h"
 
 namespace voxblox {
 namespace voxblox_gsm {

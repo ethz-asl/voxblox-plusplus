@@ -1,11 +1,11 @@
 #ifndef VOXBLOX_GSM_CONVERSIONS_H_
 #define VOXBLOX_GSM_CONVERSIONS_H_
 
+#include <geometry_msgs/Transform.h>
+#include <pcl/point_types.h>
 #include <vector>
 
-#include <geometry_msgs/Transform.h>
 #include <modelify_msgs/VoxelEvaluationDetails.h>
-#include <pcl/point_types.h>
 #include <voxblox/core/common.h>
 #include <voxblox/io/sdf_ply.h>
 

@@ -1,9 +1,9 @@
 #ifndef VOXBLOX_GSM_SLIDING_WINDOW_CONTROLLER_H
 #define VOXBLOX_GSM_SLIDING_WINDOW_CONTROLLER_H
 
-#include "iodb_controller.h"
-
 #include <tf/transform_broadcaster.h>
+
+#include <iodb_node/iodb_controller.h>
 
 namespace voxblox {
 namespace voxblox_gsm {

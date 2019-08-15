@@ -9,10 +9,10 @@
 #include <global_feature_map/feature_layer.h>
 #include <global_feature_map/feature_types.h>
 #include <global_feature_map/feature_utils.h>
+#include <global_segment_map_node/controller.h>
 #include <modelify_msgs/Features.h>
 #include <modelify_msgs/GsmUpdate.h>
 #include <modelify_msgs/ValidateMergedObject.h>
-#include <voxblox_gsm/controller.h>
 
 namespace voxblox {
 namespace voxblox_gsm {

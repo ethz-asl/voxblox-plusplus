@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>iodb_node</name>
+  <version>0.0.0</version>
+  <description>Voxblox++ ROS interface</description>
+
+  <author email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</author>
+  <author email="fadri.furrer@mavt.ethz.ch">Fadri Furrer</author>
+  <author email="tonci.novkovic@mavt.ethz.ch">Tonci Novkovic</author>
+  <author email="marius.fehr@mavt.ethz.ch">Marius Fehr</author>
+
+  <maintainer email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</maintainer>
+  <maintainer email="fadri.furrer@mavt.ethz.ch">Fadri Furrer</maintainer>
+  <maintainer email="tonci.novkovic@mavt.ethz.ch">Tonci Novkovic</maintainer>
+  <maintainer email="marius.fehr@mavt.ethz.ch">Marius Fehr</maintainer>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <buildtool_depend>catkin_simple</buildtool_depend>
+
+  <depend>gflags_catkin</depend>
+  <depend>glog_catkin</depend>
+  <depend>minkindr_conversions</depend>
+  <depend>modelify_msgs</depend>
+  <depend>pcl_catkin</depend>
+  <depend>pcl_conversions</depend>
+  <depend>roscpp</depend>
+  <depend>voxblox</depend>
+  <depend>global_segment_map</depend>
+  <depend>gsm_node</depend>
+  <depend>global_feature_map</depend>
+  <depend>voxblox_msgs</depend>
+  <depend>voxblox_ros</depend>
+  <depend>opencv3_catkin</depend>
+
+</package>

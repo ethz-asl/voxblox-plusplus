@@ -4,7 +4,7 @@
 // TODO(ntonci): Fix file extension. These files in global_segment_map_node have
 // cpp extension and all others have cc.
 
-#include "voxblox_gsm/controller.h"
+#include "global_segment_map_node/controller.h"
 
 #include <stdlib.h>
 

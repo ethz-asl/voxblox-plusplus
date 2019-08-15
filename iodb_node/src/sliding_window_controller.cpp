@@ -1,4 +1,4 @@
-#include "voxblox_gsm/sliding_window_controller.h"
+#include "iodb_node/sliding_window_controller.h"
 
 #include <minkindr_conversions/kindr_tf.h>
 #include <nav_msgs/Path.h>
