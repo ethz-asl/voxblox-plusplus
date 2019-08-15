@@ -1,8 +1,8 @@
 // Copyright (c) 2019, ASL, ETH Zurich, Switzerland
 // Licensed under the BSD 3-Clause License (see LICENSE for details)
 
-#ifndef VOXBLOX_GSM_IODB_CONTROLLER_H_
-#define VOXBLOX_GSM_IODB_CONTROLLER_H_
+#ifndef IODB_NODE_IODB_CONTROLLER_H_
+#define IODB_NODE_IODB_CONTROLLER_H_
 
 #include <global_feature_map/feature_block.h>
 #include <global_feature_map/feature_integrator.h>
@@ -104,4 +104,4 @@ class IodbController : public Controller {
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
-#endif  // VOXBLOX_GSM_IODB_CONTROLLER_H_
+#endif  // IODB_NODE_IODB_CONTROLLER_H_

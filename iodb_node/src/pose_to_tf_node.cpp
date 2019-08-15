@@ -1,3 +1,5 @@
+#include <thread>
+
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/TransformStamped.h>
 #include <glog/logging.h>
@@ -6,7 +8,6 @@
 #include <tf/transform_listener.h>
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <Eigen/Geometry>
-#include <thread>
 
 namespace modelify {
 namespace loop_closure {

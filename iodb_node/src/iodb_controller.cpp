@@ -4,6 +4,8 @@
 #include "iodb_node/iodb_controller.h"
 
 #include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
+#include <global_segment_map_node/conversions.h>
+#include <global_segment_map_node/feature_ros_tools.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 
@@ -13,6 +15,8 @@
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/mesh_vis.h>
+
+#include "iodb_node/conversions.h"
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -622,8 +626,8 @@ bool IodbController::validateMergedObjectCallback(
 
   // Extract transformations.
   std::vector<Transformation> transforms_W_O;
-  voxblox_gsm::transformMsgs2Transformations(
-      request.gsm_update.object.transforms, &transforms_W_O);
+  transformMsgs2Transformations(request.gsm_update.object.transforms,
+                                &transforms_W_O);
 
   const utils::VoxelEvaluationMode voxel_evaluation_mode =
       utils::VoxelEvaluationMode::kEvaluateAllVoxels;
@@ -635,7 +639,7 @@ bool IodbController::validateMergedObjectCallback(
       *(merged_object_layer_O.get()), transforms_W_O,
       &voxel_evaluation_details_vector);
 
-  voxblox_gsm::voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
+  voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
       voxel_evaluation_details_vector, &response.voxel_evaluation_details);
   return true;
 }

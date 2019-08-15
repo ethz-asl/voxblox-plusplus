@@ -2,12 +2,11 @@
 // Licensed under the BSD 3-Clause License (see LICENSE for details)
 
 #include <gflags/gflags.h>
+#include <global_segment_map_node/controller.h>
 #include <glog/logging.h>
 #include <ros/ros.h>
-
-#include <global_segment_map_node/controller.h>
-#include <iodb_node/iodb_controller.h>
-#include <iodb_node/sliding_window_controller.h>
+#include "iodb_node/iodb_controller.h"
+#include "iodb_node/sliding_window_controller.h"
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "iodb_node");

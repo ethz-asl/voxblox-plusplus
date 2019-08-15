@@ -1,8 +1,8 @@
 // Copyright (c) 2019, ASL, ETH Zurich, Switzerland
 // Licensed under the BSD 3-Clause License (see LICENSE for details)
 
-#ifndef VOXBLOX_GSM_CONTROLLER_H_
-#define VOXBLOX_GSM_CONTROLLER_H_
+#ifndef GLOBAL_SEGMENT_MAP_NODE_CONTROLLER_H_
+#define GLOBAL_SEGMENT_MAP_NODE_CONTROLLER_H_
 
 #include <vector>
 
@@ -190,4 +190,4 @@ class Controller {
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
-#endif  // VOXBLOX_GSM_CONTROLLER_H_
+#endif  // GLOBAL_SEGMENT_MAP_NODE_CONTROLLER_H_

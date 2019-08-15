@@ -27,7 +27,7 @@
 #include <voxblox/core/common.h>
 #include <voxblox/io/sdf_ply.h>
 #include <voxblox_ros/mesh_vis.h>
-#include "voxblox_gsm/conversions.h"
+#include "global_segment_map_node/conversions.h"
 
 #ifdef APPROXMVBB_AVAILABLE
 #include <ApproxMVBB/ComputeApproxMVBB.hpp>
