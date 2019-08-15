@@ -1,5 +1,5 @@
-#ifndef VOXBLOX_GSM_FEATURE_ROS_TOOLS_H
-#define VOXBLOX_GSM_FEATURE_ROS_TOOLS_H
+#ifndef GLOBAL_SEGMENT_MAP_NODE_FEATURE_ROS_TOOLS_H
+#define GLOBAL_SEGMENT_MAP_NODE_FEATURE_ROS_TOOLS_H
 // TODO(ntonci): These include guards have wrong format.
 // TODO(ntonci): We should probably rename this package.
 // TODO(ntonci): We should probably rename the repo.
@@ -68,4 +68,4 @@ void fromFeaturesMsgToFeature3D(const modelify_msgs::Features& features_msg,
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 
-#endif  // VOXBLOX_GSM_FEATURE_ROS_TOOLS_H
+#endif  //  GLOBAL_SEGMENT_MAP_NODE_FEATURE_ROS_TOOLS_H

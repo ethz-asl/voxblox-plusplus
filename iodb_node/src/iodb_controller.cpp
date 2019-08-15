@@ -4,12 +4,6 @@
 #include "iodb_node/iodb_controller.h"
 
 #include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
-#include <global_segment_map_node/conversions.h>
-#include <global_segment_map_node/feature_ros_tools.h>
-#include <visualization_msgs/Marker.h>
-#include <visualization_msgs/MarkerArray.h>
-
-#include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
 #include <iodb_node/conversions.h>
 #include <iodb_node/feature_ros_tools.h>
 #include <voxblox/integrator/merge_integration.h>
