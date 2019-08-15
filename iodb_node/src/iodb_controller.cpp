@@ -8,8 +8,8 @@
 #include <visualization_msgs/MarkerArray.h>
 
 #include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
-#include <global_segment_map_node/feature_ros_tools.h>
 #include <iodb_node/conversions.h>
+#include <iodb_node/feature_ros_tools.h>
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/mesh_vis.h>

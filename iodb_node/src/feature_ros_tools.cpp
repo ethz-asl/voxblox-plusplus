@@ -1,4 +1,4 @@
-#include "global_segment_map_node/feature_ros_tools.h"
+#include "iodb_node/feature_ros_tools.h"
 
 namespace voxblox {
 namespace voxblox_gsm {

@@ -12,6 +12,7 @@ catkin_simple(ALL_DEPS_REQUIRED)
 cs_add_library(${PROJECT_NAME}_library
   src/iodb_controller.cpp
   src/sliding_window_controller.cpp
+  src/feature_ros_tools.cpp
 )
 target_link_libraries(${PROJECT_NAME}_library ${catkin_LIBRARIES})
 
