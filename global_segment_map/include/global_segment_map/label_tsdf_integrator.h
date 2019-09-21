@@ -55,6 +55,7 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     float lognormal_weight_sigma = 1.8f;
     float lognormal_weight_offset = 0.7f;
 
+    // TODO(ntonci): This doesn't really belong here.
     // ICP params.
     bool enable_icp = false;
     bool keep_track_of_icp_correction = false;
