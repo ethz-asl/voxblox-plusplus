@@ -29,6 +29,7 @@
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
+#include <voxblox_ros/ros_params.h>
 
 #ifdef APPROXMVBB_AVAILABLE
 #include <ApproxMVBB/ComputeApproxMVBB.hpp>
@@ -251,9 +252,44 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       "icp/keep_track_of_icp_correction",
       label_tsdf_integrator_config_.keep_track_of_icp_correction,
       label_tsdf_integrator_config_.keep_track_of_icp_correction);
+  node_handle_private_->param<int>(
+      "icp/max_num_icp_updates",
+      label_tsdf_integrator_config_.max_num_icp_updates,
+      label_tsdf_integrator_config_.max_num_icp_updates);
+
+  node_handle_private_->param(
+      "icp_min_match_ratio",
+      label_tsdf_integrator_config_.icp_params.min_match_ratio,
+      label_tsdf_integrator_config_.icp_params.min_match_ratio);
+  node_handle_private_->param(
+      "icp_subsample_keep_ratio",
+      label_tsdf_integrator_config_.icp_params.subsample_keep_ratio,
+      label_tsdf_integrator_config_.icp_params.subsample_keep_ratio);
+  node_handle_private_->param(
+      "icp_mini_batch_size",
+      label_tsdf_integrator_config_.icp_params.mini_batch_size,
+      label_tsdf_integrator_config_.icp_params.mini_batch_size);
+  node_handle_private_->param(
+      "icp_refine_roll_pitch",
+      label_tsdf_integrator_config_.icp_params.refine_roll_pitch,
+      label_tsdf_integrator_config_.icp_params.refine_roll_pitch);
+  node_handle_private_->param(
+      "icp_inital_translation_weighting",
+      label_tsdf_integrator_config_.icp_params.inital_translation_weighting,
+      label_tsdf_integrator_config_.icp_params.inital_translation_weighting);
+  node_handle_private_->param(
+      "icp_inital_rotation_weighting",
+      label_tsdf_integrator_config_.icp_params.inital_rotation_weighting,
+      label_tsdf_integrator_config_.icp_params.inital_rotation_weighting);
+  bool enable_icp = false;
+  bool keep_track_of_icp_correction = false;
+  size_t max_num_icp_updates = 15u;
 
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
+  ICP::Config icp_config =
+      voxblox::getICPConfigFromRosParam(*node_handle_private);
+  integrator_->resetIcp(icp_config);
 
   mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
 
@@ -605,9 +641,6 @@ void Controller::segmentPointCloudCallback(
       }
       Transformation T_Gicp_C = T_G_C;
       if (label_tsdf_integrator_config_.enable_icp) {
-        // TODO(ntonci): Make icp config members ros params.
-        // integrator_->icp_.reset(new
-        // ICP(getICPConfigFromRosParam(nh_private)));
         T_Gicp_C =
             integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
       }

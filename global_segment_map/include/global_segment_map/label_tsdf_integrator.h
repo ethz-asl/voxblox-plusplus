@@ -56,9 +56,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
     float lognormal_weight_offset = 0.7f;
 
     // ICP params.
+    ICP::Config icp_params;
     bool enable_icp = false;
     bool keep_track_of_icp_correction = false;
-    size_t max_num_icp_updates = 15u;
+    int max_num_icp_updates = 15u;
   };
 
   LabelTsdfIntegrator(const Config& tsdf_config,
@@ -91,6 +92,10 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
 
   Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
                                      const Pointcloud& point_cloud);
+
+  void resetIcp(const ICP::Config& icp_config) {
+    icp_.reset(new ICP(icp_config));
+  }
 
  protected:
   // Label propagation.

@@ -917,6 +917,7 @@ void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
 
 Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
     const Transformation& T_G_C_init, const Pointcloud& point_cloud) {
+  CHECK_NOTNULL(icp_);
   // TODO(ff): We should actually check here how many blocks are in the
   // camera frustum.
   if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
