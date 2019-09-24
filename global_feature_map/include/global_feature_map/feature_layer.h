@@ -29,6 +29,12 @@ enum class FeatureBlockMergingStrategy {
   kMerge
 };
 
+template <typename FeatureType>
+inline bool compareResponse(const FeatureType& first_feature,
+                            const FeatureType& second_feature) {
+  return (first_feature.keypoint_response > second_feature.keypoint_response);
+}
+
 /**
  * A 3D information layer, containing blocks with a set of features inside them.
  */
@@ -241,6 +247,33 @@ class FeatureLayer {
 
       features->insert(features->end(), block_features.begin(),
                        block_features.end());
+    }
+  }
+
+  inline void getSortedFeatures(std::vector<FeatureType>* features,
+                                const size_t number_of_features = 0u) const {
+    CHECK_NOTNULL(features);
+
+    BlockIndexList block_list;
+    getAllAllocatedBlocks(&block_list);
+
+    for (const BlockIndex& block_idx : block_list) {
+      const typename FeatureBlock<FeatureType>::ConstPtr block =
+          getBlockPtrByIndex(block_idx);
+      CHECK_NOTNULL(block);
+
+      std::vector<FeatureType> block_features = block->getFeatures();
+      std::sort(block_features.begin(), block_features.end(),
+                compareResponse<FeatureType>);
+
+      if (number_of_features == 0 ||
+          block_features.size() < number_of_features) {
+        features->insert(features->end(), block_features.begin(),
+                         block_features.end());
+      } else {
+        features->insert(features->end(), block_features.begin(),
+                         block_features.begin() + number_of_features);
+      }
     }
   }
 
