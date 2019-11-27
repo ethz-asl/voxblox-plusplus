@@ -34,6 +34,7 @@
 - git:
     local-name: pcl_catkin
     uri: git@github.com:ethz-asl/pcl_catkin.git
+    version: fix/pcl-1.9.1
 - git:
     local-name: yaml_cpp_catkin
     uri: git@github.com:ethz-asl/yaml_cpp_catkin.git
