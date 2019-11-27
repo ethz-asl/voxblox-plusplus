@@ -29,7 +29,7 @@
     local-name: modelify_msgs
     uri: git@github.com:ethz-asl/modelify_msgs.git
 - git:
-    local-name: opencv3_catkin,
+    local-name: opencv3_catkin
     uri: git@github.com:ethz-asl/opencv3_catkin.git
 - git:
     local-name: pcl_catkin
