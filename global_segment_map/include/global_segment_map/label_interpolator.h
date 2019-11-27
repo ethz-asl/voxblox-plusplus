@@ -11,8 +11,8 @@ inline LabelVoxel Interpolator<LabelVoxel>::interpVoxel(
   LabelVoxel voxel;
 
   // TODO(margaritaG): Right now all voxels in the layer being interpolated can
-  // only belong to the same Label. Therefore, it is relatively to always use
-  // the same label, rather than interpolating weights. However, to properly
+  // only belong to the same Label. Therefore, it is relatively safe to always
+  // use the same label, rather than interpolating weights. However, to properly
   // track weights and be robust to different scenarios, need to implement
   // trilinear interpolation here.
   std::copy(std::begin(voxels[0]->label_count),

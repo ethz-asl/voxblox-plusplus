@@ -63,69 +63,80 @@ bool isObservedVoxel(const LabelVoxel& voxel) {
 template <>
 void mergeVoxelAIntoVoxelB(const LabelVoxel& voxel_A, LabelVoxel* voxel_B) {
   CHECK_NOTNULL(voxel_B);
+  // voxel_B->label_count[0].label = 2u;
+  // voxel_B->label_count[0].label_confidence = 10;
+  // voxel_B->label = 2u;
+  // voxel_B->label_confidence = 10;
+
+  if (voxel_A.label == 0u) {
+    // No new observations to be merged, voxel B stays as is.
+    return;
+  }
 
   int label_count_size =
       sizeof(voxel_B->label_count) / sizeof(*voxel_B->label_count);
 
-  std::map<Label, LabelConfidence> total_label_counts;
-
-  for (LabelCount label_count : voxel_A.label_count) {
-    if (label_count.label != 0) {
-      total_label_counts.emplace(label_count.label,
-                                 label_count.label_confidence);
+  if (voxel_B->label == 0u) {
+    // Simply copy voxel A into voxel B.
+    for (int i = 0; i < label_count_size; ++i) {
+      voxel_B->label_count[i].label = voxel_A.label_count[i].label;
+      voxel_B->label_count[i].label_confidence =
+          voxel_A.label_count[i].label_confidence;
     }
+    voxel_B->label = voxel_A.label;
+    voxel_B->label_confidence = voxel_A.label_confidence;
   }
-  for (LabelCount label_count : voxel_B->label_count) {
-    if (label_count.label != 0) {
-      auto it = total_label_counts.find(label_count.label);
-      if (it != total_label_counts.end()) {
-        total_label_counts[label_count.label] =
-            total_label_counts[label_count.label] +
-            label_count.label_confidence;
-      } else {
+
+  else {
+    // Both voxel A and voxel B contain observations, merge them.
+    std::map<Label, LabelConfidence> total_label_counts;
+
+    for (LabelCount label_count : voxel_A.label_count) {
+      if (label_count.label != 0) {
         total_label_counts.emplace(label_count.label,
                                    label_count.label_confidence);
       }
     }
-  }
 
-  std::vector<std::pair<Label, LabelConfidence>> label_counts;
-  std::copy(total_label_counts.begin(), total_label_counts.end(),
-            std::back_inserter<std::vector<std::pair<Label, LabelConfidence>>>(
-                label_counts));
-
-  std::sort(label_counts.begin(), label_counts.end(),
-            [](const std::pair<Label, LabelConfidence>& l,
-               const std::pair<Label, LabelConfidence>& r) {
-              if (l.second != r.second) return l.second < r.second;
-              return l.first < r.first;
-            });
-
-  int i = 0;
-  while (i < label_count_size && i < label_counts.size()) {
-    voxel_B->label_count[i].label = label_counts[i].first;
-    voxel_B->label_count[i].label_confidence = label_counts[i].second;
-
-    if (i == 0) {
-      voxel_B->label = label_counts[i].first;
-      voxel_B->label_confidence = label_counts[i].second;
+    for (LabelCount label_count : voxel_B->label_count) {
+      if (label_count.label != 0) {
+        auto it = total_label_counts.find(label_count.label);
+        if (it != total_label_counts.end()) {
+          total_label_counts[label_count.label] =
+              total_label_counts[label_count.label] +
+              label_count.label_confidence;
+        } else {
+          total_label_counts.emplace(label_count.label,
+                                     label_count.label_confidence);
+        }
+      }
     }
-    ++i;
+
+    std::vector<std::pair<Label, LabelConfidence>> label_counts;
+    std::copy(
+        total_label_counts.begin(), total_label_counts.end(),
+        std::back_inserter<std::vector<std::pair<Label, LabelConfidence>>>(
+            label_counts));
+
+    std::sort(label_counts.begin(), label_counts.end(),
+              [](const std::pair<Label, LabelConfidence>& l,
+                 const std::pair<Label, LabelConfidence>& r) {
+                if (l.second != r.second) return l.second < r.second;
+                return l.first < r.first;
+              });
+
+    int i = 0;
+    while (i < label_count_size && i < label_counts.size()) {
+      voxel_B->label_count[i].label = label_counts[i].first;
+      voxel_B->label_count[i].label_confidence = label_counts[i].second;
+
+      if (i == 0) {
+        voxel_B->label = label_counts[i].first;
+        voxel_B->label_confidence = label_counts[i].second;
+      }
+      ++i;
+    }
   }
-
-  // std::vector<LabelCount> total_label_counts;
-
-  // total_label_counts.reserve(2 * label_count_size);
-
-  // if (voxel_A.label == voxel_B->label) {
-  //   voxel_B->label_confidence += voxel_A.label_confidence;
-  // } else if (voxel_A.label_confidence > voxel_B->label_confidence) {
-  //   voxel_B->label = voxel_A.label;
-  //   voxel_B->label_confidence =
-  //       voxel_A.label_confidence - voxel_B->label_confidence;
-  // } else {
-  //   voxel_B->label_confidence -= voxel_A.label_confidence;
-  // }
 }
 
 }  // namespace voxblox

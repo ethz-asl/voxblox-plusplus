@@ -10,7 +10,7 @@ find_package(catkin_simple REQUIRED)
 catkin_simple(ALL_DEPS_REQUIRED)
 
 cs_add_library(${PROJECT_NAME}
-  src/label_block_serialization.cc
+  src/label_block.cc
   src/semantic_instance_label_fusion.cc
   src/label_tsdf_integrator.cc
   src/label_tsdf_map.cc

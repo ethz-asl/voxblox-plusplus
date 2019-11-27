@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <geometry_msgs/TransformStamped.h>
+#include <global_segment_map/label_block.h>
 #include <global_segment_map/label_interpolator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
@@ -515,9 +516,11 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
              segments_to_integrate_.size(), (end - start).toSec());
   }
 
+  bool merged = false;
+
   if (enable_object_tracking_) {
     for (Segment* segment : segments_to_integrate_) {
-      if (segment->label_ == 2u) {
+      if (segment->label_ == 3u && msg_timestamp.toSec() > 5.0f) {
         CHECK_NOTNULL(segment);
 
         Labels labels;
@@ -525,50 +528,59 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
         Label label = segment->label_;
         labels.push_back(label);
 
-        constexpr bool kRemoveSegmentsFromMap = false;
+        constexpr bool kRemoveSegmentsFromMap = true;
         constexpr bool kLabelsListIsComplete = false;
-        map_->extractSegmentLayers(labels, &label_to_layers,
-                                   kRemoveSegmentsFromMap,
-                                   kLabelsListIsComplete);
+        {
+          std::lock_guard<std::mutex> label_tsdf_layers_lock(
+              label_tsdf_layers_mutex_);
+          map_->extractSegmentLayers(labels, &label_to_layers,
+                                     kRemoveSegmentsFromMap,
+                                     kLabelsListIsComplete);
+        }
 
         Transformation T_G_C_icp, T_G_G_icp;
 
         if (refinePointCloudLayerTransform(
                 label_to_layers.at(label).first, segment->points_C_,
                 segment->T_G_C_, icp_.get(), &T_G_C_icp, &T_G_G_icp)) {
+          // if (refinePointCloudLayerTransform(
+          //         map_->getTsdfLayer(), segment->points_C_,
+          //         segment->T_G_C_, icp_.get(), &T_G_C_icp, &T_G_G_icp)) {
           // T_G_G_icp.setIdentity();
 
           // clang-format off
-          // Eigen::Matrix<FloatingPoint, 4, 4> T_B_A;
-          // // T_B_A <<  0.959292,  0.233991, 0.158138, -0.0627464,
-          // //          -0.277701,  0.883428, 0.377407,  0.126472,
-          // //          -0.051394, -0.405959, 0.912445, -0.0506717,
-          // //           0.      ,  0.      , 0.      ,  1.;
-          // T_B_A << 00000.99999, -0.00442385, 00000000000, -0.00130439,
-          //          00.00442385, 00000.99999, 00000000000, 00.00439841,
-          //          00000000000, 00000000000, 00000000001, 0.000560403,
-          //          00000000000, 00000000000, 00000000000, 00000000001;
-          //
-          // // clang-format on
-          // T_G_G_icp = Transformation(T_B_A);
+          Eigen::Matrix<FloatingPoint, 4, 4> T_B_A;
+          T_B_A <<  1.,  0., 0., -0.01018,
+                    0.,  1., 0.,  0.,
+                    0.,  0., 1.,  0.,
+                    0.,  0., 0.,  1.;
+          // clang-format on
+          T_G_G_icp = Transformation(T_B_A);
 
           LOG(ERROR) << "ICP refinement for this pointcloud: T_G_G_icp:\n"
                      << T_G_G_icp;
+          // std::chrono::milliseconds timespan(5605);
+          // std::this_thread::sleep_for(timespan);
 
-          mergeLayerAintoLayerB<TsdfVoxel>(label_to_layers.at(label).first,
-                                           T_G_G_icp, map_->getTsdfLayerPtr());
+          {
+            std::lock_guard<std::mutex> label_tsdf_layers_lock(
+                label_tsdf_layers_mutex_);
 
-          mergeLayerAintoLayerB<LabelVoxel>(label_to_layers.at(label).second,
-                                            T_G_G_icp,
-                                            map_->getLabelLayerPtr());
+            mergeLayerAintoLayerB<TsdfVoxel>(label_to_layers.at(label).first,
+                                             T_G_G_icp.inverse(),
+                                             map_->getTsdfLayerPtr());
+
+            mergeLayerAintoLayerB<LabelVoxel>(label_to_layers.at(label).second,
+                                              T_G_G_icp.inverse(),
+                                              map_->getLabelLayerPtr());
+          }
         }
-        // refinePointCloudLayerTransform(icp, label_to_layers.at(label).first)
-        // T_S_S_icp = integrator_->getIcpRefined_T_S_S(
-        //     segment->T_G_C_, label_to_layers.at(label).first,
-        //     segment->points_C_);
       }
     }
   }
+
+  // std::chrono::milliseconds timespan(5605);
+  // std::this_thread::sleep_for(timespan);
 
   constexpr bool kIsFreespacePointcloud = false;
 
@@ -580,7 +592,6 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
         label_tsdf_layers_mutex_);
     for (Segment* segment : segments_to_integrate_) {
       CHECK_NOTNULL(segment);
-
       integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                        segment->colors_, segment->label_,
                                        kIsFreespacePointcloud);
@@ -714,7 +725,8 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
     // Get list of all instances in the map.
     instance_labels = map_->getInstanceList();
 
-    // Extract the TSDF and label layers corresponding to each instance segment.
+    // Extract the TSDF and label layers corresponding to each instance
+    // segment.
     constexpr bool kLabelsListIsComplete = true;
     map_->extractInstanceLayers(instance_labels, &instance_label_to_layers);
   }
@@ -938,35 +950,45 @@ void Controller::generateMesh() {  // NOLINT
 }
 
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
-  std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
+  bool only_mesh_updated_blocks = true;
+  if (need_full_remesh_) {
+    only_mesh_updated_blocks = false;
+    need_full_remesh_ = false;
+  }
+
   {
     std::lock_guard<std::mutex> label_tsdf_layers_lock(
         label_tsdf_layers_mutex_);
-    timing::Timer generate_mesh_timer("mesh/update");
-    bool only_mesh_updated_blocks = true;
-    if (need_full_remesh_) {
-      only_mesh_updated_blocks = false;
-      need_full_remesh_ = false;
+    {
+      std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
+      timing::Timer generate_mesh_timer("mesh/update");
+
+      if (enable_semantic_instance_segmentation_) {
+        bool clear_updated_flag = false;
+        mesh_layer_updated_ |= mesh_merged_integrator_->generateMesh(
+            only_mesh_updated_blocks, clear_updated_flag);
+        mesh_layer_updated_ |= mesh_instance_integrator_->generateMesh(
+            only_mesh_updated_blocks, clear_updated_flag);
+        mesh_layer_updated_ |= mesh_semantic_integrator_->generateMesh(
+            only_mesh_updated_blocks, clear_updated_flag);
+      }
+
+      bool clear_updated_flag = true;
+      // TODO(ntonci): Why not calling generateMesh instead?
+      mesh_layer_updated_ |= mesh_label_integrator_->generateMesh(
+          only_mesh_updated_blocks, clear_updated_flag);
+      generate_mesh_timer.Stop();
     }
 
-    if (enable_semantic_instance_segmentation_) {
-      bool clear_updated_flag = false;
-      mesh_layer_updated_ |= mesh_merged_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
-      mesh_layer_updated_ |= mesh_instance_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
-      mesh_layer_updated_ |= mesh_semantic_integrator_->generateMesh(
-          only_mesh_updated_blocks, clear_updated_flag);
+    if (publish_pointclouds_) {
+      publishTsdfSlice();
+      publishTsdf();
+      publishLabelTsdf();
     }
-
-    bool clear_updated_flag = true;
-    // TODO(ntonci): Why not calling generateMesh instead?
-    mesh_layer_updated_ |= mesh_label_integrator_->generateMesh(
-        only_mesh_updated_blocks, clear_updated_flag);
-    generate_mesh_timer.Stop();
   }
 
   if (publish_scene_mesh_) {
+    std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
     timing::Timer publish_mesh_timer("mesh/publish");
     voxblox_msgs::Mesh mesh_msg;
 
@@ -977,11 +999,6 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     mesh_msg.header.frame_id = world_frame_;
     scene_mesh_pub_->publish(mesh_msg);
     publish_mesh_timer.Stop();
-  }
-  if (publish_pointclouds_) {
-    publishTsdfSlice();
-    publishTsdf();
-    publishLabelTsdf();
   }
 }
 
