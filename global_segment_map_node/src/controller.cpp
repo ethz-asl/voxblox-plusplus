@@ -367,6 +367,14 @@ void Controller::advertiseExtractInstancesService(
       "extract_instances", &Controller::extractInstancesCallback, this);
 }
 
+void Controller::advertiseGetListSemanticInstancesService(
+    ros::ServiceServer* get_list_semantic_instances_srv) {
+  CHECK_NOTNULL(get_list_semantic_instances_srv);
+  *get_list_semantic_instances_srv = node_handle_private_->advertiseService(
+      "get_list_semantic_instances",
+      &Controller::getListSemanticInstancesCallback, this);
+}
+
 void Controller::processSegment(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Look up transform from camera frame to world frame.
@@ -589,6 +597,21 @@ bool Controller::saveSegmentsAsMeshCallback(
   }
 
   return overall_success;
+}
+
+bool Controller::getListSemanticInstancesCallback(
+    gsm_node::GetListSemanticInstances::Request& /* request */,
+    gsm_node::GetListSemanticInstances::Response& response) {
+  SemanticLabels semantic_labels;
+
+  // Get the semantic class of each recognized instance in the map.
+  semantic_labels = map_->getSemanticInstanceList();
+
+  // Map class id to human-readable label.
+  for (const SemanticLabel semantic_label : semantic_labels) {
+    response.semantic_categories.push_back(classes[(unsigned)semantic_label]);
+  }
+  return true;
 }
 
 bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,

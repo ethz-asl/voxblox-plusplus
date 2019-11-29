@@ -40,8 +40,11 @@ int main(int argc, char** argv) {
   controller->advertiseSaveSegmentsAsMeshService(&save_segments_as_mesh_srv);
 
   ros::ServiceServer extract_instances_srv;
+  ros::ServiceServer get_list_semantic_instances_srv;
   if (controller->enable_semantic_instance_segmentation_) {
     controller->advertiseExtractInstancesService(&extract_instances_srv);
+    controller->advertiseGetListSemanticInstancesService(
+        &get_list_semantic_instances_srv);
   }
 
   // Spinner that uses a number of threads equal to the number of cores.

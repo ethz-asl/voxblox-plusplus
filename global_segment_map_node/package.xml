@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
   <name>gsm_node</name>
-  <version>0.0.0</version>
+  <version>1.0.0</version>
   <description>Voxblox++ ROS interface</description>
 
   <author email="margarita.grinvald@mavt.ethz.ch">Margarita Grinvald</author>
@@ -20,17 +20,19 @@
   <buildtool_depend>catkin_simple</buildtool_depend>
 
   <depend>gflags_catkin</depend>
+  <depend>global_segment_map</depend>
+  <depend>global_feature_map</depend>
   <depend>glog_catkin</depend>
+  <depend>message_generation</depend>
+  <depend>message_runtime</depend>
   <depend>minkindr_conversions</depend>
   <depend>modelify_msgs</depend>
+  <depend>opencv3_catkin</depend>
   <depend>pcl_catkin</depend>
   <depend>pcl_conversions</depend>
   <depend>roscpp</depend>
+  <depend>std_msgs</depend>
   <depend>voxblox</depend>
-  <depend>global_segment_map</depend>
-  <depend>global_feature_map</depend>
   <depend>voxblox_msgs</depend>
   <depend>voxblox_ros</depend>
-  <depend>opencv3_catkin</depend>
-
 </package>

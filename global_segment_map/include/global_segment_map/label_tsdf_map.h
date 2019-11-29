@@ -68,6 +68,10 @@ class LabelTsdfMap {
   // for which the voxel count is greater than 0.
   InstanceLabels getInstanceList();
 
+  // Get the list of semantic categories of all instances
+  // for which the voxel count is greated than 0.
+  SemanticLabels getSemanticInstanceList();
+
   /**
    * Extracts separate tsdf and label layers from the gsm, for every given
    * label.

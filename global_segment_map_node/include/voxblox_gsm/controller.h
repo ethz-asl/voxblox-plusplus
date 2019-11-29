@@ -13,6 +13,7 @@
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
 #include <global_segment_map/utils/visualizer.h>
+#include <gsm_node/GetListSemanticInstances.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_srvs/Empty.h>
@@ -48,6 +49,9 @@ class Controller {
   void advertiseExtractInstancesService(
       ros::ServiceServer* extract_instances_srv);
 
+  void advertiseGetListSemanticInstancesService(
+      ros::ServiceServer* get_list_semantic_categories_srv);
+
   bool enable_semantic_instance_segmentation_;
 
   bool publish_scene_mesh_;
@@ -72,6 +76,10 @@ class Controller {
 
   bool extractInstancesCallback(std_srvs::Empty::Request& request,
                                 std_srvs::Empty::Response& response);
+
+  bool getListSemanticInstancesCallback(
+      gsm_node::GetListSemanticInstances::Request& /* request */,
+      gsm_node::GetListSemanticInstances::Response& response);
 
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
