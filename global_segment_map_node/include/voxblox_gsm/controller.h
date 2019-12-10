@@ -7,13 +7,11 @@
 #include <vector>
 
 #include <geometry_msgs/Transform.h>
-
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
 #include <global_segment_map/utils/visualizer.h>
-#include <gsm_node/GetListSemanticInstances.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 #include <std_srvs/Empty.h>
@@ -22,6 +20,8 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
+#include "gsm_node/GetAlignedInstanceBoundingBox.h"
+#include "gsm_node/GetListSemanticInstances.h"
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -52,6 +52,9 @@ class Controller {
   void advertiseGetListSemanticInstancesService(
       ros::ServiceServer* get_list_semantic_categories_srv);
 
+  void advertiseGetAlignedInstanceBoundingBoxService(
+      ros::ServiceServer* get_instance_bounding_box_srv);
+
   bool enable_semantic_instance_segmentation_;
 
   bool publish_scene_mesh_;
@@ -81,6 +84,10 @@ class Controller {
       gsm_node::GetListSemanticInstances::Request& /* request */,
       gsm_node::GetListSemanticInstances::Response& response);
 
+  bool getAlignedInstanceBoundingBoxCallback(
+      gsm_node::GetAlignedInstanceBoundingBox::Request& request,
+      gsm_node::GetAlignedInstanceBoundingBox::Response& response);
+
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
                        Transformation* transform);
@@ -93,6 +100,11 @@ class Controller {
       const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
       Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
       Eigen::Vector3f* bbox_size);
+
+  void extractInstanceSegments(
+      InstanceLabels instance_labels, bool save_segments_as_ply,
+      std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>*
+          instance_label_to_layers);
 
   ros::NodeHandle* node_handle_private_;
 

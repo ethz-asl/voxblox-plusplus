@@ -231,9 +231,13 @@ void MeshLabelIntegrator::updateMeshColor(const Block<LabelVoxel>& label_block,
           label_color_map_.getColor(voxel.label, &(mesh->colors[i]));
         } break;
         case kSemantic: {
-          SemanticLabel semantic_label =
-              semantic_instance_label_fusion_ptr_->getSemanticLabel(
-                  voxel.label);
+          SemanticLabel semantic_label = 0u;
+          InstanceLabel instance_label = getInstanceLabel(voxel.label);
+          if (instance_label != 0u) {
+            semantic_label =
+                semantic_instance_label_fusion_ptr_->getSemanticLabel(
+                    voxel.label);
+          }
           // TODO(margaritaG) : fix this.
           // all_semantic_labels_ptr_->insert(semantic_label);
           semantic_color_map_.getColor(semantic_label, &(mesh->colors[i]));
@@ -268,9 +272,13 @@ void MeshLabelIntegrator::updateMeshColor(const Block<LabelVoxel>& label_block,
               voxel, label_tsdf_config_.max_confidence, &(mesh->colors[i]));
         } break;
         case kSemantic: {
-          SemanticLabel semantic_label =
-              semantic_instance_label_fusion_ptr_->getSemanticLabel(
-                  voxel.label);
+          SemanticLabel semantic_label = 0u;
+          InstanceLabel instance_label = getInstanceLabel(voxel.label);
+          if (instance_label != 0u) {
+            semantic_label =
+                semantic_instance_label_fusion_ptr_->getSemanticLabel(
+                    voxel.label);
+          }
           // TODO(margaritaG) : fix this.
           // all_semantic_labels_ptr_->insert(semantic_label);
           semantic_color_map_.getColor(semantic_label, &(mesh->colors[i]));

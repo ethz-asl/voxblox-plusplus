@@ -7,6 +7,7 @@
 #include "voxblox_gsm/controller.h"
 
 #include <stdlib.h>
+
 #include <cmath>
 #include <memory>
 #include <string>
@@ -20,16 +21,13 @@
 #include <global_segment_map/utils/file_utils.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-
-#include <minkindr_conversions/kindr_tf.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
-
 #include <voxblox/io/sdf_ply.h>
-
 #include <voxblox_ros/mesh_vis.h>
+#include "voxblox_gsm/conversions.h"
 
 #ifdef APPROXMVBB_AVAILABLE
 #include <ApproxMVBB/ComputeApproxMVBB.hpp>
@@ -375,6 +373,14 @@ void Controller::advertiseGetListSemanticInstancesService(
       &Controller::getListSemanticInstancesCallback, this);
 }
 
+void Controller::advertiseGetAlignedInstanceBoundingBoxService(
+    ros::ServiceServer* get_instance_bounding_box_srv) {
+  CHECK_NOTNULL(get_instance_bounding_box_srv);
+  *get_instance_bounding_box_srv = node_handle_private_->advertiseService(
+      "get_aligned_instance_bbox",
+      &Controller::getAlignedInstanceBoundingBoxCallback, this);
+}
+
 void Controller::processSegment(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Look up transform from camera frame to world frame.
@@ -604,18 +610,71 @@ bool Controller::getListSemanticInstancesCallback(
     gsm_node::GetListSemanticInstances::Response& response) {
   SemanticLabels semantic_labels;
 
-  // Get the semantic class of each recognized instance in the map.
-  semantic_labels = map_->getSemanticInstanceList();
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    // Get list of instances and their corresponding semantic category.
+    map_->getSemanticInstanceList(&response.instance_ids, &semantic_labels);
+  }
 
-  // Map class id to human-readable label.
+  // Map class id to human-readable semantic category label.
   for (const SemanticLabel semantic_label : semantic_labels) {
     response.semantic_categories.push_back(classes[(unsigned)semantic_label]);
   }
   return true;
 }
 
-bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
-                                          std_srvs::Empty::Response& response) {
+bool Controller::getAlignedInstanceBoundingBoxCallback(
+    gsm_node::GetAlignedInstanceBoundingBox::Request& request,
+    gsm_node::GetAlignedInstanceBoundingBox::Response& response) {
+  InstanceLabels instance_labels;
+  std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>
+      instance_label_to_layers;
+  InstanceLabel instance_label = request.instance_id;
+  instance_labels.push_back(instance_label);
+
+  bool kSaveSegmentsAsPly = false;
+  extractInstanceSegments(instance_labels, kSaveSegmentsAsPly,
+                          &instance_label_to_layers);
+
+  auto it = instance_label_to_layers.find(instance_label);
+  if (it != instance_label_to_layers.end()) {
+    const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+
+    pcl::PointCloud<pcl::PointSurfel>::Ptr instance_pointcloud(
+        new pcl::PointCloud<pcl::PointSurfel>);
+
+    convertVoxelGridToPointCloud(segment_tsdf_layer, mesh_config_,
+                                 instance_pointcloud.get());
+
+    Eigen::Vector3f bbox_translation;
+    Eigen::Quaternionf bbox_quaternion;
+    Eigen::Vector3f bbox_size;
+    computeAlignedBoundingBox(instance_pointcloud, &bbox_translation,
+                              &bbox_quaternion, &bbox_size);
+
+    fillAlignedBoundingBoxMsg(bbox_translation, bbox_quaternion, bbox_size,
+                              &response.bbox);
+
+    if (compute_and_publish_bbox_) {
+      visualization_msgs::Marker bbox_marker;
+      fillBoundingBoxMarkerMsg(world_frame_, instance_label, bbox_translation,
+                               bbox_quaternion, bbox_size, &bbox_marker);
+      bbox_pub_->publish(bbox_marker);
+
+      geometry_msgs::TransformStamped bbox_tf;
+      fillBoundingBoxTfMsg(world_frame_, std::to_string(instance_label),
+                           bbox_translation, bbox_quaternion, &bbox_tf);
+      tf_broadcaster_.sendTransform(bbox_tf);
+    }
+  }
+
+  return true;
+}
+
+bool Controller::extractInstancesCallback(
+    std_srvs::Empty::Request& /*request*/,
+    std_srvs::Empty::Response& /*response*/) {
   InstanceLabels instance_labels;
   std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>
       instance_label_to_layers;
@@ -624,37 +683,54 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
         label_tsdf_layers_mutex_);
     // Get list of all instances in the map.
     instance_labels = map_->getInstanceList();
+  }
+
+  bool kSaveSegmentsAsPly = true;
+  extractInstanceSegments(instance_labels, kSaveSegmentsAsPly,
+                          &instance_label_to_layers);
+
+  return true;
+}
+
+void Controller::extractInstanceSegments(
+    InstanceLabels instance_labels, bool save_segments_as_ply,
+    std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>*
+        instance_label_to_layers) {
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
 
     // Extract the TSDF and label layers corresponding to each instance segment.
     constexpr bool kLabelsListIsComplete = true;
-    map_->extractInstanceLayers(instance_labels, &instance_label_to_layers);
+    map_->extractInstanceLayers(instance_labels, instance_label_to_layers);
   }
 
   for (const InstanceLabel instance_label : instance_labels) {
-    auto it = instance_label_to_layers.find(instance_label);
-    CHECK(it != instance_label_to_layers.end())
+    auto it = instance_label_to_layers->find(instance_label);
+    CHECK(it != instance_label_to_layers->end())
         << "Layers for instance label " << instance_label
         << " could not be extracted.";
 
-    const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
-    const Layer<LabelVoxel>& segment_label_layer = it->second.second;
+    if (save_segments_as_ply) {
+      const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+      const Layer<LabelVoxel>& segment_label_layer = it->second.second;
 
-    CHECK_EQ(voxblox::file_utils::makePath("gsm_instances", 0777), 0);
+      CHECK_EQ(voxblox::file_utils::makePath("vpp_instances", 0777), 0);
 
-    std::string mesh_filename = "gsm_instances/gsm_segment_mesh_label_" +
-                                std::to_string(instance_label) + ".ply";
+      std::string mesh_filename = "vpp_instances/vpp_instance_segment_label_" +
+                                  std::to_string(instance_label) + ".ply";
 
-    bool success = voxblox::io::outputLayerAsPly(
-        segment_tsdf_layer, mesh_filename,
-        voxblox::io::PlyOutputTypes::kSdfIsosurface);
+      bool success = voxblox::io::outputLayerAsPly(
+          segment_tsdf_layer, mesh_filename,
+          voxblox::io::PlyOutputTypes::kSdfIsosurface);
 
-    if (success) {
-      ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
-    } else {
-      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
+      if (success) {
+        ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
+      } else {
+        ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
+      }
     }
   }
-  return true;
 }
 
 bool Controller::lookupTransform(const std::string& from_frame,
