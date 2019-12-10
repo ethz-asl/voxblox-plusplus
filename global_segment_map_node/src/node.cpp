@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
     controller->advertiseSceneMeshTopic();
   }
 
+  ros::ServiceServer get_instance_bounding_box_srv;
   if (controller->compute_and_publish_bbox_) {
     controller->advertiseBboxTopic();
   }
@@ -41,14 +42,16 @@ int main(int argc, char** argv) {
 
   ros::ServiceServer extract_instances_srv;
   ros::ServiceServer get_list_semantic_instances_srv;
-  ros::ServiceServer get_instance_bounding_box_srv;
 
   if (controller->enable_semantic_instance_segmentation_) {
     controller->advertiseExtractInstancesService(&extract_instances_srv);
     controller->advertiseGetListSemanticInstancesService(
         &get_list_semantic_instances_srv);
-    controller->advertiseGetAlignedInstanceBoundingBoxService(
-        &get_instance_bounding_box_srv);
+
+    if (controller->compute_and_publish_bbox_) {
+      controller->advertiseGetAlignedInstanceBoundingBoxService(
+          &get_instance_bounding_box_srv);
+    }
   }
 
   // Spinner that uses a number of threads equal to the number of cores.

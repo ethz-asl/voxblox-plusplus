@@ -656,17 +656,16 @@ bool Controller::getAlignedInstanceBoundingBoxCallback(
     fillAlignedBoundingBoxMsg(bbox_translation, bbox_quaternion, bbox_size,
                               &response.bbox);
 
-    if (compute_and_publish_bbox_) {
-      visualization_msgs::Marker bbox_marker;
-      fillBoundingBoxMarkerMsg(world_frame_, instance_label, bbox_translation,
-                               bbox_quaternion, bbox_size, &bbox_marker);
-      bbox_pub_->publish(bbox_marker);
+    // Visualize bounding box in RViz.
+    visualization_msgs::Marker bbox_marker;
+    fillBoundingBoxMarkerMsg(world_frame_, instance_label, bbox_translation,
+                             bbox_quaternion, bbox_size, &bbox_marker);
+    bbox_pub_->publish(bbox_marker);
 
-      geometry_msgs::TransformStamped bbox_tf;
-      fillBoundingBoxTfMsg(world_frame_, std::to_string(instance_label),
-                           bbox_translation, bbox_quaternion, &bbox_tf);
-      tf_broadcaster_.sendTransform(bbox_tf);
-    }
+    geometry_msgs::TransformStamped bbox_tf;
+    fillBoundingBoxTfMsg(world_frame_, std::to_string(instance_label),
+                         bbox_translation, bbox_quaternion, &bbox_tf);
+    tf_broadcaster_.sendTransform(bbox_tf);
   }
 
   return true;
