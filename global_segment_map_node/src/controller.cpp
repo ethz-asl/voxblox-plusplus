@@ -126,6 +126,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrated_frames_count_(0u),
       tf_listener_(ros::Duration(500)),
       world_frame_("world"),
+      integration_on_(true),
       publish_scene_mesh_(false),
       received_first_message_(false),
       mesh_layer_updated_(false),
@@ -344,6 +345,13 @@ void Controller::advertiseBboxTopic() {
                                                                   true));
 }
 
+void Controller::advertiseToggleIntegrationService(
+    ros::ServiceServer* toggle_integration_srv) {
+  CHECK_NOTNULL(toggle_integration_srv);
+  *toggle_integration_srv = node_handle_private_->advertiseService(
+      "toggle_integration", &Controller::toggleIntegrationCallback, this);
+}
+
 void Controller::advertiseGenerateMeshService(
     ros::ServiceServer* generate_mesh_srv) {
   CHECK_NOTNULL(generate_mesh_srv);
@@ -534,6 +542,9 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
 
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
+  if (!integration_on_) {
+    return;
+  }
   // Message timestamps are used to detect when all
   // segment messages from a certain frame have arrived.
   // Since segments from the same frame all have the same timestamp,
@@ -554,9 +565,14 @@ void Controller::segmentPointCloudCallback(
   processSegment(segment_point_cloud_msg);
 }
 
-bool Controller::generateMeshCallback(
-    std_srvs::Empty::Request& request,
-    std_srvs::Empty::Response& response) {  // NOLINT
+bool Controller::toggleIntegrationCallback(
+    std_srvs::Empty::Request& request, std_srvs::Empty::Response& response) {
+  integration_on_ = !integration_on_;
+  return true;
+}
+
+bool Controller::generateMeshCallback(std_srvs::Empty::Request& request,
+                                      std_srvs::Empty::Response& response) {
   constexpr bool kClearMesh = true;
   generateMesh(kClearMesh);
   return true;

@@ -42,6 +42,9 @@ class Controller {
 
   void advertiseBboxTopic();
 
+  void advertiseToggleIntegrationService(
+      ros::ServiceServer* toggle_integration_srv);
+
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
   void advertiseGetScenePointcloudService(
@@ -71,6 +74,9 @@ class Controller {
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
   void integrateFrame(ros::Time msg_timestamp);
+
+  bool toggleIntegrationCallback(std_srvs::Empty::Request& request,
+                                 std_srvs::Empty::Response& response);
 
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
@@ -123,6 +129,7 @@ class Controller {
 
   std::string world_frame_;
 
+  bool integration_on_;
   bool received_first_message_;
 
   LabelTsdfMap::Config map_config_;
