@@ -40,6 +40,8 @@ class Controller {
 
   void advertiseSceneMeshTopic();
 
+  void advertiseSceneCloudTopic();
+
   void advertiseBboxTopic();
 
   void advertiseToggleIntegrationService(
@@ -143,6 +145,7 @@ class Controller {
   MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config_;
   ros::Timer update_mesh_timer_;
   ros::Publisher* scene_mesh_pub_;
+  ros::Publisher* scene_cloud_pub_;
   MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
   std::string mesh_filename_;
 

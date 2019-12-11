@@ -339,6 +339,12 @@ void Controller::advertiseSceneMeshTopic() {
       node_handle_private_->advertise<voxblox_msgs::Mesh>("mesh", 1, true));
 }
 
+void Controller::advertiseSceneCloudTopic() {
+  scene_cloud_pub_ = new ros::Publisher(
+      node_handle_private_->advertise<pcl::PointCloud<pcl::PointXYZRGB>>(
+          "cloud", 1, true));
+}
+
 void Controller::advertiseBboxTopic() {
   bbox_pub_ = new ros::Publisher(
       node_handle_private_->advertise<visualization_msgs::Marker>("bbox", 1,
@@ -586,6 +592,8 @@ bool Controller::getScenePointcloudCallback(
 
   pointcloud.header.frame_id = world_frame_;
   pcl::toROSMsg(pointcloud, response.scene_cloud);
+
+  scene_cloud_pub_->publish(pointcloud);
 
   return true;
 }

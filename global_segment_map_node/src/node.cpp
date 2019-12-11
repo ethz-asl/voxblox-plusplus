@@ -30,6 +30,7 @@ int main(int argc, char** argv) {
 
   if (controller->publish_scene_mesh_) {
     controller->advertiseSceneMeshTopic();
+    controller->advertiseSceneCloudTopic();
   }
 
   if (controller->compute_and_publish_bbox_) {
