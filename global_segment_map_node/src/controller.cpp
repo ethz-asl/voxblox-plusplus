@@ -351,6 +351,13 @@ void Controller::advertiseGenerateMeshService(
       "generate_mesh", &Controller::generateMeshCallback, this);
 }
 
+void Controller::advertiseGetScenePointcloudService(
+    ros::ServiceServer* get_scene_pointcloud) {
+  CHECK_NOTNULL(get_scene_pointcloud);
+  *get_scene_pointcloud = node_handle_private_->advertiseService(
+      "get_scene_pointcloud", &Controller::getScenePointcloudCallback, this);
+}
+
 void Controller::advertiseSaveSegmentsAsMeshService(
     ros::ServiceServer* save_segments_as_mesh_srv) {
   CHECK_NOTNULL(save_segments_as_mesh_srv);
@@ -555,6 +562,18 @@ bool Controller::generateMeshCallback(
   return true;
 }
 
+bool Controller::getScenePointcloudCallback(
+    gsm_node::GetScenePointcloud::Request& /* request */,
+    gsm_node::GetScenePointcloud::Response& response) {
+  pcl::PointCloud<pcl::PointXYZRGB> pointcloud;
+  fillPointcloudWithMesh(mesh_merged_layer_, ColorMode::kColor, &pointcloud);
+
+  pointcloud.header.frame_id = world_frame_;
+  pcl::toROSMsg(pointcloud, response.scene_cloud);
+
+  return true;
+}
+
 bool Controller::saveSegmentsAsMeshCallback(
     std_srvs::Empty::Request& request, std_srvs::Empty::Response& response) {
   Labels labels;
@@ -627,48 +646,64 @@ bool Controller::getListSemanticInstancesCallback(
 bool Controller::getAlignedInstanceBoundingBoxCallback(
     gsm_node::GetAlignedInstanceBoundingBox::Request& request,
     gsm_node::GetAlignedInstanceBoundingBox::Response& response) {
-  InstanceLabels instance_labels;
+  InstanceLabels all_instance_labels, instance_labels;
   std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>
       instance_label_to_layers;
   InstanceLabel instance_label = request.instance_id;
-  instance_labels.push_back(instance_label);
 
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    // Get list of all instances in the map.
+    all_instance_labels = map_->getInstanceList();
+  }
+  // Check if queried instance id is in the list of instance ids in the map.
+  auto instance_label_it = std::find(all_instance_labels.begin(),
+                                     all_instance_labels.end(), instance_label);
+
+  if (instance_label_it == all_instance_labels.end()) {
+    LOG(ERROR) << "The queried instance ID does not exist in the map.";
+    return false;
+  }
+
+  instance_labels.push_back(instance_label);
   bool kSaveSegmentsAsPly = false;
   extractInstanceSegments(instance_labels, kSaveSegmentsAsPly,
                           &instance_label_to_layers);
 
   auto it = instance_label_to_layers.find(instance_label);
-  if (it != instance_label_to_layers.end()) {
-    const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+  CHECK(it != instance_label_to_layers.end())
+      << "Layers for instance label " << instance_label
+      << " could not be extracted.";
 
-    pcl::PointCloud<pcl::PointSurfel>::Ptr instance_pointcloud(
-        new pcl::PointCloud<pcl::PointSurfel>);
+  const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
 
-    convertVoxelGridToPointCloud(segment_tsdf_layer, mesh_config_,
-                                 instance_pointcloud.get());
+  pcl::PointCloud<pcl::PointSurfel>::Ptr instance_pointcloud(
+      new pcl::PointCloud<pcl::PointSurfel>);
 
-    Eigen::Vector3f bbox_translation;
-    Eigen::Quaternionf bbox_quaternion;
-    Eigen::Vector3f bbox_size;
-    computeAlignedBoundingBox(instance_pointcloud, &bbox_translation,
-                              &bbox_quaternion, &bbox_size);
+  convertVoxelGridToPointCloud(segment_tsdf_layer, mesh_config_,
+                               instance_pointcloud.get());
 
-    fillAlignedBoundingBoxMsg(bbox_translation, bbox_quaternion, bbox_size,
-                              &response.bbox);
+  Eigen::Vector3f bbox_translation;
+  Eigen::Quaternionf bbox_quaternion;
+  Eigen::Vector3f bbox_size;
+  computeAlignedBoundingBox(instance_pointcloud, &bbox_translation,
+                            &bbox_quaternion, &bbox_size);
 
-    if (compute_and_publish_bbox_) {
-      visualization_msgs::Marker bbox_marker;
-      fillBoundingBoxMarkerMsg(world_frame_, instance_label, bbox_translation,
-                               bbox_quaternion, bbox_size, &bbox_marker);
-      bbox_pub_->publish(bbox_marker);
+  fillAlignedBoundingBoxMsg(bbox_translation, bbox_quaternion, bbox_size,
+                            &response.bbox);
 
-      geometry_msgs::TransformStamped bbox_tf;
-      fillBoundingBoxTfMsg(world_frame_, std::to_string(instance_label),
-                           bbox_translation, bbox_quaternion, &bbox_tf);
-      tf_broadcaster_.sendTransform(bbox_tf);
-    }
+  if (compute_and_publish_bbox_) {
+    visualization_msgs::Marker bbox_marker;
+    fillBoundingBoxMarkerMsg(world_frame_, instance_label, bbox_translation,
+                             bbox_quaternion, bbox_size, &bbox_marker);
+    bbox_pub_->publish(bbox_marker);
+
+    geometry_msgs::TransformStamped bbox_tf;
+    fillBoundingBoxTfMsg(world_frame_, std::to_string(instance_label),
+                         bbox_translation, bbox_quaternion, &bbox_tf);
+    tf_broadcaster_.sendTransform(bbox_tf);
   }
-
   return true;
 }
 
@@ -701,7 +736,6 @@ void Controller::extractInstanceSegments(
         label_tsdf_layers_mutex_);
 
     // Extract the TSDF and label layers corresponding to each instance segment.
-    constexpr bool kLabelsListIsComplete = true;
     map_->extractInstanceLayers(instance_labels, instance_label_to_layers);
   }
 

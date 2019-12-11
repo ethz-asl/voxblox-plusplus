@@ -22,6 +22,7 @@
 #include <voxblox_ros/conversions.h>
 #include "gsm_node/GetAlignedInstanceBoundingBox.h"
 #include "gsm_node/GetListSemanticInstances.h"
+#include "gsm_node/GetScenePointcloud.h"
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -42,6 +43,9 @@ class Controller {
   void advertiseBboxTopic();
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
+
+  void advertiseGetScenePointcloudService(
+      ros::ServiceServer* get_scene_pointcloud);
 
   void advertiseSaveSegmentsAsMeshService(
       ros::ServiceServer* save_segments_as_mesh_srv);
@@ -73,6 +77,10 @@ class Controller {
 
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
+
+  bool getScenePointcloudCallback(
+      gsm_node::GetScenePointcloud::Request& /* request */,
+      gsm_node::GetScenePointcloud::Response& response);
 
   bool saveSegmentsAsMeshCallback(std_srvs::Empty::Request& request,
                                   std_srvs::Empty::Response& response);

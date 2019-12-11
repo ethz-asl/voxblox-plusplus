@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
   ros::NodeHandle node_handle_private("~");
 
   voxblox::voxblox_gsm::Controller* controller;
-  LOG(INFO) << "Starting Voxblox++";
+  LOG(INFO) << "Starting Voxblox++ node.";
   controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
 
   ros::Subscriber segment_point_cloud_sub;
@@ -35,6 +35,9 @@ int main(int argc, char** argv) {
 
   ros::ServiceServer generate_mesh_srv;
   controller->advertiseGenerateMeshService(&generate_mesh_srv);
+
+  ros::ServiceServer get_scene_pointcloud;
+  controller->advertiseGetScenePointcloudService(&get_scene_pointcloud);
 
   ros::ServiceServer save_segments_as_mesh_srv;
   controller->advertiseSaveSegmentsAsMeshService(&save_segments_as_mesh_srv);
