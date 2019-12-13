@@ -50,9 +50,10 @@ inline void voxelEvaluationDetails2VoxelEvaluationDetailsMsg(
   }
 }
 
-inline void fillAlignedBoundingBoxMsg(
-    Eigen::Vector3f bbox_translation, Eigen::Quaternionf bbox_quaternion,
-    Eigen::Vector3f bbox_size, modelify_msgs::BoundingBox* bounding_box_msg) {
+inline void fillAlignedBoundingBoxMsg(Eigen::Vector3f bbox_translation,
+                                      Eigen::Quaternionf bbox_quaternion,
+                                      Eigen::Vector3f bbox_size,
+                                      vpp_msgs::BoundingBox* bounding_box_msg) {
   CHECK_NOTNULL(bounding_box_msg);
   bounding_box_msg->pose.position.x = bbox_translation(0);
   bounding_box_msg->pose.position.y = bbox_translation(1);

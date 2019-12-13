@@ -585,8 +585,8 @@ bool Controller::generateMeshCallback(std_srvs::Empty::Request& request,
 }
 
 bool Controller::getScenePointcloudCallback(
-    gsm_node::GetScenePointcloud::Request& /* request */,
-    gsm_node::GetScenePointcloud::Response& response) {
+    vpp_msgs::GetScenePointcloud::Request& /* request */,
+    vpp_msgs::GetScenePointcloud::Response& response) {
   pcl::PointCloud<pcl::PointXYZRGB> pointcloud;
   fillPointcloudWithMesh(mesh_merged_layer_, ColorMode::kColor, &pointcloud);
 
@@ -649,8 +649,8 @@ bool Controller::saveSegmentsAsMeshCallback(
 }
 
 bool Controller::getListSemanticInstancesCallback(
-    gsm_node::GetListSemanticInstances::Request& /* request */,
-    gsm_node::GetListSemanticInstances::Response& response) {
+    vpp_msgs::GetListSemanticInstances::Request& /* request */,
+    vpp_msgs::GetListSemanticInstances::Response& response) {
   SemanticLabels semantic_labels;
 
   {
@@ -668,8 +668,8 @@ bool Controller::getListSemanticInstancesCallback(
 }
 
 bool Controller::getAlignedInstanceBoundingBoxCallback(
-    gsm_node::GetAlignedInstanceBoundingBox::Request& request,
-    gsm_node::GetAlignedInstanceBoundingBox::Response& response) {
+    vpp_msgs::GetAlignedInstanceBoundingBox::Request& request,
+    vpp_msgs::GetAlignedInstanceBoundingBox::Response& response) {
   InstanceLabels all_instance_labels, instance_labels;
   std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>
       instance_label_to_layers;

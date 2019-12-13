@@ -20,9 +20,9 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
-#include "gsm_node/GetAlignedInstanceBoundingBox.h"
-#include "gsm_node/GetListSemanticInstances.h"
-#include "gsm_node/GetScenePointcloud.h"
+#include <vpp_msgs/GetAlignedInstanceBoundingBox.h>
+#include <vpp_msgs/GetListSemanticInstances.h>
+#include <vpp_msgs/GetScenePointcloud.h>
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -87,8 +87,8 @@ class Controller {
                             std_srvs::Empty::Response& response);
 
   bool getScenePointcloudCallback(
-      gsm_node::GetScenePointcloud::Request& /* request */,
-      gsm_node::GetScenePointcloud::Response& response);
+      vpp_msgs::GetScenePointcloud::Request& /* request */,
+      vpp_msgs::GetScenePointcloud::Response& response);
 
   bool saveSegmentsAsMeshCallback(std_srvs::Empty::Request& request,
                                   std_srvs::Empty::Response& response);
@@ -97,12 +97,12 @@ class Controller {
                                 std_srvs::Empty::Response& response);
 
   bool getListSemanticInstancesCallback(
-      gsm_node::GetListSemanticInstances::Request& /* request */,
-      gsm_node::GetListSemanticInstances::Response& response);
+      vpp_msgs::GetListSemanticInstances::Request& /* request */,
+      vpp_msgs::GetListSemanticInstances::Response& response);
 
   bool getAlignedInstanceBoundingBoxCallback(
-      gsm_node::GetAlignedInstanceBoundingBox::Request& request,
-      gsm_node::GetAlignedInstanceBoundingBox::Response& response);
+      vpp_msgs::GetAlignedInstanceBoundingBox::Request& request,
+      vpp_msgs::GetAlignedInstanceBoundingBox::Response& response);
 
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,

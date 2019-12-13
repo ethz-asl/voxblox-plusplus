@@ -1,3 +1,0 @@
-uint16 instance_id
----
-modelify_msgs/BoundingBox bbox
