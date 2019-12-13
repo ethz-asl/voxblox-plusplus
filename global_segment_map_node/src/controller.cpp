@@ -234,34 +234,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
 
   mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
-
-  label_tsdf_mesh_config_.color_scheme =
-      MeshLabelIntegrator::ColorScheme::kLabel;
-  mesh_label_integrator_.reset(new MeshLabelIntegrator(
-      mesh_config_, label_tsdf_mesh_config_, map_.get(),
-      mesh_label_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
-
   if (enable_semantic_instance_segmentation_) {
     mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
-
-    label_tsdf_mesh_config_.color_scheme =
-        MeshLabelIntegrator::ColorScheme::kSemantic;
-    mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_semantic_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
-    label_tsdf_mesh_config_.color_scheme =
-        MeshLabelIntegrator::ColorScheme::kInstance;
-    mesh_instance_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_instance_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
-    label_tsdf_mesh_config_.color_scheme =
-        MeshLabelIntegrator::ColorScheme::kMerged;
-    mesh_merged_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_merged_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
   }
+
+  resetMeshIntegrators();
 
   // Visualization settings.
   bool visualize = false;
@@ -349,6 +328,12 @@ void Controller::advertiseBboxTopic() {
   bbox_pub_ = new ros::Publisher(
       node_handle_private_->advertise<visualization_msgs::Marker>("bbox", 1,
                                                                   true));
+}
+
+void Controller::advertiseResetMapService(ros::ServiceServer* reset_map_srv) {
+  CHECK_NOTNULL(reset_map_srv);
+  *reset_map_srv = node_handle_private_->advertiseService(
+      "reset_map", &Controller::resetMapCallback, this);
 }
 
 void Controller::advertiseToggleIntegrationService(
@@ -569,6 +554,70 @@ void Controller::segmentPointCloudCallback(
   last_segment_msg_timestamp_ = segment_point_cloud_msg->header.stamp;
 
   processSegment(segment_point_cloud_msg);
+}
+
+void Controller::resetMeshIntegrators() {
+  label_tsdf_mesh_config_.color_scheme =
+      MeshLabelIntegrator::ColorScheme::kLabel;
+  mesh_label_integrator_.reset(new MeshLabelIntegrator(
+      mesh_config_, label_tsdf_mesh_config_, map_.get(),
+      mesh_label_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+
+  if (enable_semantic_instance_segmentation_) {
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kSemantic;
+    mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_semantic_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kInstance;
+    mesh_instance_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_instance_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kMerged;
+    mesh_merged_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_merged_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+  }
+}
+
+// TODO(margaritaG): this is not thread safe wrt segmentPointCloudCallback yet.
+bool Controller::resetMapCallback(std_srvs::Empty::Request& /*request*/,
+                                  std_srvs::Empty::Response& /*request*/) {
+  // Reset counters and flags.
+  integrated_frames_count_ = 0u;
+  received_first_message_ = false;
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+
+    map_.reset(new LabelTsdfMap(map_config_));
+    integrator_.reset(new LabelTsdfIntegrator(
+        tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
+  }
+  // Clear the mesh layers.
+  {
+    std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
+
+    mesh_label_layer_->clear();
+    mesh_semantic_layer_->clear();
+    mesh_instance_layer_->clear();
+    mesh_merged_layer_->clear();
+
+    resetMeshIntegrators();
+    need_full_remesh_ = true;
+  }
+
+  // Clear segments to be integrated from the last frame.
+  segment_merge_candidates_.clear();
+  segment_label_candidates.clear();
+  for (Segment* segment : segments_to_integrate_) {
+    delete segment;
+  }
+  segments_to_integrate_.clear();
+
+  return true;
 }
 
 bool Controller::toggleIntegrationCallback(

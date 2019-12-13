@@ -44,6 +44,8 @@ class Controller {
 
   void advertiseBboxTopic();
 
+  void advertiseResetMapService(ros::ServiceServer* reset_map_srv);
+
   void advertiseToggleIntegrationService(
       ros::ServiceServer* toggle_integration_srv);
 
@@ -76,6 +78,9 @@ class Controller {
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
   void integrateFrame(ros::Time msg_timestamp);
+
+  bool resetMapCallback(std_srvs::Empty::Request& request,
+                        std_srvs::Empty::Response& response);
 
   bool toggleIntegrationCallback(std_srvs::Empty::Request& request,
                                  std_srvs::Empty::Response& response);
@@ -111,6 +116,9 @@ class Controller {
   void generateMesh(bool clear_mesh);
 
   void updateMeshEvent(const ros::TimerEvent& e);
+
+  // NOT thread safe.
+  void resetMeshIntegrators();
 
   void computeAlignedBoundingBox(
       const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,

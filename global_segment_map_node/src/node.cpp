@@ -22,6 +22,9 @@ int main(int argc, char** argv) {
   LOG(INFO) << "Starting Voxblox++ node.";
   controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
 
+  ros::ServiceServer reset_map_srv;
+  controller->advertiseResetMapService(&reset_map_srv);
+
   ros::ServiceServer toggle_integration_srv;
   controller->advertiseToggleIntegrationService(&toggle_integration_srv);
 
