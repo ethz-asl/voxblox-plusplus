@@ -40,7 +40,7 @@
     version: fix/pcl-1.9.1
 - git:
     local-name: vpp_msgs
-    uri: git@github.com:ethz-asl/vpp_msgs.git
+    uri: https://github.com/ethz-asl/vpp_msgs.git
 - git:
     local-name: yaml_cpp_catkin
     uri: https://github.com/ethz-asl/yaml_cpp_catkin.git
