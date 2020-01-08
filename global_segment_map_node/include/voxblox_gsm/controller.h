@@ -82,8 +82,8 @@ class Controller {
   bool resetMapCallback(std_srvs::Empty::Request& request,
                         std_srvs::Empty::Response& response);
 
-  bool toggleIntegrationCallback(std_srvs::Empty::Request& request,
-                                 std_srvs::Empty::Response& response);
+  bool toggleIntegrationCallback(std_srvs::SetBool::Request& request,
+                                 std_srvs::SetBool::Response& response);
 
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);

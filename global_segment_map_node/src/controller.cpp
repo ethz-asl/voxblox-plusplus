@@ -621,8 +621,17 @@ bool Controller::resetMapCallback(std_srvs::Empty::Request& /*request*/,
 }
 
 bool Controller::toggleIntegrationCallback(
-    std_srvs::Empty::Request& request, std_srvs::Empty::Response& response) {
-  integration_on_ = !integration_on_;
+    std_srvs::SetBool::Request& request,
+    std_srvs::SetBool::Response& response) {
+  if (request.data ^ integration_on_) {
+    integration_on_ = request.data;
+    response.success = true;
+  } else {
+    response.success = false;
+    response.message = "Integration is already " +
+                       std::string(integration_on_ ? "ON." : "OFF.");
+  }
+
   return true;
 }
 
