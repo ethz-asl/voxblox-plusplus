@@ -170,7 +170,6 @@ class Controller {
   std::map<Label, std::set<Label>> merges_to_publish_;
 
   // Semantic labels.
-  std::set<SemanticLabel> all_semantic_labels_;
   std::map<Label, std::map<SemanticLabel, int>>* label_class_count_ptr_;
 
   // Current frame label propagation.

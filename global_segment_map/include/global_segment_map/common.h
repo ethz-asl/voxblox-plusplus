@@ -10,7 +10,9 @@
 
 namespace voxblox {
 
-// GSM custom types.
+const uint16_t BackgroundLabel = 0u;
+
+// Voxblox++ custom types.
 typedef uint16_t Label;
 typedef uint16_t LabelConfidence;
 typedef uint16_t InstanceLabel;

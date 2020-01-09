@@ -559,26 +559,26 @@ void Controller::segmentPointCloudCallback(
 void Controller::resetMeshIntegrators() {
   label_tsdf_mesh_config_.color_scheme =
       MeshLabelIntegrator::ColorScheme::kLabel;
-  mesh_label_integrator_.reset(new MeshLabelIntegrator(
-      mesh_config_, label_tsdf_mesh_config_, map_.get(),
-      mesh_label_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+  mesh_label_integrator_.reset(
+      new MeshLabelIntegrator(mesh_config_, label_tsdf_mesh_config_, map_.get(),
+                              mesh_label_layer_.get(), &need_full_remesh_));
 
   if (enable_semantic_instance_segmentation_) {
     label_tsdf_mesh_config_.color_scheme =
         MeshLabelIntegrator::ColorScheme::kSemantic;
     mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_semantic_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+        mesh_semantic_layer_.get(), &need_full_remesh_));
     label_tsdf_mesh_config_.color_scheme =
         MeshLabelIntegrator::ColorScheme::kInstance;
     mesh_instance_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_instance_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+        mesh_instance_layer_.get(), &need_full_remesh_));
     label_tsdf_mesh_config_.color_scheme =
         MeshLabelIntegrator::ColorScheme::kMerged;
     mesh_merged_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_merged_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
+        mesh_merged_layer_.get(), &need_full_remesh_));
   }
 }
 
@@ -892,12 +892,8 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
         mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
                                              clear_updated_flag);
         if (enable_semantic_instance_segmentation_) {
-          all_semantic_labels_.clear();
           mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
                                                   clear_updated_flag);
-          for (auto sl : all_semantic_labels_) {
-            LOG(ERROR) << classes[(unsigned)sl];
-          }
           mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
                                                   clear_updated_flag);
           mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
@@ -1029,7 +1025,7 @@ void Controller::computeAlignedBoundingBox(
 
   ApproxMVBB::Matrix33 A_KI = oobb.m_q_KI.matrix().transpose();
   const int size = points.cols();
-  for (unsigned int i = 0; i < size; ++i) {
+  for (unsigned int i = 0u; i < size; ++i) {
     oobb.unite(A_KI * points.col(i));
   }
 
