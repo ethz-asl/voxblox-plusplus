@@ -36,4 +36,5 @@
   <depend>voxblox</depend>
   <depend>voxblox_msgs</depend>
   <depend>voxblox_ros</depend>
+  <depend>vpp_msgs</depend>
 </package>
