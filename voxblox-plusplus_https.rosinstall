@@ -29,6 +29,12 @@
     local-name: minkindr
     uri: https://github.com/ethz-asl/minkindr.git
 - git:
+    local-name: catkin_boost_python_buildtool
+    uri: https://github.com/ethz-asl/catkin_boost_python_buildtool
+- git:
+    local-name: numpy_eigen
+    uri: https://github.com/ethz-asl/numpy_eigen.git
+- git:
     local-name: modelify_msgs
     uri: https://github.com/ethz-asl/modelify_msgs.git
 - git:
