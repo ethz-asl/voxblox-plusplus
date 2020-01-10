@@ -1,5 +1,5 @@
 <launch>
-  <arg name="visualize" default="true" />
+  <arg name="visualize" default="false" />
   <arg name="sensor" default="realsense"/>
 
   <node name="mask_rcnn" pkg="mask_rcnn_ros" type="mask_rcnn_node.py" output="log">
@@ -10,8 +10,7 @@
   <include file="$(find depth_segmentation)/launch/semantic_instance_segmentation.launch">
     <arg name="depth_segmentation_params_file" value="$(find depth_segmentation)/cfg/$(arg sensor)_config.yaml"/>
     <arg name="sensor_topics_file" value="$(find depth_segmentation)/cfg/$(arg sensor)_topics.yaml"/>
-    <param name="semantic_instance_segmentation/enable" value="true"/>
-    <param name="label_display" value="$(arg visualize)"/>
+    <arg name="visualize" value="$(arg visualize)"/>
   </include>
 
   <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/yumi.yaml"/>
