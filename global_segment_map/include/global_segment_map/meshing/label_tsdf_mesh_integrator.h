@@ -47,14 +47,12 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
   MeshLabelIntegrator(
       const MeshIntegratorConfig& config,
       const MeshLabelIntegrator::LabelTsdfConfig& label_tsdf_config,
-      LabelTsdfMap* map, MeshLayer* mesh_layer,
-      std::set<SemanticLabel>* all_semantic_labels, bool* remesh = nullptr);
+      LabelTsdfMap* map, MeshLayer* mesh_layer, bool* remesh = nullptr);
 
   MeshLabelIntegrator(
       const MeshIntegratorConfig& config,
       const MeshLabelIntegrator::LabelTsdfConfig& label_tsdf_config,
-      const LabelTsdfMap& map, MeshLayer* mesh_layer,
-      std::set<SemanticLabel>* all_semantic_labels, bool* remesh = nullptr);
+      const LabelTsdfMap& map, MeshLayer* mesh_layer, bool* remesh = nullptr);
 
   MeshLabelIntegrator(
       const MeshIntegratorConfig& config,
@@ -94,7 +92,6 @@ class MeshLabelIntegrator : public MeshIntegrator<TsdfVoxel> {
 
   const SemanticInstanceLabelFusion* semantic_instance_label_fusion_ptr_;
 
-  std::set<SemanticLabel>* all_semantic_labels_ptr_;
   bool* remesh_ptr_;
   // This parameter is used if no valid remesh_ptr is provided to the class at
   // construction time.

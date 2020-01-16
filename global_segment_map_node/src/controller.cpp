@@ -7,6 +7,7 @@
 #include "voxblox_gsm/controller.h"
 
 #include <stdlib.h>
+
 #include <cmath>
 #include <memory>
 #include <string>
@@ -20,16 +21,13 @@
 #include <global_segment_map/utils/file_utils.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
-
-#include <minkindr_conversions/kindr_tf.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
-
 #include <voxblox/io/sdf_ply.h>
-
 #include <voxblox_ros/mesh_vis.h>
+#include "voxblox_gsm/conversions.h"
 
 #ifdef APPROXMVBB_AVAILABLE
 #include <ApproxMVBB/ComputeApproxMVBB.hpp>
@@ -128,6 +126,7 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       integrated_frames_count_(0u),
       tf_listener_(ros::Duration(500)),
       world_frame_("world"),
+      integration_on_(true),
       publish_scene_mesh_(false),
       received_first_message_(false),
       mesh_layer_updated_(false),
@@ -235,34 +234,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
 
   mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
-
-  label_tsdf_mesh_config_.color_scheme =
-      MeshLabelIntegrator::ColorScheme::kLabel;
-  mesh_label_integrator_.reset(new MeshLabelIntegrator(
-      mesh_config_, label_tsdf_mesh_config_, map_.get(),
-      mesh_label_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
-
   if (enable_semantic_instance_segmentation_) {
     mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
     mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
-
-    label_tsdf_mesh_config_.color_scheme =
-        MeshLabelIntegrator::ColorScheme::kSemantic;
-    mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_semantic_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
-    label_tsdf_mesh_config_.color_scheme =
-        MeshLabelIntegrator::ColorScheme::kInstance;
-    mesh_instance_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_instance_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
-    label_tsdf_mesh_config_.color_scheme =
-        MeshLabelIntegrator::ColorScheme::kMerged;
-    mesh_merged_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_merged_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
   }
+
+  resetMeshIntegrators();
 
   // Visualization settings.
   bool visualize = false;
@@ -340,10 +318,29 @@ void Controller::advertiseSceneMeshTopic() {
       node_handle_private_->advertise<voxblox_msgs::Mesh>("mesh", 1, true));
 }
 
+void Controller::advertiseSceneCloudTopic() {
+  scene_cloud_pub_ = new ros::Publisher(
+      node_handle_private_->advertise<pcl::PointCloud<pcl::PointXYZRGB>>(
+          "cloud", 1, true));
+}
+
 void Controller::advertiseBboxTopic() {
   bbox_pub_ = new ros::Publisher(
       node_handle_private_->advertise<visualization_msgs::Marker>("bbox", 1,
                                                                   true));
+}
+
+void Controller::advertiseResetMapService(ros::ServiceServer* reset_map_srv) {
+  CHECK_NOTNULL(reset_map_srv);
+  *reset_map_srv = node_handle_private_->advertiseService(
+      "reset_map", &Controller::resetMapCallback, this);
+}
+
+void Controller::advertiseToggleIntegrationService(
+    ros::ServiceServer* toggle_integration_srv) {
+  CHECK_NOTNULL(toggle_integration_srv);
+  *toggle_integration_srv = node_handle_private_->advertiseService(
+      "toggle_integration", &Controller::toggleIntegrationCallback, this);
 }
 
 void Controller::advertiseGenerateMeshService(
@@ -351,6 +348,13 @@ void Controller::advertiseGenerateMeshService(
   CHECK_NOTNULL(generate_mesh_srv);
   *generate_mesh_srv = node_handle_private_->advertiseService(
       "generate_mesh", &Controller::generateMeshCallback, this);
+}
+
+void Controller::advertiseGetScenePointcloudService(
+    ros::ServiceServer* get_scene_pointcloud) {
+  CHECK_NOTNULL(get_scene_pointcloud);
+  *get_scene_pointcloud = node_handle_private_->advertiseService(
+      "get_scene_pointcloud", &Controller::getScenePointcloudCallback, this);
 }
 
 void Controller::advertiseSaveSegmentsAsMeshService(
@@ -365,6 +369,22 @@ void Controller::advertiseExtractInstancesService(
   CHECK_NOTNULL(extract_instances_srv);
   *extract_instances_srv = node_handle_private_->advertiseService(
       "extract_instances", &Controller::extractInstancesCallback, this);
+}
+
+void Controller::advertiseGetListSemanticInstancesService(
+    ros::ServiceServer* get_list_semantic_instances_srv) {
+  CHECK_NOTNULL(get_list_semantic_instances_srv);
+  *get_list_semantic_instances_srv = node_handle_private_->advertiseService(
+      "get_list_semantic_instances",
+      &Controller::getListSemanticInstancesCallback, this);
+}
+
+void Controller::advertiseGetAlignedInstanceBoundingBoxService(
+    ros::ServiceServer* get_instance_bounding_box_srv) {
+  CHECK_NOTNULL(get_instance_bounding_box_srv);
+  *get_instance_bounding_box_srv = node_handle_private_->advertiseService(
+      "get_aligned_instance_bbox",
+      &Controller::getAlignedInstanceBoundingBoxCallback, this);
 }
 
 void Controller::processSegment(
@@ -513,6 +533,9 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
 
 void Controller::segmentPointCloudCallback(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
+  if (!integration_on_) {
+    return;
+  }
   // Message timestamps are used to detect when all
   // segment messages from a certain frame have arrived.
   // Since segments from the same frame all have the same timestamp,
@@ -533,11 +556,103 @@ void Controller::segmentPointCloudCallback(
   processSegment(segment_point_cloud_msg);
 }
 
-bool Controller::generateMeshCallback(
-    std_srvs::Empty::Request& request,
-    std_srvs::Empty::Response& response) {  // NOLINT
+void Controller::resetMeshIntegrators() {
+  label_tsdf_mesh_config_.color_scheme =
+      MeshLabelIntegrator::ColorScheme::kLabel;
+  mesh_label_integrator_.reset(
+      new MeshLabelIntegrator(mesh_config_, label_tsdf_mesh_config_, map_.get(),
+                              mesh_label_layer_.get(), &need_full_remesh_));
+
+  if (enable_semantic_instance_segmentation_) {
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kSemantic;
+    mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_semantic_layer_.get(), &need_full_remesh_));
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kInstance;
+    mesh_instance_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_instance_layer_.get(), &need_full_remesh_));
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kMerged;
+    mesh_merged_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_merged_layer_.get(), &need_full_remesh_));
+  }
+}
+
+// TODO(margaritaG): this is not thread safe wrt segmentPointCloudCallback yet.
+bool Controller::resetMapCallback(std_srvs::Empty::Request& /*request*/,
+                                  std_srvs::Empty::Response& /*request*/) {
+  // Reset counters and flags.
+  integrated_frames_count_ = 0u;
+  received_first_message_ = false;
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+
+    map_.reset(new LabelTsdfMap(map_config_));
+    integrator_.reset(new LabelTsdfIntegrator(
+        tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
+  }
+  // Clear the mesh layers.
+  {
+    std::lock_guard<std::mutex> mesh_layer_lock(mesh_layer_mutex_);
+
+    mesh_label_layer_->clear();
+    mesh_semantic_layer_->clear();
+    mesh_instance_layer_->clear();
+    mesh_merged_layer_->clear();
+
+    resetMeshIntegrators();
+    need_full_remesh_ = true;
+  }
+
+  // Clear segments to be integrated from the last frame.
+  segment_merge_candidates_.clear();
+  segment_label_candidates.clear();
+  for (Segment* segment : segments_to_integrate_) {
+    delete segment;
+  }
+  segments_to_integrate_.clear();
+
+  return true;
+}
+
+bool Controller::toggleIntegrationCallback(
+    std_srvs::SetBool::Request& request,
+    std_srvs::SetBool::Response& response) {
+  if (request.data ^ integration_on_) {
+    integration_on_ = request.data;
+    response.success = true;
+  } else {
+    response.success = false;
+    response.message = "Integration is already " +
+                       std::string(integration_on_ ? "ON." : "OFF.");
+  }
+
+  return true;
+}
+
+bool Controller::generateMeshCallback(std_srvs::Empty::Request& request,
+                                      std_srvs::Empty::Response& response) {
   constexpr bool kClearMesh = true;
   generateMesh(kClearMesh);
+  return true;
+}
+
+bool Controller::getScenePointcloudCallback(
+    vpp_msgs::GetScenePointcloud::Request& /* request */,
+    vpp_msgs::GetScenePointcloud::Response& response) {
+  pcl::PointCloud<pcl::PointXYZRGB> pointcloud;
+  fillPointcloudWithMesh(mesh_merged_layer_, ColorMode::kColor, &pointcloud);
+
+  pointcloud.header.frame_id = world_frame_;
+  pcl::toROSMsg(pointcloud, response.scene_cloud);
+
+  scene_cloud_pub_->publish(pointcloud);
+
   return true;
 }
 
@@ -591,8 +706,92 @@ bool Controller::saveSegmentsAsMeshCallback(
   return overall_success;
 }
 
-bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
-                                          std_srvs::Empty::Response& response) {
+bool Controller::getListSemanticInstancesCallback(
+    vpp_msgs::GetListSemanticInstances::Request& /* request */,
+    vpp_msgs::GetListSemanticInstances::Response& response) {
+  SemanticLabels semantic_labels;
+
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    // Get list of instances and their corresponding semantic category.
+    map_->getSemanticInstanceList(&response.instance_ids, &semantic_labels);
+  }
+
+  // Map class id to human-readable semantic category label.
+  for (const SemanticLabel semantic_label : semantic_labels) {
+    response.semantic_categories.push_back(classes[(unsigned)semantic_label]);
+  }
+  return true;
+}
+
+bool Controller::getAlignedInstanceBoundingBoxCallback(
+    vpp_msgs::GetAlignedInstanceBoundingBox::Request& request,
+    vpp_msgs::GetAlignedInstanceBoundingBox::Response& response) {
+  InstanceLabels all_instance_labels, instance_labels;
+  std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>
+      instance_label_to_layers;
+  InstanceLabel instance_label = request.instance_id;
+
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    // Get list of all instances in the map.
+    all_instance_labels = map_->getInstanceList();
+  }
+  // Check if queried instance id is in the list of instance ids in the map.
+  auto instance_label_it = std::find(all_instance_labels.begin(),
+                                     all_instance_labels.end(), instance_label);
+
+  if (instance_label_it == all_instance_labels.end()) {
+    LOG(ERROR) << "The queried instance ID does not exist in the map.";
+    return false;
+  }
+
+  instance_labels.push_back(instance_label);
+  bool kSaveSegmentsAsPly = false;
+  extractInstanceSegments(instance_labels, kSaveSegmentsAsPly,
+                          &instance_label_to_layers);
+
+  auto it = instance_label_to_layers.find(instance_label);
+  CHECK(it != instance_label_to_layers.end())
+      << "Layers for instance label " << instance_label
+      << " could not be extracted.";
+
+  const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+
+  pcl::PointCloud<pcl::PointSurfel>::Ptr instance_pointcloud(
+      new pcl::PointCloud<pcl::PointSurfel>);
+
+  convertVoxelGridToPointCloud(segment_tsdf_layer, mesh_config_,
+                               instance_pointcloud.get());
+
+  Eigen::Vector3f bbox_translation;
+  Eigen::Quaternionf bbox_quaternion;
+  Eigen::Vector3f bbox_size;
+  computeAlignedBoundingBox(instance_pointcloud, &bbox_translation,
+                            &bbox_quaternion, &bbox_size);
+
+  fillAlignedBoundingBoxMsg(bbox_translation, bbox_quaternion, bbox_size,
+                            &response.bbox);
+
+  if (compute_and_publish_bbox_) {
+    visualization_msgs::Marker bbox_marker;
+    fillBoundingBoxMarkerMsg(world_frame_, instance_label, bbox_translation,
+                             bbox_quaternion, bbox_size, &bbox_marker);
+    bbox_pub_->publish(bbox_marker);
+
+    geometry_msgs::TransformStamped bbox_tf;
+    fillBoundingBoxTfMsg(world_frame_, std::to_string(instance_label),
+                         bbox_translation, bbox_quaternion, &bbox_tf);
+    tf_broadcaster_.sendTransform(bbox_tf);
+  }
+  return true;
+}
+
+bool Controller::extractInstancesCallback(
+    std_srvs::Empty::Request& /*request*/,
+    std_srvs::Empty::Response& /*response*/) {
   InstanceLabels instance_labels;
   std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>
       instance_label_to_layers;
@@ -601,37 +800,53 @@ bool Controller::extractInstancesCallback(std_srvs::Empty::Request& request,
         label_tsdf_layers_mutex_);
     // Get list of all instances in the map.
     instance_labels = map_->getInstanceList();
+  }
+
+  bool kSaveSegmentsAsPly = true;
+  extractInstanceSegments(instance_labels, kSaveSegmentsAsPly,
+                          &instance_label_to_layers);
+
+  return true;
+}
+
+void Controller::extractInstanceSegments(
+    InstanceLabels instance_labels, bool save_segments_as_ply,
+    std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>*
+        instance_label_to_layers) {
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
 
     // Extract the TSDF and label layers corresponding to each instance segment.
-    constexpr bool kLabelsListIsComplete = true;
-    map_->extractInstanceLayers(instance_labels, &instance_label_to_layers);
+    map_->extractInstanceLayers(instance_labels, instance_label_to_layers);
   }
 
   for (const InstanceLabel instance_label : instance_labels) {
-    auto it = instance_label_to_layers.find(instance_label);
-    CHECK(it != instance_label_to_layers.end())
+    auto it = instance_label_to_layers->find(instance_label);
+    CHECK(it != instance_label_to_layers->end())
         << "Layers for instance label " << instance_label
         << " could not be extracted.";
 
-    const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
-    const Layer<LabelVoxel>& segment_label_layer = it->second.second;
+    if (save_segments_as_ply) {
+      const Layer<TsdfVoxel>& segment_tsdf_layer = it->second.first;
+      const Layer<LabelVoxel>& segment_label_layer = it->second.second;
 
-    CHECK_EQ(voxblox::file_utils::makePath("gsm_instances", 0777), 0);
+      CHECK_EQ(voxblox::file_utils::makePath("vpp_instances", 0777), 0);
 
-    std::string mesh_filename = "gsm_instances/gsm_segment_mesh_label_" +
-                                std::to_string(instance_label) + ".ply";
+      std::string mesh_filename = "vpp_instances/vpp_instance_segment_label_" +
+                                  std::to_string(instance_label) + ".ply";
 
-    bool success = voxblox::io::outputLayerAsPly(
-        segment_tsdf_layer, mesh_filename,
-        voxblox::io::PlyOutputTypes::kSdfIsosurface);
+      bool success = voxblox::io::outputLayerAsPly(
+          segment_tsdf_layer, mesh_filename,
+          voxblox::io::PlyOutputTypes::kSdfIsosurface);
 
-    if (success) {
-      ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
-    } else {
-      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
+      if (success) {
+        ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
+      } else {
+        ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
+      }
     }
   }
-  return true;
 }
 
 bool Controller::lookupTransform(const std::string& from_frame,
@@ -677,12 +892,8 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
         mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
                                              clear_updated_flag);
         if (enable_semantic_instance_segmentation_) {
-          all_semantic_labels_.clear();
           mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
                                                   clear_updated_flag);
-          for (auto sl : all_semantic_labels_) {
-            LOG(ERROR) << classes[(unsigned)sl];
-          }
           mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
                                                   clear_updated_flag);
           mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
@@ -814,7 +1025,7 @@ void Controller::computeAlignedBoundingBox(
 
   ApproxMVBB::Matrix33 A_KI = oobb.m_q_KI.matrix().transpose();
   const int size = points.cols();
-  for (unsigned int i = 0; i < size; ++i) {
+  for (unsigned int i = 0u; i < size; ++i) {
     oobb.unite(A_KI * points.col(i));
   }
 

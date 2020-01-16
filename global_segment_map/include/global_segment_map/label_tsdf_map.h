@@ -62,11 +62,19 @@ class LabelTsdfMap {
 
   // Get the list of all labels
   // for which the voxel count is greater than 0.
+  // NOT THREAD SAFE.
   Labels getLabelList();
 
   // Get the list of all instance labels
   // for which the voxel count is greater than 0.
+  // NOT THREAD SAFE.
   InstanceLabels getInstanceList();
+
+  // Get the list of semantic categories of all instances
+  // for which the voxel count is greated than 0.
+  // NOT THREAD SAFE.
+  void getSemanticInstanceList(InstanceLabels* instance_labels,
+                               SemanticLabels* semantic_labels);
 
   /**
    * Extracts separate tsdf and label layers from the gsm, for every given

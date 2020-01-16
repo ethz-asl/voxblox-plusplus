@@ -36,6 +36,36 @@ InstanceLabels LabelTsdfMap::getInstanceList() {
   return instance_labels;
 }
 
+void LabelTsdfMap::getSemanticInstanceList(InstanceLabels* instance_labels,
+                                           SemanticLabels* semantic_labels) {
+  std::set<InstanceLabel> instance_labels_set;
+  Labels labels = getLabelList();
+
+  float kFramesCountThresholdFactor = 0.1f;
+
+  for (const Label label : labels) {
+    InstanceLabel instance_label =
+        semantic_instance_label_fusion_.getInstanceLabel(
+            label, kFramesCountThresholdFactor);
+
+    // If the label maps to an instance,
+    // fetch the corresponding semantic class.
+    if (instance_label != 0u) {
+      // As multiple labels can match to a same instance_label,
+      // make sure to only add once each instance_label.
+      auto ret = instance_labels_set.emplace(instance_label);
+      if (ret.second) {
+        SemanticLabel semantic_label =
+            semantic_instance_label_fusion_.getSemanticLabel(label);
+        CHECK_NE(semantic_label, 0u)
+            << "Instance assigned to semantic category BACKGROUND.";
+        instance_labels->push_back(instance_label);
+        semantic_labels->push_back(semantic_label);
+      }
+    }
+  }
+}
+
 void LabelTsdfMap::extractSegmentLayers(
     const std::vector<Label>& labels,
     std::unordered_map<Label, LayerPair>* label_layers_map,

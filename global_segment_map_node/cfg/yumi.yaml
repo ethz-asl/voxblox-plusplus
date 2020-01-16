@@ -1,0 +1,25 @@
+segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
+world_frame_id: "/base_link"
+
+voxblox:
+  voxel_size: 0.01
+  voxels_per_side: 8
+  truncation_distance_factor: 5.0
+  voxel_carving_enabled: true
+  max_ray_length_m: 3
+
+pairwise_confidence_merging:
+  enable_pairwise_confidence_merging: true
+  merging_min_overlap_ratio: 0.15
+  merging_min_frame_count: 3
+
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: true
+
+meshing:
+  visualize: true
+  update_mesh_every_n_sec: 2.0
+  publish_segment_mesh: false
+  publish_scene_mesh: true
+  compute_and_publish_bbox: true
+  mesh_filename: "vpp_yumi_mesh.ply"

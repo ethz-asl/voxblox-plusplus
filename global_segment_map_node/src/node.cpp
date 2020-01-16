@@ -19,14 +19,21 @@ int main(int argc, char** argv) {
   ros::NodeHandle node_handle_private("~");
 
   voxblox::voxblox_gsm::Controller* controller;
-  LOG(INFO) << "Starting Voxblox++";
+  LOG(INFO) << "Starting Voxblox++ node.";
   controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
+
+  ros::ServiceServer reset_map_srv;
+  controller->advertiseResetMapService(&reset_map_srv);
+
+  ros::ServiceServer toggle_integration_srv;
+  controller->advertiseToggleIntegrationService(&toggle_integration_srv);
 
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
   if (controller->publish_scene_mesh_) {
     controller->advertiseSceneMeshTopic();
+    controller->advertiseSceneCloudTopic();
   }
 
   if (controller->compute_and_publish_bbox_) {
@@ -36,12 +43,22 @@ int main(int argc, char** argv) {
   ros::ServiceServer generate_mesh_srv;
   controller->advertiseGenerateMeshService(&generate_mesh_srv);
 
+  ros::ServiceServer get_scene_pointcloud;
+  controller->advertiseGetScenePointcloudService(&get_scene_pointcloud);
+
   ros::ServiceServer save_segments_as_mesh_srv;
   controller->advertiseSaveSegmentsAsMeshService(&save_segments_as_mesh_srv);
 
   ros::ServiceServer extract_instances_srv;
+  ros::ServiceServer get_list_semantic_instances_srv;
+  ros::ServiceServer get_instance_bounding_box_srv;
+
   if (controller->enable_semantic_instance_segmentation_) {
     controller->advertiseExtractInstancesService(&extract_instances_srv);
+    controller->advertiseGetListSemanticInstancesService(
+        &get_list_semantic_instances_srv);
+    controller->advertiseGetAlignedInstanceBoundingBoxService(
+        &get_instance_bounding_box_srv);
   }
 
   // Spinner that uses a number of threads equal to the number of cores.

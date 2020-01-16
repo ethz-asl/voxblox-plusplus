@@ -110,14 +110,15 @@ SemanticLabel SemanticInstanceLabelFusion::getSemanticLabel(
     const Label& label) const {
   SemanticLabel semantic_label = 0u;
 
-  if (getInstanceLabel(label) == 0u) {
+  if (getInstanceLabel(label) == BackgroundLabel) {
     return semantic_label;
   }
   int max_count = 0;
   auto label_it = label_class_count_.find(label);
   if (label_it != label_class_count_.end()) {
     for (auto const& class_count : label_it->second) {
-      if (class_count.second > max_count && class_count.first != 0u) {
+      if (class_count.second > max_count &&
+          class_count.first != BackgroundLabel) {
         semantic_label = class_count.first;
         max_count = class_count.second;
       }

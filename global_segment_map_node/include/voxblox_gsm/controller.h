@@ -7,7 +7,6 @@
 #include <vector>
 
 #include <geometry_msgs/Transform.h>
-
 #include <global_segment_map/label_tsdf_integrator.h>
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
@@ -21,6 +20,9 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
+#include <vpp_msgs/GetAlignedInstanceBoundingBox.h>
+#include <vpp_msgs/GetListSemanticInstances.h>
+#include <vpp_msgs/GetScenePointcloud.h>
 
 namespace voxblox {
 namespace voxblox_gsm {
@@ -38,15 +40,31 @@ class Controller {
 
   void advertiseSceneMeshTopic();
 
+  void advertiseSceneCloudTopic();
+
   void advertiseBboxTopic();
 
+  void advertiseResetMapService(ros::ServiceServer* reset_map_srv);
+
+  void advertiseToggleIntegrationService(
+      ros::ServiceServer* toggle_integration_srv);
+
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
+
+  void advertiseGetScenePointcloudService(
+      ros::ServiceServer* get_scene_pointcloud);
 
   void advertiseSaveSegmentsAsMeshService(
       ros::ServiceServer* save_segments_as_mesh_srv);
 
   void advertiseExtractInstancesService(
       ros::ServiceServer* extract_instances_srv);
+
+  void advertiseGetListSemanticInstancesService(
+      ros::ServiceServer* get_list_semantic_categories_srv);
+
+  void advertiseGetAlignedInstanceBoundingBoxService(
+      ros::ServiceServer* get_instance_bounding_box_srv);
 
   bool enable_semantic_instance_segmentation_;
 
@@ -61,17 +79,35 @@ class Controller {
 
   void integrateFrame(ros::Time msg_timestamp);
 
+  bool resetMapCallback(std_srvs::Empty::Request& request,
+                        std_srvs::Empty::Response& response);
+
+  bool toggleIntegrationCallback(std_srvs::SetBool::Request& request,
+                                 std_srvs::SetBool::Response& response);
+
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
 
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
 
+  bool getScenePointcloudCallback(
+      vpp_msgs::GetScenePointcloud::Request& /* request */,
+      vpp_msgs::GetScenePointcloud::Response& response);
+
   bool saveSegmentsAsMeshCallback(std_srvs::Empty::Request& request,
                                   std_srvs::Empty::Response& response);
 
   bool extractInstancesCallback(std_srvs::Empty::Request& request,
                                 std_srvs::Empty::Response& response);
+
+  bool getListSemanticInstancesCallback(
+      vpp_msgs::GetListSemanticInstances::Request& /* request */,
+      vpp_msgs::GetListSemanticInstances::Response& response);
+
+  bool getAlignedInstanceBoundingBoxCallback(
+      vpp_msgs::GetAlignedInstanceBoundingBox::Request& request,
+      vpp_msgs::GetAlignedInstanceBoundingBox::Response& response);
 
   bool lookupTransform(const std::string& from_frame,
                        const std::string& to_frame, const ros::Time& timestamp,
@@ -81,10 +117,18 @@ class Controller {
 
   void updateMeshEvent(const ros::TimerEvent& e);
 
+  // NOT thread safe.
+  void resetMeshIntegrators();
+
   void computeAlignedBoundingBox(
       const pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud,
       Eigen::Vector3f* bbox_translation, Eigen::Quaternionf* bbox_quaternion,
       Eigen::Vector3f* bbox_size);
+
+  void extractInstanceSegments(
+      InstanceLabels instance_labels, bool save_segments_as_ply,
+      std::unordered_map<InstanceLabel, LabelTsdfMap::LayerPair>*
+          instance_label_to_layers);
 
   ros::NodeHandle* node_handle_private_;
 
@@ -95,6 +139,7 @@ class Controller {
 
   std::string world_frame_;
 
+  bool integration_on_;
   bool received_first_message_;
 
   LabelTsdfMap::Config map_config_;
@@ -108,6 +153,7 @@ class Controller {
   MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config_;
   ros::Timer update_mesh_timer_;
   ros::Publisher* scene_mesh_pub_;
+  ros::Publisher* scene_cloud_pub_;
   MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
   std::string mesh_filename_;
 
@@ -124,7 +170,6 @@ class Controller {
   std::map<Label, std::set<Label>> merges_to_publish_;
 
   // Semantic labels.
-  std::set<SemanticLabel> all_semantic_labels_;
   std::map<Label, std::map<SemanticLabel, int>>* label_class_count_ptr_;
 
   // Current frame label propagation.

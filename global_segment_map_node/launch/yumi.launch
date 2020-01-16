@@ -1,0 +1,24 @@
+<launch>
+  <arg name="visualize" default="false" />
+  <arg name="sensor" default="realsense"/>
+
+  <node name="mask_rcnn" pkg="mask_rcnn_ros" type="mask_rcnn_node.py" output="log">
+    <remap from="~input" to="/camera/color/image_raw" />
+    <param name="~visualization" value="$(arg visualize)" />
+  </node>
+
+  <include file="$(find depth_segmentation)/launch/semantic_instance_segmentation.launch">
+    <arg name="depth_segmentation_params_file" value="$(find depth_segmentation)/cfg/$(arg sensor)_config.yaml"/>
+    <arg name="sensor_topics_file" value="$(find depth_segmentation)/cfg/$(arg sensor)_topics.yaml"/>
+    <arg name="visualize" value="$(arg visualize)"/>
+  </include>
+
+  <arg name="gsm_node_params_name" default="$(find gsm_node)/cfg/yumi.yaml"/>
+
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+    <rosparam command="load" file="$(arg gsm_node_params_name)" />
+    <param name="meshing/visualize" value="$(arg visualize)"/>
+    <param name="meshing/update_mesh_every_n_sec" value="0.0" unless="$(arg visualize)"/>
+  </node>
+
+</launch>

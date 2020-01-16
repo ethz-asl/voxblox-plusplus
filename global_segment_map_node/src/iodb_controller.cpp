@@ -3,15 +3,12 @@
 
 #include "voxblox_gsm/iodb_controller.h"
 
+#include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-
-#include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
-
 #include <voxblox/integrator/merge_integration.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/mesh_vis.h>
-
 #include "voxblox_gsm/conversions.h"
 #include "voxblox_gsm/feature_ros_tools.h"
 

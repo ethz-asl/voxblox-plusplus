@@ -6,8 +6,7 @@ namespace voxblox {
 MeshLabelIntegrator::MeshLabelIntegrator(
     const MeshIntegratorConfig& config,
     const MeshLabelIntegrator::LabelTsdfConfig& label_tsdf_config,
-    LabelTsdfMap* map, MeshLayer* mesh_layer,
-    std::set<SemanticLabel>* all_semantic_labels, bool* remesh)
+    LabelTsdfMap* map, MeshLayer* mesh_layer, bool* remesh)
     : MeshIntegrator(config, CHECK_NOTNULL(map)->getTsdfLayerPtr(), mesh_layer),
       label_tsdf_config_(label_tsdf_config),
       label_layer_mutable_ptr_(CHECK_NOTNULL(map->getLabelLayerPtr())),
@@ -18,7 +17,6 @@ MeshLabelIntegrator::MeshLabelIntegrator(
       instance_color_map_(),
       semantic_color_map_(
           SemanticColorMap::create(label_tsdf_config.class_task)),
-      all_semantic_labels_ptr_(all_semantic_labels),
       remesh_ptr_(remesh) {
   if (remesh_ptr_ == nullptr) {
     remesh_ptr_ = &remesh_;
@@ -28,8 +26,7 @@ MeshLabelIntegrator::MeshLabelIntegrator(
 MeshLabelIntegrator::MeshLabelIntegrator(
     const MeshIntegratorConfig& config,
     const MeshLabelIntegrator::LabelTsdfConfig& label_tsdf_config,
-    const LabelTsdfMap& map, MeshLayer* mesh_layer,
-    std::set<SemanticLabel>* all_semantic_labels, bool* remesh)
+    const LabelTsdfMap& map, MeshLayer* mesh_layer, bool* remesh)
     : MeshIntegrator(config, map.getTsdfLayer(), mesh_layer),
       label_tsdf_config_(label_tsdf_config),
       label_layer_mutable_ptr_(nullptr),
@@ -40,7 +37,6 @@ MeshLabelIntegrator::MeshLabelIntegrator(
       instance_color_map_(),
       semantic_color_map_(
           SemanticColorMap::create(label_tsdf_config.class_task)),
-      all_semantic_labels_ptr_(all_semantic_labels),
       remesh_ptr_(remesh) {
   if (remesh_ptr_ == nullptr) {
     remesh_ptr_ = &remesh_;
@@ -231,11 +227,13 @@ void MeshLabelIntegrator::updateMeshColor(const Block<LabelVoxel>& label_block,
           label_color_map_.getColor(voxel.label, &(mesh->colors[i]));
         } break;
         case kSemantic: {
-          SemanticLabel semantic_label =
-              semantic_instance_label_fusion_ptr_->getSemanticLabel(
-                  voxel.label);
-          // TODO(margaritaG) : fix this.
-          // all_semantic_labels_ptr_->insert(semantic_label);
+          SemanticLabel semantic_label = 0u;
+          InstanceLabel instance_label = getInstanceLabel(voxel.label);
+          if (instance_label != BackgroundLabel) {
+            semantic_label =
+                semantic_instance_label_fusion_ptr_->getSemanticLabel(
+                    voxel.label);
+          }
           semantic_color_map_.getColor(semantic_label, &(mesh->colors[i]));
         } break;
         case kInstance: {
@@ -244,7 +242,7 @@ void MeshLabelIntegrator::updateMeshColor(const Block<LabelVoxel>& label_block,
         } break;
         case kMerged: {
           InstanceLabel instance_label = getInstanceLabel(voxel.label);
-          if (instance_label == 0u) {
+          if (instance_label == BackgroundLabel) {
             label_color_map_.getColor(voxel.label, &(mesh->colors[i]));
           } else {
             instance_color_map_.getColor(instance_label, &(mesh->colors[i]));
@@ -268,11 +266,13 @@ void MeshLabelIntegrator::updateMeshColor(const Block<LabelVoxel>& label_block,
               voxel, label_tsdf_config_.max_confidence, &(mesh->colors[i]));
         } break;
         case kSemantic: {
-          SemanticLabel semantic_label =
-              semantic_instance_label_fusion_ptr_->getSemanticLabel(
-                  voxel.label);
-          // TODO(margaritaG) : fix this.
-          // all_semantic_labels_ptr_->insert(semantic_label);
+          SemanticLabel semantic_label = 0u;
+          InstanceLabel instance_label = getInstanceLabel(voxel.label);
+          if (instance_label != BackgroundLabel) {
+            semantic_label =
+                semantic_instance_label_fusion_ptr_->getSemanticLabel(
+                    voxel.label);
+          }
           semantic_color_map_.getColor(semantic_label, &(mesh->colors[i]));
         } break;
         case kInstance: {
@@ -281,7 +281,7 @@ void MeshLabelIntegrator::updateMeshColor(const Block<LabelVoxel>& label_block,
         } break;
         case kMerged: {
           InstanceLabel instance_label = getInstanceLabel(voxel.label);
-          if (instance_label == 0u) {
+          if (instance_label == BackgroundLabel) {
             label_color_map_.getColor(voxel.label, &(mesh->colors[i]));
           } else {
             instance_color_map_.getColor(instance_label, &(mesh->colors[i]));
