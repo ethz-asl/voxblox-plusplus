@@ -1,21 +1,10 @@
-segment_point_cloud_topic: "/depth_segmentation_node/object_segment"
 world_frame_id: "map"
 
 voxblox:
   voxel_size: 0.02
-  voxels_per_side: 8
   truncation_distance_factor: 5.0
   voxel_carving_enabled: true
   max_ray_length_m: 3
-
-gsm:
-  min_label_voxel_count: 20
-  label_propagation_td_factor: 1.0
-
-pairwise_confidence_merging:
-  enable_pairwise_confidence_merging: true
-  merging_min_overlap_ratio: 0.15
-  merging_min_frame_count: 3
 
 semantic_instance_segmentation:
   enable_semantic_instance_segmentation: true
@@ -23,6 +12,4 @@ semantic_instance_segmentation:
 meshing:
   visualize: true
   update_mesh_every_n_sec: 2.0
-  publish_segment_mesh: false
   publish_scene_mesh: false
-  mesh_filename: "gsm_mobmi_mesh.ply"

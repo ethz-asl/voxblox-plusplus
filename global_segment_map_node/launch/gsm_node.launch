@@ -1,0 +1,11 @@
+<launch>
+  <arg name="scene_name" default="asl_office_floor" />
+  <arg name="visualize" default="false" />
+
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
+    <rosparam command="load" file="$(find gsm_node)/cfg/default.yaml" />
+    <rosparam command="load" file="$(find gsm_node)/cfg/$(arg scene_name).yaml" />
+    <param name="meshing/visualize" value="$(arg visualize)" />
+    <param name="meshing/update_mesh_every_n_sec" value="0.0" unless="$(arg visualize)" />
+  </node>
+</launch>
