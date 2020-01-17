@@ -1,9 +1,0 @@
-package voxblox;
-
-message FeatureLayerProto {
-  optional double block_size = 1;
-
-  optional double feature_descriptor_size = 2;
-
-  optional string type = 3;
-}
