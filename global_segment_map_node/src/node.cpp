@@ -5,8 +5,7 @@
 #include <glog/logging.h>
 #include <ros/ros.h>
 
-#include "voxblox_gsm/controller.h"
-#include "voxblox_gsm/sliding_window_controller.h"
+#include "global_segment_map_node/controller.h"
 
 int main(int argc, char** argv) {
   ros::init(argc, argv, "gsm_node");

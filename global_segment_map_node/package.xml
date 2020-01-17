@@ -21,7 +21,6 @@
 
   <depend>gflags_catkin</depend>
   <depend>global_segment_map</depend>
-  <depend>global_feature_map</depend>
   <depend>glog_catkin</depend>
   <depend>message_generation</depend>
   <depend>message_runtime</depend>
