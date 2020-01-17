@@ -1,6 +1,0 @@
-depth_image_sub_topic: /camera/depth/image_raw
-rgb_image_sub_topic: /camera/rgb/image_raw
-depth_camera_info_sub_topic: /camera/depth/camera_info
-rgb_camera_info_sub_topic: /camera/rgb/camera_info
-world_frame_id: "world"
-imu_frame_id: "none"
