@@ -35,9 +35,6 @@
     local-name: numpy_eigen
     uri: git@github.com:ethz-asl/numpy_eigen.git
 - git:
-    local-name: modelify_msgs
-    uri: git@github.com:ethz-asl/modelify_msgs.git
-- git:
     local-name: opencv3_catkin
     uri: git@github.com:ethz-asl/opencv3_catkin.git
 - git:
@@ -47,6 +44,3 @@
 - git:
     local-name: vpp_msgs
     uri: git@github.com:ethz-asl/vpp_msgs.git
-- git:
-    local-name: yaml_cpp_catkin
-    uri: git@github.com:ethz-asl/yaml_cpp_catkin.git

@@ -11,7 +11,9 @@ namespace voxblox {
 class Visualizer {
  public:
   Visualizer(const std::vector<std::shared_ptr<MeshLayer>>& mesh_layers,
-             bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr);
+             bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr,
+             std::vector<double> camera_distances,
+             std::vector<double> clip_distances, bool save_visualizer_frames);
 
   void visualizeMesh();
 
@@ -21,6 +23,11 @@ class Visualizer {
   bool* mesh_layer_updated_;
 
   size_t frame_count_;
+
+  std::vector<double> camera_position_;
+  std::vector<double> clip_distances_;
+
+  bool save_visualizer_frames_;
 };
 }  // namespace voxblox
 

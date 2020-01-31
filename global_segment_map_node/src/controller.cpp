@@ -135,6 +135,15 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       compute_and_publish_bbox_(false),
       use_label_propagation_(true) {
   CHECK_NOTNULL(node_handle_private_);
+
+  bool verbose_log = false;
+  node_handle_private_->param<bool>("debug/verbose_log", verbose_log,
+                                    verbose_log);
+
+  if (verbose_log) {
+    FLAGS_stderrthreshold = 0;
+  }
+
   node_handle_private_->param<std::string>("world_frame_id", world_frame_,
                                            world_frame_);
 
@@ -146,7 +155,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<int>("voxblox/voxels_per_side", voxels_per_side,
                                    voxels_per_side);
   if (!isPowerOfTwo(voxels_per_side)) {
-    ROS_ERROR("voxels_per_side must be a power of 2, setting to default value");
+    LOG(ERROR)
+        << "voxels_per_side must be a power of 2, setting to default value.";
     voxels_per_side = map_config_.voxels_per_side;
   }
   map_config_.voxels_per_side = voxels_per_side;
@@ -245,6 +255,20 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   // Visualization settings.
   bool visualize = false;
   node_handle_private_->param<bool>("meshing/visualize", visualize, visualize);
+
+  bool save_visualizer_frames = false;
+  node_handle_private_->param<bool>("debug/save_visualizer_frames",
+                                    save_visualizer_frames,
+                                    save_visualizer_frames);
+
+  std::vector<double> camera_position;
+  std::vector<double> clip_distances;
+  node_handle_private_->param<std::vector<double>>(
+      "meshing/visualizer_parameters/camera_position", camera_position,
+      camera_position);
+  node_handle_private_->param<std::vector<double>>(
+      "meshing/visualizer_parameters/clip_distances", clip_distances,
+      clip_distances);
   if (visualize) {
     std::vector<std::shared_ptr<MeshLayer>> mesh_layers;
     mesh_layers.push_back(mesh_label_layer_);
@@ -254,8 +278,10 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       mesh_layers.push_back(mesh_semantic_layer_);
       mesh_layers.push_back(mesh_merged_layer_);
     }
+
     visualizer_ =
-        new Visualizer(mesh_layers, &mesh_layer_updated_, &mesh_layer_mutex_);
+        new Visualizer(mesh_layers, &mesh_layer_updated_, &mesh_layer_mutex_,
+                       camera_position, clip_distances, save_visualizer_frames);
     viz_thread_ = std::thread(&Visualizer::visualizeMesh, visualizer_);
   }
 
@@ -270,9 +296,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
 
 #ifndef APPROXMVBB_AVAILABLE
   if (compute_and_publish_bbox_) {
-    ROS_WARN_STREAM(
-        "ApproxMVBB is not available and therefore "
-        "bounding box functionality is disabled.");
+    LOG(WARNING) << "ApproxMVBB is not available and therefore "
+                    "bounding box functionality is disabled.";
   }
   compute_and_publish_bbox_ = false;
 #endif
@@ -429,24 +454,15 @@ void Controller::processSegment(
     timing::Timer label_candidates_timer("compute_label_candidates");
 
     if (use_label_propagation_) {
-      ros::WallTime start = ros::WallTime::now();
       integrator_->computeSegmentLabelCandidates(
           segment, &segment_label_candidates, &segment_merge_candidates_);
-
-      ros::WallTime end = ros::WallTime::now();
-      ROS_INFO(
-          "Computed label candidates for a pointcloud of size %lu in %f "
-          "seconds.",
-          segment->points_C_.size(), (end - start).toSec());
     }
-
-    ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
   }
 }
 
 void Controller::integrateFrame(ros::Time msg_timestamp) {
-  ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
-           ++integrated_frames_count_, msg_timestamp.toSec());
+  LOG(INFO) << "Integrating frame n." << ++integrated_frames_count_
+            << ", timestamp of frame: " << msg_timestamp.toSec();
   ros::WallTime start;
   ros::WallTime end;
 
@@ -459,8 +475,8 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
                                         &segment_merge_candidates_);
     propagation_timer.Stop();
     end = ros::WallTime::now();
-    ROS_INFO("Decided labels for %lu pointclouds in %f seconds.",
-             segments_to_integrate_.size(), (end - start).toSec());
+    LOG(INFO) << "Decided labels for " << segments_to_integrate_.size()
+              << " pointclouds in " << (end - start).toSec() << " seconds.";
   }
 
   constexpr bool kIsFreespacePointcloud = false;
@@ -500,12 +516,14 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
 
   integrate_timer.Stop();
   end = ros::WallTime::now();
-  ROS_INFO(
-      "Integrated %lu pointclouds in %f secs, have %lu tsdf "
-      "and %lu label blocks.",
-      segments_to_integrate_.size(), (end - start).toSec(),
-      map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks(),
-      map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks());
+  LOG(INFO) << "Integrated " << segments_to_integrate_.size()
+            << " pointclouds in " << (end - start).toSec() << " secs. ";
+
+  LOG(INFO) << "The map contains "
+            << map_->getTsdfLayerPtr()->getNumberOfAllocatedBlocks()
+            << " tsdf and "
+            << map_->getLabelLayerPtr()->getNumberOfAllocatedBlocks()
+            << " label blocks.";
 
   start = ros::WallTime::now();
 
@@ -513,10 +531,7 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
   integrator_->getLabelsToPublish(&segment_labels_to_publish_);
 
   end = ros::WallTime::now();
-  ROS_INFO(
-      "Merged segments and fetched the ones to publish in %f "
-      "seconds.",
-      (end - start).toSec());
+  LOG(INFO) << "Merged segments in " << (end - start).toSec() << " seconds.";
   start = ros::WallTime::now();
 
   segment_merge_candidates_.clear();
@@ -527,8 +542,10 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
   segments_to_integrate_.clear();
 
   end = ros::WallTime::now();
-  ROS_INFO("Cleared candidates and memory in %f seconds.",
-           (end - start).toSec());
+  LOG(INFO) << "Cleared candidates and memory in " << (end - start).toSec()
+            << " seconds.";
+
+  LOG(INFO) << "Timings: " << std::endl << timing::Timing::Print() << std::endl;
 }
 
 void Controller::segmentPointCloudCallback(
@@ -547,7 +564,7 @@ void Controller::segmentPointCloudCallback(
     if (segments_to_integrate_.size() > 0u) {
       integrateFrame(segment_point_cloud_msg->header.stamp);
     } else {
-      ROS_INFO("No segments to integrate.");
+      LOG(INFO) << "No segments to integrate.";
     }
   }
   received_first_message_ = true;
@@ -697,9 +714,9 @@ bool Controller::saveSegmentsAsMeshCallback(
         voxblox::io::PlyOutputTypes::kSdfIsosurface);
 
     if (success) {
-      ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
+      LOG(INFO) << "Output segment file as PLY: " << mesh_filename.c_str();
     } else {
-      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
+      LOG(INFO) << "Failed to output mesh as PLY:" << mesh_filename.c_str();
     }
   }
 
@@ -841,9 +858,9 @@ void Controller::extractInstanceSegments(
           voxblox::io::PlyOutputTypes::kSdfIsosurface);
 
       if (success) {
-        ROS_INFO("Output segment file as PLY: %s", mesh_filename.c_str());
+        LOG(INFO) << "Output segment file as PLY: " << mesh_filename.c_str();
       } else {
-        ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename.c_str());
+        LOG(INFO) << "Failed to output mesh as PLY: " << mesh_filename.c_str();
       }
     }
   }
@@ -946,14 +963,14 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     }
     output_mesh_timer.Stop();
     if (success) {
-      ROS_INFO("Output file as PLY: %s", mesh_filename_.c_str());
+      LOG(INFO) << "Output file as PLY: " << mesh_filename_.c_str();
     } else {
-      ROS_INFO("Failed to output mesh as PLY: %s", mesh_filename_.c_str());
+      LOG(INFO) << "Failed to output mesh as PLY: " << mesh_filename_.c_str();
     }
   }
 
-  ROS_INFO_STREAM("Mesh Timings: " << std::endl
-                                   << voxblox::timing::Timing::Print());
+  LOG(INFO) << "Mesh Timings: " << std::endl
+            << voxblox::timing::Timing::Print();
 }
 
 void Controller::updateMeshEvent(const ros::TimerEvent& e) {
@@ -1039,9 +1056,9 @@ void Controller::computeAlignedBoundingBox(
   *bbox_translation = ((min_in_I + max_in_I) / 2).cast<float>();
   *bbox_size = ((oobb.m_maxPoint - oobb.m_minPoint).cwiseAbs()).cast<float>();
 #else
-  ROS_WARN_STREAM(
-      "Bounding box computation is not supported since ApproxMVBB is "
-      "disabled.");
+  LOG(WARNING)
+      << "Bounding box computation is not supported since ApproxMVBB is "
+         "disabled.";
 #endif
 }
 

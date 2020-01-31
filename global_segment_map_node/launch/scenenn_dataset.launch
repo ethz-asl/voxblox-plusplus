@@ -3,6 +3,8 @@
   <arg name="bag_file" default="/path/to/data.bag"/>
   <arg name="visualize" default="true" />
 
+  <!-- Download the dataset here: https://projects.asl.ethz.ch/datasets/doku.php?id=voxblox-plusplus -->
+
   <include file="$(find gsm_node)/launch/vpp_pipeline.launch">
     <arg name="scene_name" value="scenenn" />
     <arg name="sensor_name" value="primesense" />

@@ -13,3 +13,11 @@ meshing:
   visualize: true
   update_mesh_every_n_sec: 2.0
   publish_scene_mesh: false
+  visualizer_parameters:
+    camera_position: [-1.41162,    6.28602,   -0.300336,
+                      -1.49346,    0.117437,   0.0843885,
+                       0.0165199, -0.0624571, -0.997911]
+    clip_distances: [1.79126, 8.86051]
+
+debug:
+  verbose_log: true

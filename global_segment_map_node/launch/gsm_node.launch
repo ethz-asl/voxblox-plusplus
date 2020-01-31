@@ -6,6 +6,5 @@
     <rosparam command="load" file="$(find gsm_node)/cfg/default.yaml" />
     <rosparam command="load" file="$(find gsm_node)/cfg/$(arg scene_name).yaml" />
     <param name="meshing/visualize" value="$(arg visualize)" />
-    <param name="meshing/update_mesh_every_n_sec" value="0.0" unless="$(arg visualize)" />
   </node>
 </launch>
