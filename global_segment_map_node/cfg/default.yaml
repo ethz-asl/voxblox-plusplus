@@ -29,8 +29,16 @@ meshing:
   publish_scene_mesh: true
   mesh_filename: "vpp_mesh.ply"
   compute_and_publish_bbox: false
-  min_weight: 3
+  visualizer_parameters:
+    camera_position: [-0.73071,  1.35896,   6.98444,  # Position - x y z
+                       0.204536, 0.470912,  0.381721, # Focal point - x y z
+                      -0.945969, 0.275475, -0.171043] # View up - x y z
+    clip_distances: [5.87024, 8.29843]
 
 icp:
   enable_icp: false
   keep_track_of_icp_correction: true
+
+debug:
+  verbose_log: false
+  save_visualizer_frames: false

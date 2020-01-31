@@ -13,12 +13,15 @@ int main(int argc, char** argv) {
   google::ParseCommandLineFlags(&argc, &argv, false);
   google::InstallFailureSignalHandler();
 
-  FLAGS_stderrthreshold = 1;
   ros::NodeHandle node_handle;
   ros::NodeHandle node_handle_private("~");
 
   voxblox::voxblox_gsm::Controller* controller;
-  LOG(INFO) << "Starting Voxblox++ node.";
+
+  std::cout << endl
+            << "Voxblox++ Copyright (C) 2016-2020 ASL, ETH Zurich." << endl
+            << endl;
+
   controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
 
   ros::ServiceServer reset_map_srv;

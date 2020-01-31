@@ -4,11 +4,16 @@ namespace voxblox {
 
 Visualizer::Visualizer(
     const std::vector<std::shared_ptr<MeshLayer>>& mesh_layers,
-    bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr)
+    bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr,
+    std::vector<double> camera_position, std::vector<double> clip_distances,
+    bool save_visualizer_frames)
     : mesh_layers_(mesh_layers),
       mesh_layer_updated_(CHECK_NOTNULL(mesh_layer_updated)),
       mesh_layer_mutex_ptr_(CHECK_NOTNULL(mesh_layer_mutex_ptr)),
-      frame_count_(0u) {}
+      frame_count_(0u),
+      camera_position_(camera_position),
+      clip_distances_(clip_distances),
+      save_visualizer_frames_(save_visualizer_frames) {}
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
@@ -33,19 +38,21 @@ void Visualizer::visualizeMesh() {
     // create instances of it in the same thread they will be used in.
     std::shared_ptr<pcl::visualization::PCLVisualizer> visualizer =
         std::make_shared<pcl::visualization::PCLVisualizer>();
-    std::string name = std::to_string(index + 1);
+    std::string name = "Map " + std::to_string(index + 1);
     visualizer->setWindowName(name.c_str());
     visualizer->setBackgroundColor(255, 255, 255);
     visualizer->initCameraParameters();
-    // TODO(grinvalm): find some general default parameters.
-    // scenenn231
-    visualizer->setCameraPosition(-1.41162, 6.28602, -0.300336, -1.49346,
-                                  0.117437, 0.0843885, 0.0165199, -0.0624571,
-                                  -0.997911);
-    visualizer->setCameraClipDistances(1.79126, 8.86051);
 
-    visualizer->setSize(1900, 1300);
-    visualizer->setPosition(650, 800);
+    if (camera_position_.size()) {
+      visualizer->setCameraPosition(
+          camera_position_[0], camera_position_[1], camera_position_[2],
+          camera_position_[3], camera_position_[4], camera_position_[5],
+          camera_position_[6], camera_position_[7], camera_position_[8]);
+    }
+    if (clip_distances_.size()) {
+      visualizer->setCameraClipDistances(clip_distances_[0],
+                                         clip_distances_[1]);
+    }
 
     pcl_visualizers.push_back(visualizer);
   }
@@ -115,9 +122,12 @@ void Visualizer::visualizeMesh() {
           pcl_visualizers[index]->addPolygonMesh(polygon_meshes[index],
                                                  "meshes", 0);
         }
-        pcl_visualizers[index]->saveScreenshot(
-            std::to_string(index) + "/frame_" + std::to_string(frame_count_) +
-            ".png");
+
+        if (save_visualizer_frames_) {
+          pcl_visualizers[index]->saveScreenshot(
+              "vpp_map_" + std::to_string(index) + "/frame_" +
+              std::to_string(frame_count_) + ".png");
+        }
       }
       frame_count_++;
 
