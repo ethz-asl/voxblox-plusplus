@@ -1,0 +1,18 @@
+world_frame_id: "map"
+
+voxblox:
+  voxel_size: 0.02
+  truncation_distance_factor: 5.0
+  voxel_carving_enabled: false
+  max_ray_length_m: 2
+
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: true
+
+meshing:
+  visualize: true
+  publish_scene_mesh: false
+  update_mesh_every_n_sec: 2.0
+
+debug:
+  verbose_log: false

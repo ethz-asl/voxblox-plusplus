@@ -243,15 +243,6 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
 
-  mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
-  if (enable_semantic_instance_segmentation_) {
-    mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
-    mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
-    mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
-  }
-
-  resetMeshIntegrators();
-
   // Visualization settings.
   bool visualize = false;
   node_handle_private_->param<bool>("meshing/visualize", visualize, visualize);
@@ -260,6 +251,21 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
   node_handle_private_->param<bool>("debug/save_visualizer_frames",
                                     save_visualizer_frames,
                                     save_visualizer_frames);
+
+  bool multiple_visualizers = false;
+  node_handle_private_->param<bool>("debug/multiple_visualizers",
+                                    multiple_visualizers_,
+                                    multiple_visualizers_);
+
+  mesh_merged_layer_.reset(new MeshLayer(map_->block_size()));
+
+  if (multiple_visualizers_) {
+    mesh_label_layer_.reset(new MeshLayer(map_->block_size()));
+    mesh_semantic_layer_.reset(new MeshLayer(map_->block_size()));
+    mesh_instance_layer_.reset(new MeshLayer(map_->block_size()));
+  }
+
+  resetMeshIntegrators();
 
   std::vector<double> camera_position;
   std::vector<double> clip_distances;
@@ -271,12 +277,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       clip_distances);
   if (visualize) {
     std::vector<std::shared_ptr<MeshLayer>> mesh_layers;
-    mesh_layers.push_back(mesh_label_layer_);
 
-    if (enable_semantic_instance_segmentation_) {
+    mesh_layers.push_back(mesh_merged_layer_);
+
+    if (multiple_visualizers_) {
+      mesh_layers.push_back(mesh_label_layer_);
       mesh_layers.push_back(mesh_instance_layer_);
       mesh_layers.push_back(mesh_semantic_layer_);
-      mesh_layers.push_back(mesh_merged_layer_);
     }
 
     visualizer_ =
@@ -575,12 +582,18 @@ void Controller::segmentPointCloudCallback(
 
 void Controller::resetMeshIntegrators() {
   label_tsdf_mesh_config_.color_scheme =
-      MeshLabelIntegrator::ColorScheme::kLabel;
-  mesh_label_integrator_.reset(
-      new MeshLabelIntegrator(mesh_config_, label_tsdf_mesh_config_, map_.get(),
-                              mesh_label_layer_.get(), &need_full_remesh_));
+      MeshLabelIntegrator::ColorScheme::kMerged;
 
-  if (enable_semantic_instance_segmentation_) {
+  mesh_merged_integrator_.reset(
+      new MeshLabelIntegrator(mesh_config_, label_tsdf_mesh_config_, map_.get(),
+                              mesh_merged_layer_.get(), &need_full_remesh_));
+
+  if (multiple_visualizers_) {
+    label_tsdf_mesh_config_.color_scheme =
+        MeshLabelIntegrator::ColorScheme::kLabel;
+    mesh_label_integrator_.reset(new MeshLabelIntegrator(
+        mesh_config_, label_tsdf_mesh_config_, map_.get(),
+        mesh_label_layer_.get(), &need_full_remesh_));
     label_tsdf_mesh_config_.color_scheme =
         MeshLabelIntegrator::ColorScheme::kSemantic;
     mesh_semantic_integrator_.reset(new MeshLabelIntegrator(
@@ -591,11 +604,6 @@ void Controller::resetMeshIntegrators() {
     mesh_instance_integrator_.reset(new MeshLabelIntegrator(
         mesh_config_, label_tsdf_mesh_config_, map_.get(),
         mesh_instance_layer_.get(), &need_full_remesh_));
-    label_tsdf_mesh_config_.color_scheme =
-        MeshLabelIntegrator::ColorScheme::kMerged;
-    mesh_merged_integrator_.reset(new MeshLabelIntegrator(
-        mesh_config_, label_tsdf_mesh_config_, map_.get(),
-        mesh_merged_layer_.get(), &need_full_remesh_));
   }
 }
 
@@ -903,34 +911,23 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
     {
       std::lock_guard<std::mutex> label_tsdf_layers_lock(
           label_tsdf_layers_mutex_);
+
+      bool only_mesh_updated_blocks = true;
       if (clear_mesh) {
-        constexpr bool only_mesh_updated_blocks = false;
-        constexpr bool clear_updated_flag = true;
+        only_mesh_updated_blocks = false;
+      }
+
+      constexpr bool clear_updated_flag = true;
+      mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+                                            clear_updated_flag);
+
+      if (multiple_visualizers_) {
         mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
                                              clear_updated_flag);
-        if (enable_semantic_instance_segmentation_) {
-          mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                  clear_updated_flag);
-          mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                  clear_updated_flag);
-          mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+        mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
                                                 clear_updated_flag);
-        }
-
-      } else {
-        constexpr bool only_mesh_updated_blocks = true;
-        constexpr bool clear_updated_flag = true;
-        mesh_label_integrator_->generateMesh(only_mesh_updated_blocks,
-                                             clear_updated_flag);
-
-        if (enable_semantic_instance_segmentation_) {
-          mesh_semantic_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                  clear_updated_flag);
-          mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
-                                                  clear_updated_flag);
-          mesh_merged_integrator_->generateMesh(only_mesh_updated_blocks,
+        mesh_instance_integrator_->generateMesh(only_mesh_updated_blocks,
                                                 clear_updated_flag);
-        }
       }
       generate_mesh_timer.Stop();
     }
@@ -942,7 +939,7 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
       voxblox_msgs::Mesh mesh_msg;
       // TODO(margaritaG) : this function cleans up empty meshes, and this seems
       // to trouble the visualizer. Investigate.
-      generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
+      generateVoxbloxMeshMsg(mesh_merged_layer_, ColorMode::kColor, &mesh_msg);
       mesh_msg.header.frame_id = world_frame_;
       scene_mesh_pub_->publish(mesh_msg);
       publish_mesh_timer.Stop();
@@ -951,15 +948,15 @@ void Controller::generateMesh(bool clear_mesh) {  // NOLINT
 
   if (!mesh_filename_.empty()) {
     timing::Timer output_mesh_timer("mesh/output");
-    bool success = outputMeshLayerAsPly("label_" + mesh_filename_, false,
-                                        *mesh_label_layer_);
-    if (enable_semantic_instance_segmentation_) {
+    bool success = outputMeshLayerAsPly("merged_" + mesh_filename_, false,
+                                        *mesh_merged_layer_);
+    if (multiple_visualizers_) {
+      success &= outputMeshLayerAsPly("label_" + mesh_filename_, false,
+                                      *mesh_label_layer_);
       success &= outputMeshLayerAsPly("semantic_" + mesh_filename_, false,
                                       *mesh_semantic_layer_);
       success &= outputMeshLayerAsPly("instance_" + mesh_filename_, false,
                                       *mesh_instance_layer_);
-      success &= outputMeshLayerAsPly("merged_" + mesh_filename_, false,
-                                      *mesh_merged_layer_);
     }
     output_mesh_timer.Stop();
     if (success) {
@@ -985,9 +982,9 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
       need_full_remesh_ = false;
     }
 
-    if (enable_semantic_instance_segmentation_) {
+    if (multiple_visualizers_) {
       bool clear_updated_flag = false;
-      mesh_layer_updated_ |= mesh_merged_integrator_->generateMesh(
+      mesh_layer_updated_ |= mesh_label_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
       mesh_layer_updated_ |= mesh_instance_integrator_->generateMesh(
           only_mesh_updated_blocks, clear_updated_flag);
@@ -997,8 +994,9 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
 
     bool clear_updated_flag = true;
     // TODO(ntonci): Why not calling generateMesh instead?
-    mesh_layer_updated_ |= mesh_label_integrator_->generateMesh(
+    mesh_layer_updated_ |= mesh_merged_integrator_->generateMesh(
         only_mesh_updated_blocks, clear_updated_flag);
+
     generate_mesh_timer.Stop();
   }
 
@@ -1007,7 +1005,7 @@ void Controller::updateMeshEvent(const ros::TimerEvent& e) {
     voxblox_msgs::Mesh mesh_msg;
     // TODO(margaritaG) : this function cleans up empty meshes, and this
     // seems to trouble the visualizer. Investigate.
-    generateVoxbloxMeshMsg(mesh_label_layer_, ColorMode::kColor, &mesh_msg);
+    generateVoxbloxMeshMsg(mesh_merged_layer_, ColorMode::kColor, &mesh_msg);
     mesh_msg.header.frame_id = world_frame_;
     scene_mesh_pub_->publish(mesh_msg);
     publish_mesh_timer.Stop();

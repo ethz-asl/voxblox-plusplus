@@ -1,0 +1,12 @@
+<launch>
+  <arg name="visualize" default="true" />
+
+  <include file="$(find gsm_node)/launch/vpp_pipeline.launch">
+    <arg name="scene_name" value="orb_slam2" />
+    <arg name="sensor_name" value="primesense" />
+    <arg name="visualize" value="$(arg visualize)" />
+  </include>
+
+  <include file="$(find orb_slam2_ros)/ros/launch/orb_slam2_primesense_rgbd.launch">
+  </include>
+</launch>
