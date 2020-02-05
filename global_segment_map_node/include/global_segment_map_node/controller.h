@@ -185,6 +185,7 @@ class Controller {
   std::mutex mesh_layer_mutex_;
   bool mesh_layer_updated_;
   bool need_full_remesh_;
+  bool multiple_visualizers_;
 };
 
 }  // namespace voxblox_gsm

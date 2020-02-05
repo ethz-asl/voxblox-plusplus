@@ -1,0 +1,23 @@
+world_frame_id: "map"
+
+voxblox:
+  voxel_size: 0.015
+  truncation_distance_factor: 5.0
+  voxel_carving_enabled: false
+  max_ray_length_m: 3
+
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: true
+
+meshing:
+  visualize: true
+  publish_scene_mesh: false
+  update_mesh_every_n_sec: 2.0
+  visualizer_parameters:
+    camera_position: [-1.91571,  -0.148907, 1.38851,   # Position - x y z
+                       0.335035, -1.0907,  -0.0125681, # Focal point - x y z
+                       0.480502, -0.139695, 0.865796]  # View up - x y z
+    clip_distances: [ 0.00685696, 6.85696]
+
+debug:
+  verbose_log: false
