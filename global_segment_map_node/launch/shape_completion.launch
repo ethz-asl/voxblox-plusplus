@@ -1,0 +1,23 @@
+<launch>
+  <arg name="scene_name" default="orb_slam2" />
+  <arg name="sensor_name" default="primesense" />
+  <arg name="visualize" default="true" />
+
+  <include file="$(find mask_rcnn_ros)/launch/mask_rcnn_node.launch">
+    <arg name="sensor_name" value="$(arg sensor_name)" />
+    <arg name="visualize" value="false" />
+  </include>
+
+  <include file="$(find depth_segmentation)/launch/semantic_depth_segmentation.launch">
+    <arg name="sensor_name" value="$(arg sensor_name)" />
+    <arg name="visualize" value="$(arg visualize)" />
+  </include>
+
+  <node name="rgbd_segmentation_node" pkg="rgbd_segmentation" type="rgbd_segmentation_node.py" output="screen">
+  </node>
+
+  <!-- <include file="$(find orb_slam2_ros)/ros/launch/orb_slam2_primesense_rgbd.launch">
+  </include> -->
+
+
+</launch>
