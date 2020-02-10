@@ -12,11 +12,14 @@ class Visualizer {
  public:
   Visualizer(const std::vector<std::shared_ptr<MeshLayer>>& mesh_layers,
              bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr,
-             std::vector<double> camera_distances,
-             std::vector<double> clip_distances, bool save_visualizer_frames);
+             std::shared_ptr<Eigen::Matrix4f> camera_position,
+             bool save_visualizer_frames);
 
   void visualizeMesh();
 
+ private:
+  // pcl::visualization::Camera computeCameraParams(
+  //     const Eigen::Matrix3f& intrinsics, const Eigen::Matrix4f& extrinsics);
   std::vector<std::shared_ptr<MeshLayer>> mesh_layers_;
 
   std::mutex* mesh_layer_mutex_ptr_;
@@ -24,8 +27,10 @@ class Visualizer {
 
   size_t frame_count_;
 
-  std::vector<double> camera_position_;
-  std::vector<double> clip_distances_;
+  // std::vector<double> camera_position_;
+  // std::vector<double> clip_distances_;
+  Eigen::Matrix3f camera_intrinsics_;
+  std::shared_ptr<Eigen::Matrix4f> camera_position_;
 
   bool save_visualizer_frames_;
 };

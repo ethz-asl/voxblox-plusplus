@@ -292,9 +292,11 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       mesh_layers.push_back(mesh_semantic_layer_);
     }
 
+    camera_position_.reset(new Eigen::Matrix4f());
+
     visualizer_ =
         new Visualizer(mesh_layers, &mesh_layer_updated_, &mesh_layer_mutex_,
-                       camera_position, clip_distances, save_visualizer_frames);
+                       camera_position_, save_visualizer_frames);
     viz_thread_ = std::thread(&Visualizer::visualizeMesh, visualizer_);
   }
 
@@ -428,10 +430,9 @@ void Controller::advertiseGetAlignedInstanceBoundingBoxService(
 void Controller::processSegment(
     const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg) {
   // Look up transform from camera frame to world frame.
-  Transformation T_G_C;
   std::string from_frame = segment_point_cloud_msg->header.frame_id;
   if (lookupTransform(from_frame, world_frame_,
-                      segment_point_cloud_msg->header.stamp, &T_G_C)) {
+                      segment_point_cloud_msg->header.stamp, &T_G_C_)) {
     // Convert the PCL pointcloud into voxblox format.
     // Horrible hack fix to fix color parsing colors in PCL.
     for (size_t d = 0; d < segment_point_cloud_msg->fields.size(); ++d) {
@@ -447,18 +448,18 @@ void Controller::processSegment(
       pcl::PointCloud<voxblox::PointSemanticInstanceType>
           point_cloud_semantic_instance;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_semantic_instance);
-      segment = new Segment(point_cloud_semantic_instance, T_G_C);
+      segment = new Segment(point_cloud_semantic_instance, T_G_C_);
     } else if (use_label_propagation_) {
       // TODO(ntonci): maybe rename use_label_propagation_ to something like
       // use_voxblox_plus_plus_lables_ or change the order and call it
       // use_external_labels_
       pcl::PointCloud<voxblox::PointType> point_cloud;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud);
-      segment = new Segment(point_cloud, T_G_C);
+      segment = new Segment(point_cloud, T_G_C_);
     } else {
       pcl::PointCloud<voxblox::PointLabelType> point_cloud_label;
       pcl::fromROSMsg(*segment_point_cloud_msg, point_cloud_label);
-      segment = new Segment(point_cloud_label, T_G_C);
+      segment = new Segment(point_cloud_label, T_G_C_);
     }
     CHECK_NOTNULL(segment);
     segments_to_integrate_.push_back(segment);
@@ -570,11 +571,12 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
     std::lock_guard<std::mutex> label_tsdf_layers_lock(
         label_tsdf_layers_mutex_);
 
+    *camera_position_ = T_G_C_.getTransformationMatrix();
+
     start = ros::WallTime::now();
     timing::Timer integrate_timer("integrate_frame_pointclouds");
     for (Segment* segment : segments_to_integrate_) {
       CHECK_NOTNULL(segment);
-      // segment->T_G_C_ = T_Gicp_C;
 
       integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                        segment->colors_, segment->label_,

@@ -185,6 +185,8 @@ class Controller {
 
   std::thread viz_thread_;
   Visualizer* visualizer_;
+  Transformation T_G_C_;
+  std::shared_ptr<Eigen::Matrix4f> camera_position_;
   std::mutex label_tsdf_layers_mutex_;
   std::mutex mesh_layer_mutex_;
   bool mesh_layer_updated_;

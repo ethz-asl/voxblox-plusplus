@@ -5,15 +5,62 @@ namespace voxblox {
 Visualizer::Visualizer(
     const std::vector<std::shared_ptr<MeshLayer>>& mesh_layers,
     bool* mesh_layer_updated, std::mutex* mesh_layer_mutex_ptr,
-    std::vector<double> camera_position, std::vector<double> clip_distances,
+    std::shared_ptr<Eigen::Matrix4f> camera_position,
     bool save_visualizer_frames)
     : mesh_layers_(mesh_layers),
       mesh_layer_updated_(CHECK_NOTNULL(mesh_layer_updated)),
       mesh_layer_mutex_ptr_(CHECK_NOTNULL(mesh_layer_mutex_ptr)),
       frame_count_(0u),
       camera_position_(camera_position),
-      clip_distances_(clip_distances),
-      save_visualizer_frames_(save_visualizer_frames) {}
+      save_visualizer_frames_(save_visualizer_frames) {
+  camera_intrinsics_ << 564.3, 0, 480, 0, 564.3, 270, 0, 0, 1;
+}
+
+// Code from
+// https://github.com/PointCloudLibrary/pcl/blob/master/visualization/src/interactor_style.cpp
+void computeCameraParams(const Eigen::Matrix3f& intrinsics,
+                         const Eigen::Matrix4f& extrinsics,
+                         pcl::visualization::Camera* cam) {
+  // Position = extrinsic translation
+  Eigen::Vector3f pos_vec = extrinsics.block<3, 1>(0, 3);
+
+  // Rotate the view vector
+  Eigen::Matrix3f rotation = extrinsics.block<3, 3>(0, 0);
+  Eigen::Vector3f y_axis(0.f, 1.f, 0.f);
+  Eigen::Vector3f up_vec(rotation * y_axis);
+
+  // Compute the new focal point
+  Eigen::Vector3f z_axis(0.f, 0.f, 1.f);
+  Eigen::Vector3f focal_vec = pos_vec + rotation * z_axis;
+
+  // Get the width and height of the image - assume the calibrated centers are
+  // at the center of the image
+  Eigen::Vector2i window_size;
+  window_size[0] = 2 * static_cast<int>(intrinsics(0, 2));
+  window_size[1] = 2 * static_cast<int>(intrinsics(1, 2));
+
+  // Compute the vertical field of view based on the focal length and image
+  // height
+  double fovy = 2 * std::atan(window_size[1] / (2. * intrinsics(1, 1)));
+
+  cam->pos[0] = pos_vec[0];
+  cam->pos[1] = pos_vec[1];
+  cam->pos[2] = pos_vec[2];
+  cam->focal[0] = focal_vec[0];
+  cam->focal[1] = focal_vec[1];
+  cam->focal[2] = focal_vec[2];
+  // The camera frame in the PCL viewer are rotated
+  // around z by 180 degrees,
+  cam->view[0] = -up_vec[0];
+  cam->view[1] = -up_vec[1];
+  cam->view[2] = -up_vec[2];
+
+  cam->fovy = fovy;
+  cam->clip[0] = 0.01;
+  cam->clip[1] = 1000.01;
+  cam->window_size[0] = window_size[0];
+  cam->window_size[1] = window_size[1];
+}
 
 // TODO(grinvalm): make it more efficient by only updating the
 // necessary polygons and not all of them each time.
@@ -42,18 +89,20 @@ void Visualizer::visualizeMesh() {
     visualizer->setWindowName(name.c_str());
     visualizer->setSize(800, 600);
     visualizer->setBackgroundColor(255, 255, 255);
-    visualizer->initCameraParameters();
+    // visualizer->initCameraParameters();
 
-    if (camera_position_.size()) {
-      visualizer->setCameraPosition(
-          camera_position_[0], camera_position_[1], camera_position_[2],
-          camera_position_[3], camera_position_[4], camera_position_[5],
-          camera_position_[6], camera_position_[7], camera_position_[8]);
-    }
-    if (clip_distances_.size()) {
-      visualizer->setCameraClipDistances(clip_distances_[0],
-                                         clip_distances_[1]);
-    }
+    // visualizer->setCameraClipDistances(0.00685696, 6.85696);
+
+    // if (camera_position_.size()) {
+    //   visualizer->setCameraPosition(
+    //       camera_position_[0], camera_position_[1], camera_position_[2],
+    //       camera_position_[3], camera_position_[4], camera_position_[5],
+    //       camera_position_[6], camera_position_[7], camera_position_[8]);
+    // }
+    // if (clip_distances_.size()) {
+    //   visualizer->setCameraClipDistances(clip_distances_[0],
+    //                                      clip_distances_[1]);
+    // }
 
     pcl_visualizers.push_back(visualizer);
   }
@@ -122,6 +171,10 @@ void Visualizer::visualizeMesh() {
                                                        "meshes")) {
           pcl_visualizers[index]->addPolygonMesh(polygon_meshes[index],
                                                  "meshes", 0);
+
+          pcl::visualization::Camera cam;
+          computeCameraParams(camera_intrinsics_, *camera_position_, &cam);
+          pcl_visualizers[index]->setCameraParameters(cam);
         }
 
         if (save_visualizer_frames_) {
