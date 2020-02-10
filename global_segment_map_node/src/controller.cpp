@@ -17,16 +17,22 @@
 #include <vector>
 
 #include <geometry_msgs/TransformStamped.h>
+#include <global_segment_map/label_interpolator.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/file_utils.h>
 #include <glog/logging.h>
+#include <kindr/minimal/quat-transformation.h>
 #include <minkindr_conversions/kindr_tf.h>
+#include <pcl/console/time.h>  // TicToc
+#include <pcl/io/ply_io.h>
 #include <visualization_msgs/Marker.h>
 #include <visualization_msgs/MarkerArray.h>
-#include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
+#include <voxblox/integrator/merge_integration.h>
 #include <voxblox/io/sdf_ply.h>
+#include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
+
 #include "global_segment_map_node/conversions.h"
 
 #ifdef APPROXMVBB_AVAILABLE
@@ -486,43 +492,98 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
               << " pointclouds in " << (end - start).toSec() << " seconds.";
   }
 
+  bool object_pose_tracking = true;
+  if (object_pose_tracking) {
+    std::unordered_map<Label, LabelTsdfMap::LayerPair> label_to_layers;
+    {
+      std::lock_guard<std::mutex> label_tsdf_layers_lock(
+          label_tsdf_layers_mutex_);
+
+      timing::Timer extract_segments_timer("extract_object_models");
+
+      // Extract the TSDF and label layers corresponding to all segments.
+
+      Labels labels;
+      for (Segment* segment : segments_to_integrate_) {
+        if (segment->instance_label_ != 0u) {
+          labels.push_back(segment->label_);
+        }
+      }
+      constexpr bool kLabelsListIsComplete = false;
+      constexpr bool kRemoveSegmentsFromMap = true;
+      map_->extractSegmentLayers(labels, &label_to_layers,
+                                 kRemoveSegmentsFromMap, kLabelsListIsComplete);
+      extract_segments_timer.Stop();
+
+      for (Segment* segment : segments_to_integrate_) {
+        if (segment->instance_label_ == 0u) {
+          continue;
+        }
+        Layer<TsdfVoxel>& model_tsdf_layer =
+            label_to_layers.at(segment->label_).first;
+        Layer<LabelVoxel>& model_label_layer =
+            label_to_layers.at(segment->label_).second;
+        if (model_tsdf_layer.getNumberOfAllocatedBlocks() > 0) {
+          pcl::PointCloud<pcl::PointXYZRGB>::Ptr segment_pcl_cloud(
+              new pcl::PointCloud<pcl::PointXYZRGB>);
+          // TODO(margaritaG): we already had pcl cloud at some point, why going
+          // back and forth?
+          pointcloudToPclXYZRGB(segment->points_C_, segment->colors_,
+                                segment_pcl_cloud.get());
+
+          pcl::PointCloud<pcl::PointXYZRGB>::Ptr model_pcl_cloud(
+              new pcl::PointCloud<pcl::PointXYZRGB>);
+          convertVoxelGridToPointCloud(model_tsdf_layer, mesh_config_,
+                                       model_pcl_cloud.get());
+
+          // Transform model cloud from global frame to camera frame.
+          pcl::transformPointCloud(
+              *model_pcl_cloud, *model_pcl_cloud,
+              segment->T_G_C_.inverse().getTransformationMatrix());
+
+          timing::Timer object_pose_tracking_timer("object_pose_tracking");
+          Eigen::Matrix4f T_M_M;
+          icp_.align(model_pcl_cloud, segment_pcl_cloud, &T_M_M);
+          object_pose_tracking_timer.Stop();
+
+          mergeLayerAintoLayerB<TsdfVoxel>(
+              model_tsdf_layer,
+              segment->T_G_C_ *
+                  Transformation().constructAndRenormalizeRotation(T_M_M) *
+                  segment->T_G_C_.inverse(),
+              map_->getTsdfLayerPtr());
+
+          mergeLayerAintoLayerB<LabelVoxel>(
+              model_label_layer,
+              segment->T_G_C_ *
+                  Transformation().constructAndRenormalizeRotation(T_M_M) *
+                  segment->T_G_C_.inverse(),
+              map_->getLabelLayerPtr());
+        }
+      }
+    }
+  }
+
   constexpr bool kIsFreespacePointcloud = false;
-
-  start = ros::WallTime::now();
-  timing::Timer integrate_timer("integrate_frame_pointclouds");
-  Transformation T_G_C = segments_to_integrate_.at(0)->T_G_C_;
-  Pointcloud point_cloud_all_segments_t;
-  for (Segment* segment : segments_to_integrate_) {
-    // Concatenate point clouds. (NOTE(ff): We should probably just use
-    // the original cloud here instead.)
-    Pointcloud::iterator it = point_cloud_all_segments_t.end();
-    point_cloud_all_segments_t.insert(it, segment->points_C_.begin(),
-                                      segment->points_C_.end());
-  }
-  Transformation T_Gicp_C = T_G_C;
-  if (label_tsdf_integrator_config_.enable_icp) {
-    // TODO(ntonci): Make icp config members ros params.
-    // integrator_->icp_.reset(new
-    // ICP(getICPConfigFromRosParam(nh_private)));
-    T_Gicp_C =
-        integrator_->getIcpRefined_T_G_C(T_G_C, point_cloud_all_segments_t);
-  }
-
   {
+    // Integrate the segment pointclouds into the TSDF and Label layers.
     std::lock_guard<std::mutex> label_tsdf_layers_lock(
         label_tsdf_layers_mutex_);
+
+    start = ros::WallTime::now();
+    timing::Timer integrate_timer("integrate_frame_pointclouds");
     for (Segment* segment : segments_to_integrate_) {
       CHECK_NOTNULL(segment);
-      segment->T_G_C_ = T_Gicp_C;
+      // segment->T_G_C_ = T_Gicp_C;
 
       integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
                                        segment->colors_, segment->label_,
                                        kIsFreespacePointcloud);
     }
+    integrate_timer.Stop();
+    end = ros::WallTime::now();
   }
 
-  integrate_timer.Stop();
-  end = ros::WallTime::now();
   LOG(INFO) << "Integrated " << segments_to_integrate_.size()
             << " pointclouds in " << (end - start).toSec() << " secs. ";
 
@@ -683,17 +744,13 @@ bool Controller::getScenePointcloudCallback(
 
 bool Controller::saveSegmentsAsMeshCallback(
     std_srvs::Empty::Request& request, std_srvs::Empty::Response& response) {
-  Labels labels;
   std::unordered_map<Label, LabelTsdfMap::LayerPair> label_to_layers;
   {
     std::lock_guard<std::mutex> label_tsdf_layers_lock(
         label_tsdf_layers_mutex_);
-    // Get list of all labels in the map.
-    labels = map_->getLabelList();
 
-    // Extract the TSDF and label layers corresponding to each segment.
-    constexpr bool kLabelsListIsComplete = true;
-    map_->extractSegmentLayers(labels, &label_to_layers, kLabelsListIsComplete);
+    // Extract the TSDF and label layers corresponding to all segments.
+    map_->extractAllSegmentLayers(&label_to_layers);
   }
 
   const char* kSegmentFolder = "gsm_segments";
@@ -702,6 +759,8 @@ bool Controller::saveSegmentsAsMeshCallback(
   if (stat(kSegmentFolder, &info) != 0) {
     CHECK_EQ(mkdir(kSegmentFolder, ACCESSPERMS), 0);
   }
+
+  Labels labels = map_->getLabelList();
 
   bool overall_success = true;
   for (Label label : labels) {

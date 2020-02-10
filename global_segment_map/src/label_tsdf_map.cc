@@ -12,7 +12,7 @@ Labels LabelTsdfMap::getLabelList() {
       count_unused_labels++;
     }
   }
-  LOG(ERROR) << "Unused labels count: " << count_unused_labels;
+  LOG(INFO) << "Unused labels count: " << count_unused_labels;
   return labels;
 }
 
@@ -66,10 +66,20 @@ void LabelTsdfMap::getSemanticInstanceList(InstanceLabels* instance_labels,
   }
 }
 
+void LabelTsdfMap::extractAllSegmentLayers(
+    std::unordered_map<Label, LayerPair>* label_layers_map) {
+  // Get list of all labels in the map.
+  Labels labels = getLabelList();
+
+  // Extract the TSDF and label layers corresponding to each segment.
+  constexpr bool kLabelsListIsComplete = true;
+  extractSegmentLayers(labels, label_layers_map, kLabelsListIsComplete);
+}
+
 void LabelTsdfMap::extractSegmentLayers(
     const std::vector<Label>& labels,
     std::unordered_map<Label, LayerPair>* label_layers_map,
-    const bool labels_list_is_complete) {
+    const bool remove_segments_from_map, const bool labels_list_is_complete) {
   CHECK_NOTNULL(label_layers_map);
 
   // Map a label to its corresponding TSDF and label layers.
@@ -93,7 +103,7 @@ void LabelTsdfMap::extractSegmentLayers(
 
     const size_t vps = global_label_block->voxels_per_side();
     for (size_t i = 0u; i < vps * vps * vps; ++i) {
-      const LabelVoxel& global_label_voxel =
+      LabelVoxel& global_label_voxel =
           global_label_block->getVoxelByLinearIndex(i);
 
       if (global_label_voxel.label == 0u) {
@@ -103,9 +113,9 @@ void LabelTsdfMap::extractSegmentLayers(
       auto it = label_layers_map->find(global_label_voxel.label);
       if (it == label_layers_map->end()) {
         if (labels_list_is_complete) {
-          // TODO(margaritaG): this seemed to fail once, find out why there are
-          // labels in the map which are not in the label list.
-          LOG(FATAL) << "At least one voxel in the GSM is assigned to label "
+          // TODO(margaritaG): this seemed to fail once, find out why there
+          // are labels in the map which are not in the label list.
+          LOG(FATAL) << "At least one voxel in the map is assigned to label "
                      << global_label_voxel.label
                      << " which is not in the given "
                         "list of labels to retrieve.";
@@ -126,11 +136,19 @@ void LabelTsdfMap::extractSegmentLayers(
       TsdfVoxel& tsdf_voxel = tsdf_block->getVoxelByLinearIndex(i);
       LabelVoxel& label_voxel = label_block->getVoxelByLinearIndex(i);
 
-      const TsdfVoxel& global_tsdf_voxel =
+      TsdfVoxel& global_tsdf_voxel =
           global_tsdf_block->getVoxelByLinearIndex(i);
 
       tsdf_voxel = global_tsdf_voxel;
       label_voxel = global_label_voxel;
+
+      if (remove_segments_from_map) {
+        // TODO(grinvalm): What should be done with these voxels and blocks?
+        global_tsdf_voxel = TsdfVoxel();
+        global_label_voxel = LabelVoxel();
+
+        global_tsdf_block->updated() = true;
+      }
     }
   }
 }

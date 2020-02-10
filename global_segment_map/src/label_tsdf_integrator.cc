@@ -1,5 +1,7 @@
 #include "global_segment_map/label_tsdf_integrator.h"
 
+#include "global_segment_map/utils/label_voxel_utils.h"
+
 namespace voxblox {
 
 LabelTsdfIntegrator::LabelTsdfIntegrator(
@@ -12,7 +14,9 @@ LabelTsdfIntegrator::LabelTsdfIntegrator(
       highest_label_ptr_(CHECK_NOTNULL(map->getHighestLabelPtr())),
       highest_instance_ptr_(CHECK_NOTNULL(map->getHighestInstancePtr())),
       semantic_instance_label_fusion_ptr_(
-          map->getSemanticInstanceLabelFusionPtr()) {}
+          map->getSemanticInstanceLabelFusionPtr()) {
+  CHECK(label_layer_);
+}
 
 void LabelTsdfIntegrator::checkForSegmentLabelMergeCandidate(
     const Label& label, const int label_points_count,
@@ -121,56 +125,6 @@ Label LabelTsdfIntegrator::getNextUnassignedLabel(
     voxel_label = voxel.label;
   }
   return voxel_label;
-}
-
-void LabelTsdfIntegrator::updateVoxelLabelAndConfidence(
-    LabelVoxel* label_voxel, const Label& preferred_label) {
-  CHECK_NOTNULL(label_voxel);
-  Label max_label = 0u;
-  LabelConfidence max_confidence = 0u;
-  for (const LabelCount& label_count : label_voxel->label_count) {
-    if (label_count.label_confidence > max_confidence ||
-        (label_count.label == preferred_label && preferred_label != 0u &&
-         label_count.label_confidence == max_confidence)) {
-      max_confidence = label_count.label_confidence;
-      max_label = label_count.label;
-    }
-  }
-  label_voxel->label = max_label;
-  label_voxel->label_confidence = max_confidence;
-}
-
-void LabelTsdfIntegrator::addVoxelLabelConfidence(
-    const Label& label, const LabelConfidence& confidence,
-    LabelVoxel* label_voxel) {
-  CHECK_NOTNULL(label_voxel);
-  bool updated = false;
-  for (LabelCount& label_count : label_voxel->label_count) {
-    if (label_count.label == label) {
-      // Label already observed in this voxel.
-      label_count.label_confidence = label_count.label_confidence + confidence;
-      updated = true;
-      break;
-    }
-  }
-  if (updated == false) {
-    for (LabelCount& label_count : label_voxel->label_count) {
-      if (label_count.label == 0u) {
-        // This is the first allocated but unused index in the map
-        // in which the new entry should be added.
-        label_count.label = label;
-        label_count.label_confidence = confidence;
-        updated = true;
-        break;
-      }
-    }
-  }
-  if (updated == false) {
-    // TODO(margaritaG): handle this nicely or remove.
-    // LOG(FATAL) << "Out-of-memory for storing labels and confidences for this
-    // "
-    //               " voxel. Please increse size of array.";
-  }
 }
 
 void LabelTsdfIntegrator::computeSegmentLabelCandidates(
@@ -479,8 +433,8 @@ void LabelTsdfIntegrator::updateLabelVoxel(const Point& point_G,
 
   // label_voxel->semantic_label = semantic_label;
   Label previous_label = label_voxel->label;
-  addVoxelLabelConfidence(label, confidence, label_voxel);
-  updateVoxelLabelAndConfidence(label_voxel, label);
+  utils::addVoxelLabelConfidence(label, confidence, label_voxel);
+  utils::updateVoxelLabelAndConfidence(label_voxel, label);
   Label new_label = label_voxel->label;
 
   // This old semantic stuff per voxel was not thread safe.
@@ -726,12 +680,12 @@ void LabelTsdfIntegrator::swapLabels(const Label& old_label,
       }
       if (old_label_confidence > 0u) {
         // Add old_label confidence, if any, to new_label confidence.
-        addVoxelLabelConfidence(new_label, old_label_confidence, &voxel);
+        utils::addVoxelLabelConfidence(new_label, old_label_confidence, &voxel);
       }
       // TODO(grinvalm) calling update with different preferred labels
       // can result in different assigned labels to the voxel, and
       // can trigger an update of a segment.
-      updateVoxelLabelAndConfidence(&voxel, new_label);
+      utils::updateVoxelLabelAndConfidence(&voxel, new_label);
       Label updated_label = voxel.label;
 
       if (updated_label != previous_label) {
@@ -915,48 +869,49 @@ void LabelTsdfIntegrator::mergeLabels(LLSet* merges_to_publish) {
   }
 }
 
-Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
-    const Transformation& T_G_C_init, const Pointcloud& point_cloud) {
-  // TODO(ff): We should actually check here how many blocks are in the
-  // camera frustum.
-  if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
-    return T_G_C_init;
-  }
-  Transformation T_Gicp_C;
-  timing::Timer icp_timer("icp");
-  if (!label_tsdf_config_.keep_track_of_icp_correction) {
-    T_Gicp_G_.setIdentity();
-  }
-
-  const size_t num_icp_updates =
-      icp_->runICP(*layer_, point_cloud, T_Gicp_G_ * T_G_C_init, &T_Gicp_C);
-  if (num_icp_updates == 0u ||
-      num_icp_updates > label_tsdf_config_.max_num_icp_updates) {
-    LOG(INFO) << "num_icp_updates is too high or 0: " << num_icp_updates
-              << ", using T_G_C_init.";
-    return T_G_C_init;
-  }
-  LOG(INFO) << "ICP refinement performed " << num_icp_updates
-            << " successful update steps.";
-  T_Gicp_G_ = T_Gicp_C * T_G_C_init.inverse();
-
-  if (!label_tsdf_config_.keep_track_of_icp_correction) {
-    LOG(INFO) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
-  } else {
-    LOG(INFO) << "ICP refinement for this pointcloud: T_Gicp_G: " << T_Gicp_G_;
-  }
-
-  if (!icp_->refiningRollPitch()) {
-    // its already removed internally but small floating point errors can
-    // build up if accumulating transforms
-    Transformation::Vector6 vec_T_Gicp_G = T_Gicp_G_.log();
-    vec_T_Gicp_G[3] = 0.0;
-    vec_T_Gicp_G[4] = 0.0;
-    T_Gicp_G_ = Transformation::exp(vec_T_Gicp_G);
-  }
-
-  icp_timer.Stop();
-  return T_Gicp_C;
-}
+// Transformation LabelTsdfIntegrator::getIcpRefined_T_G_C(
+//     const Transformation& T_G_C_init, const Pointcloud& point_cloud) {
+//   // TODO(ff): We should actually check here how many blocks are in the
+//   // camera frustum.
+//   if (layer_->getNumberOfAllocatedBlocks() <= 0u) {
+//     return T_G_C_init;
+//   }
+//   Transformation T_Gicp_C;
+//   timing::Timer icp_timer("icp");
+//   if (!label_tsdf_config_.keep_track_of_icp_correction) {
+//     T_Gicp_G_.setIdentity();
+//   }
+//
+//   const size_t num_icp_updates =
+//       icp_->runICP(*layer_, point_cloud, T_Gicp_G_ * T_G_C_init, &T_Gicp_C);
+//   if (num_icp_updates == 0u ||
+//       num_icp_updates > label_tsdf_config_.max_num_icp_updates) {
+//     LOG(INFO) << "num_icp_updates is too high or 0: " << num_icp_updates
+//               << ", using T_G_C_init.";
+//     return T_G_C_init;
+//   }
+//   LOG(INFO) << "ICP refinement performed " << num_icp_updates
+//             << " successful update steps.";
+//   T_Gicp_G_ = T_Gicp_C * T_G_C_init.inverse();
+//
+//   if (!label_tsdf_config_.keep_track_of_icp_correction) {
+//     LOG(INFO) << "Current ICP refinement offset: T_Gicp_G: " << T_Gicp_G_;
+//   } else {
+//     LOG(INFO) << "ICP refinement for this pointcloud: T_Gicp_G: " <<
+//     T_Gicp_G_;
+//   }
+//
+//   if (!icp_->refiningRollPitch()) {
+//     // its already removed internally but small floating point errors can
+//     // build up if accumulating transforms
+//     Transformation::Vector6 vec_T_Gicp_G = T_Gicp_G_.log();
+//     vec_T_Gicp_G[3] = 0.0;
+//     vec_T_Gicp_G[4] = 0.0;
+//     T_Gicp_G_ = Transformation::exp(vec_T_Gicp_G);
+//   }
+//
+//   icp_timer.Stop();
+//   return T_Gicp_C;
+// }
 
 }  // namespace voxblox

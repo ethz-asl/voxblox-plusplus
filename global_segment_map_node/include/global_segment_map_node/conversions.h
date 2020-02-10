@@ -118,6 +118,50 @@ inline void convertVoxelGridToPointCloud(
   surfel_cloud->height = 1u;
 }
 
+inline void convertVoxelGridToPointCloud(
+    const voxblox::Layer<voxblox::TsdfVoxel>& tsdf_voxels,
+    const MeshIntegratorConfig& mesh_config,
+    pcl::PointCloud<pcl::PointXYZRGB>* pcl_cloud) {
+  CHECK_NOTNULL(pcl_cloud);
+
+  static constexpr bool kConnectedMesh = false;
+  voxblox::Mesh mesh;
+  io::convertLayerToMesh(tsdf_voxels, mesh_config, &mesh, kConnectedMesh);
+
+  pcl_cloud->reserve(mesh.vertices.size());
+
+  size_t vert_idx = 0u;
+  for (const voxblox::Point& vert : mesh.vertices) {
+    pcl::PointXYZRGB point;
+    point.x = vert(0);
+    point.y = vert(1);
+    point.z = vert(2);
+
+    if (mesh.hasColors()) {
+      const voxblox::Color& color = mesh.colors[vert_idx];
+      point.r = static_cast<int>(color.r);
+      point.g = static_cast<int>(color.g);
+      point.b = static_cast<int>(color.b);
+    }
+
+    // if (mesh.hasNormals()) {
+    //   const voxblox::Point& normal = mesh.normals[vert_idx];
+    //   point.normal_x = normal(0);
+    //   point.normal_y = normal(1);
+    //   point.normal_z = normal(2);
+    // } else {
+    //   LOG(FATAL) << "Mesh doesn't have normals.";
+    // }
+
+    pcl_cloud->push_back(point);
+    ++vert_idx;
+  }
+
+  pcl_cloud->is_dense = true;
+  pcl_cloud->width = pcl_cloud->points.size();
+  pcl_cloud->height = 1u;
+}
+
 }  // namespace voxblox_gsm
 }  // namespace voxblox
 #endif  // VOXBLOX_GSM_CONVERSIONS_H_

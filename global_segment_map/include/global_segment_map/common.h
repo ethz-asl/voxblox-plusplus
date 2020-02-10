@@ -38,7 +38,7 @@ struct LabelCount {
   LabelConfidence label_confidence = 0u;
 };
 
-struct PointSurfelLabel {
+struct PointXYZRGBLNormal {
   PCL_ADD_POINT4D;
   PCL_ADD_NORMAL4D;
   PCL_ADD_RGB;
@@ -47,7 +47,7 @@ struct PointSurfelLabel {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 
-struct PointSurfelSemanticInstance {
+struct PointXYZRGBSemanticInstanceNormal {
   PCL_ADD_POINT4D;
   PCL_ADD_NORMAL4D;
   PCL_ADD_RGB;
@@ -58,17 +58,17 @@ struct PointSurfelSemanticInstance {
 } EIGEN_ALIGN16;
 
 typedef pcl::PointXYZRGB PointType;
-typedef PointSurfelLabel PointLabelType;
-typedef PointSurfelSemanticInstance PointSemanticInstanceType;
+typedef PointXYZRGBLNormal PointLabelType;
+typedef PointXYZRGBSemanticInstanceNormal PointSemanticInstanceType;
 
 }  // namespace voxblox
 
-POINT_CLOUD_REGISTER_POINT_STRUCT(voxblox::PointSurfelLabel,
+POINT_CLOUD_REGISTER_POINT_STRUCT(voxblox::PointXYZRGBLNormal,
                                   (float, x, x)(float, y, y)(float, z, z)(
                                       float, rgb, rgb)(uint32_t, label, label))
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(
-    voxblox::PointSemanticInstanceType,
+    voxblox::PointXYZRGBSemanticInstanceNormal,
     (float, x, x)(float, y, y)(float, z, z)(float, rgb, rgb)(
         uint8_t, instance_label,
         instance_label)(voxblox::SemanticLabel, semantic_label, semantic_label))

@@ -11,6 +11,7 @@
 #include <global_segment_map/label_tsdf_map.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/meshing/label_tsdf_mesh_integrator.h>
+#include <global_segment_map/utils/icp.h>
 #include <global_segment_map/utils/visualizer.h>
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
@@ -176,6 +177,9 @@ class Controller {
   std::vector<Segment*> segments_to_integrate_;
   std::map<Label, std::map<Segment*, size_t>> segment_label_candidates;
   std::map<Segment*, std::vector<Label>> segment_merge_candidates_;
+
+  // ICP.
+  ICP icp_;
 
   ros::Publisher* bbox_pub_;
 

@@ -40,6 +40,7 @@ void Visualizer::visualizeMesh() {
         std::make_shared<pcl::visualization::PCLVisualizer>();
     std::string name = "Map " + std::to_string(index + 1);
     visualizer->setWindowName(name.c_str());
+    visualizer->setSize(800, 600);
     visualizer->setBackgroundColor(255, 255, 255);
     visualizer->initCameraParameters();
 

@@ -5,7 +5,6 @@
 #include <vector>
 
 #include <glog/logging.h>
-#include <voxblox/alignment/icp.h>
 #include <voxblox/core/layer.h>
 #include <voxblox/core/voxel.h>
 #include <voxblox/integrator/integrator_utils.h>
@@ -13,7 +12,6 @@
 #include <voxblox/utils/timing.h>
 
 #include "global_segment_map/common.h"
-#include "global_segment_map/icp_utils.h"
 #include "global_segment_map/label_tsdf_map.h"
 #include "global_segment_map/segment.h"
 #include "global_segment_map/semantic_instance_label_fusion.h"
@@ -89,8 +87,8 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   void getLabelsToPublish(
       std::vector<voxblox::Label>* segment_labels_to_publish);
 
-  Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
-                                     const Pointcloud& point_cloud);
+  // Transformation getIcpRefined_T_G_C(const Transformation& T_G_C_init,
+  //                                    const Pointcloud& point_cloud);
 
  protected:
   // Label propagation.
@@ -235,9 +233,9 @@ class LabelTsdfIntegrator : public MergedTsdfIntegrator {
   // Pairwise confidence merging.
   LLMap pairwise_confidence_;
 
-  // ICP variables.
-  std::shared_ptr<ICP> icp_;
-  Transformation T_Gicp_G_;
+  // // ICP variables.
+  // std::shared_ptr<ICP> icp_;
+  // Transformation T_Gicp_G_;
 
   // Semantic instance-aware segmentation.
   SemanticInstanceLabelFusion* semantic_instance_label_fusion_ptr_;
