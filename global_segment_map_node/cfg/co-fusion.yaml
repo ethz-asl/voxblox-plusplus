@@ -1,0 +1,24 @@
+segment_point_cloud_topic: "/camera/object_segment"
+world_frame_id: "world"
+
+voxblox:
+  voxel_size: 0.015
+  truncation_distance_factor: 5.0
+  voxel_carving_enabled: false
+  max_ray_length_m: 3
+
+semantic_instance_segmentation:
+  enable_semantic_instance_segmentation: true
+
+meshing:
+  visualize: true
+  publish_scene_mesh: true
+  update_mesh_every_n_sec: 2.0
+  visualizer_parameters:
+    camera_position: [1.52898, -0.383355, 2.93472,   # Position - x y z
+                      0.269255, 0.151335, 0.476462, # Focal point - x y z
+                      -0.784698, 0.384967, 0.485849]  # View up - x y z
+    clip_distances: [ 0.00685696, 6.85696]
+
+debug:
+  verbose_log: true
