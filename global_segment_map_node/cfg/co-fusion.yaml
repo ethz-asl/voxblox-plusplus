@@ -2,10 +2,10 @@ segment_point_cloud_topic: "/camera/object_segment"
 world_frame_id: "world"
 
 voxblox:
-  voxel_size: 0.015
-  truncation_distance_factor: 5.0
+  voxel_size: 0.01
+  truncation_distance_factor: 3.0
   voxel_carving_enabled: false
-  max_ray_length_m: 3
+  max_ray_length_m: 5
 
 semantic_instance_segmentation:
   enable_semantic_instance_segmentation: true

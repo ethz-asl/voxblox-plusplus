@@ -475,6 +475,7 @@ void Controller::processSegment(
 }
 
 void Controller::integrateFrame(ros::Time msg_timestamp) {
+  timing::Timer all_integration_timer("all_integration");
   LOG(INFO) << "Integrating frame n." << ++integrated_frames_count_
             << ", timestamp of frame: " << msg_timestamp.toSec();
   ros::WallTime start;
@@ -614,6 +615,7 @@ void Controller::integrateFrame(ros::Time msg_timestamp) {
   end = ros::WallTime::now();
   LOG(INFO) << "Cleared candidates and memory in " << (end - start).toSec()
             << " seconds.";
+  all_integration_timer.Stop();
 
   LOG(INFO) << "Timings: " << std::endl << timing::Timing::Print() << std::endl;
 }
