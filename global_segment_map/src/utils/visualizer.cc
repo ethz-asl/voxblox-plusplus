@@ -13,8 +13,8 @@ Visualizer::Visualizer(
       frame_count_(0u),
       camera_position_(camera_position),
       save_visualizer_frames_(save_visualizer_frames) {
-  camera_intrinsics_ << 564.3, 0, 480, 0, 564.3, 270, 0, 0, 1;
-  // camera_intrinsics_ << 360, 0, 320, 0, 360, 240, 0, 0, 1;
+  // camera_intrinsics_ << 564.3, 0, 480, 0, 564.3, 270, 0, 0, 1;
+  camera_intrinsics_ << 360, 0, 320, 0, 360, 240, 0, 0, 1;
 }
 
 // Code from

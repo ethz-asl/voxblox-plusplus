@@ -1,4 +1,5 @@
-segment_point_cloud_topic: "/camera/object_segment"
+# segment_point_cloud_topic: "/camera/object_segment"
+segment_point_cloud_topic: "/rgbd_segmentation_node/segment_pointcloud"
 world_frame_id: "world"
 
 voxblox:
