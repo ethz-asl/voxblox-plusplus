@@ -121,13 +121,17 @@ void MeshLabelIntegrator::generateMeshBlocksFunction(
   size_t list_idx;
   while (index_getter->getNextIndex(&list_idx)) {
     const BlockIndex& block_idx = all_tsdf_blocks[list_idx];
+    typename Block<TsdfVoxel>::Ptr tsdf_block =
+        sdf_layer_mutable_->getBlockPtrByIndex(block_idx);
+    typename Block<LabelVoxel>::Ptr label_block =
+        label_layer_mutable_ptr_->getBlockPtrByIndex(block_idx);
+
+    if (tsdf_block == nullptr || label_block == nullptr) {
+      continue;
+    }
+
     updateMeshForBlock(block_idx);
     if (clear_updated_flag) {
-      typename Block<TsdfVoxel>::Ptr tsdf_block =
-          sdf_layer_mutable_->getBlockPtrByIndex(block_idx);
-      typename Block<LabelVoxel>::Ptr label_block =
-          label_layer_mutable_ptr_->getBlockPtrByIndex(block_idx);
-
       tsdf_block->updated() = false;
       label_block->updated() = false;
     }
@@ -200,11 +204,19 @@ void MeshLabelIntegrator::updateMeshBlockColor(
       updateMeshColor(*tsdf_block, mesh_block);
       break;
     default:
-      if (!label_block) {
-        LOG(FATAL)
-            << "Trying to color a mesh using a non-existent label block.";
+      // if (!label_block) {
+      //   LOG(FATAL)
+      //       << "Trying to color a mesh using a non-existent label block.";
+      // }
+      // updateMeshColor(*label_block, mesh_block);
+      if (label_block) {
+        updateMeshColor(*label_block, mesh_block);
       }
-      updateMeshColor(*label_block, mesh_block);
+      // else {
+      // LOG(WARNING)
+      //     << "Trying to color a mesh using a non-existent label block.";
+      // }
+      break;
   }
 }
 

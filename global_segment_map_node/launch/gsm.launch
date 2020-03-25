@@ -1,9 +1,11 @@
 <launch>
   <arg name="gsm_node_params_file" default="$(find gsm_node)/cfg/default.yaml"/>
   <arg name="sensor_topics_file" default="$(find depth_segmentation)/cfg/default_topics.yaml"/>
+  <arg name="mesh_name" default="mesh.ply"/>
 
-  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="log">
+  <node name="gsm_node" pkg="gsm_node" type="gsm_node" output="screen">
     <rosparam command="load" file="$(arg sensor_topics_file)" />
     <rosparam command="load" file="$(arg gsm_node_params_file)" />
+    <param name="meshing/mesh_filename" value="$(arg mesh_name)" />
   </node>
 </launch>

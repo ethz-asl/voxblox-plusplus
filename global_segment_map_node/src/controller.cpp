@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <cmath>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -25,10 +26,13 @@
 #include <visualization_msgs/MarkerArray.h>
 #include <voxblox/alignment/icp.h>
 #include <voxblox/core/common.h>
+#include <voxblox/core/tsdf_map.h>
 #include <voxblox/integrator/merge_integration.h>
+#include <voxblox/integrator/tsdf_integrator.h>
 #include <voxblox/utils/layer_utils.h>
 #include <voxblox_ros/conversions.h>
 #include <voxblox_ros/mesh_vis.h>
+#include <voxblox_ros/ptcloud_vis.h>
 
 #ifdef APPROXMVBB_AVAILABLE
 #include <ApproxMVBB/ComputeApproxMVBB.hpp>
@@ -252,6 +256,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       label_tsdf_integrator_config_.keep_track_of_icp_correction,
       label_tsdf_integrator_config_.keep_track_of_icp_correction);
 
+  LOG(INFO) << "Base TSDF Integrator config \n"
+            << tsdf_integrator_config_.print();
   integrator_.reset(new LabelTsdfIntegrator(
       tsdf_integrator_config_, label_tsdf_integrator_config_, map_.get()));
 
@@ -262,6 +268,8 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       "meshing/min_weight", mesh_config_.min_weight, mesh_config_.min_weight);
   label_tsdf_mesh_config_.color_scheme =
       MeshLabelIntegrator::ColorScheme::kLabel;
+
+  LOG(INFO) << "Base Mesh Integrator config \n" << mesh_config_.print();
   mesh_label_integrator_.reset(new MeshLabelIntegrator(
       mesh_config_, label_tsdf_mesh_config_, map_.get(),
       mesh_label_layer_.get(), &all_semantic_labels_, &need_full_remesh_));
@@ -368,7 +376,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
                                    max_block_features_for_visualization_,
                                    max_block_features_for_visualization_);
 
-}  // namespace voxblox_gsm
+  TsdfMap::Config config;
+  config.tsdf_voxel_size = map_config_.voxel_size;
+  config.tsdf_voxels_per_side = map_config_.voxels_per_side;
+  scene_map_.reset(new TsdfMap(config));
+  scene_integrator_.reset(new MergedTsdfIntegrator(
+      tsdf_integrator_config_, scene_map_->getTsdfLayerPtr()));
+}
 
 Controller::~Controller() { viz_thread_.join(); }
 
@@ -397,6 +411,34 @@ void Controller::advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub) {
       node_handle_private_->advertise<visualization_msgs::MarkerArray>(
           feature_block_topic, kFeatureBlockQueueSize, true);
   feature_block_pub_ = feature_block_pub;
+}
+
+void Controller::advertiseTsdfSurfaceTopic(ros::Publisher* tsdf_surface_pub) {
+  CHECK_NOTNULL(tsdf_surface_pub);
+
+  constexpr int kFeatureBlockQueueSize = 2000;
+  *tsdf_surface_pub =
+      node_handle_private_->advertise<pcl::PointCloud<pcl::PointXYZI>>(
+          "tsdf_pointcloud", 1, true);
+  tsdf_surface_pub_ = tsdf_surface_pub;
+}
+
+void Controller::subscribeScenePointCloudTopic(
+    ros::Subscriber* scene_point_cloud_sub) {
+  CHECK_NOTNULL(scene_point_cloud_sub);
+  std::string scene_point_cloud_topic =
+      "/depth_segmentation_node/complete_scene";
+  node_handle_private_->param<std::string>("scene_point_cloud_topic",
+                                           scene_point_cloud_topic,
+                                           scene_point_cloud_topic);
+  // TODO (margaritaG): make this a param once segments of a frame are
+  // refactored to be received as one single message.
+  // Large queue size to give slack to the
+  // pipeline and not lose any messages.
+  constexpr int kSegmentPointCloudQueueSize = 6000;
+  *scene_point_cloud_sub = node_handle_private_->subscribe(
+      scene_point_cloud_topic, kSegmentPointCloudQueueSize,
+      &Controller::scenePointCloudCallback, this);
 }
 
 void Controller::subscribeSegmentPointCloudTopic(
@@ -553,7 +595,33 @@ void Controller::featureCallback(const modelify_msgs::Features& features_msg) {
       "Integrated %lu features in %f seconds. Total number of features: %lu.",
       features_C.size(), (end - start).toSec(),
       feature_layer_->getNumberOfFeatures());
-  ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
+  // ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
+}
+
+void Controller::scenePointCloudCallback(
+    const sensor_msgs::PointCloud2::Ptr& point_cloud_msg) {
+  Transformation T_G_C;
+  std::string from_frame = point_cloud_msg->header.frame_id;
+  if (lookupTransform(from_frame, world_frame_, point_cloud_msg->header.stamp,
+                      &T_G_C)) {
+    // Convert the PCL pointcloud into voxblox format.
+    // Horrible hack fix to fix color parsing colors in PCL.
+    for (size_t d = 0; d < point_cloud_msg->fields.size(); ++d) {
+      if (point_cloud_msg->fields[d].name == std::string("rgb")) {
+        point_cloud_msg->fields[d].datatype = sensor_msgs::PointField::FLOAT32;
+      }
+    }
+
+    pcl::PointCloud<voxblox::PointType> point_cloud_scene;
+    pcl::fromROSMsg(*point_cloud_msg, point_cloud_scene);
+    Segment* segment = nullptr;
+    segment = new Segment(point_cloud_scene, T_G_C);
+
+    constexpr bool kIsFreespacePointcloud = false;
+    scene_integrator_->integratePointCloud(segment->T_G_C_, segment->points_C_,
+                                           segment->colors_,
+                                           kIsFreespacePointcloud);
+  }
 }
 
 void Controller::segmentPointCloudCallback(
@@ -567,7 +635,7 @@ void Controller::segmentPointCloudCallback(
 
   if (received_first_message_ &&
       last_segment_msg_timestamp_ != segment_point_cloud_msg->header.stamp) {
-    ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
+    // ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
 
     ROS_INFO("Integrating frame n.%zu, timestamp of frame: %f",
              ++integrated_frames_count_,
@@ -713,13 +781,21 @@ void Controller::segmentPointCloudCallback(
           segment, &segment_label_candidates, &segment_merge_candidates_);
 
       ros::WallTime end = ros::WallTime::now();
-      ROS_INFO(
-          "Computed label candidates for a pointcloud of size %lu in %f "
-          "seconds.",
-          segment->points_C_.size(), (end - start).toSec());
+      // ROS_INFO(
+      //     "Computed label candidates for a pointcloud of size %lu in %f "
+      //     "seconds.",
+      //     segment->points_C_.size(), (end - start).toSec());
     }
 
-    ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());
+    // ROS_INFO_STREAM("Timings: " << std::endl << timing::Timing::Print());3
+
+    if (false) {
+      pcl::PointCloud<pcl::PointXYZI> pointcloud;
+      createDistancePointcloudFromTsdfLayer(map_->getTsdfLayer(), &pointcloud);
+
+      pointcloud.header.frame_id = world_frame_;
+      tsdf_surface_pub_->publish(pointcloud);
+    }
   }
 }
 
@@ -779,6 +855,8 @@ bool Controller::generateMeshCallback(
     std_srvs::Empty::Response& response) {  // NOLINT
   constexpr bool kClearMesh = true;
   generateMesh(kClearMesh);
+  bool success_save =
+      saveFeatureLayer<Feature3D>(*feature_layer_, "/tmp/feature_layer.proto");
   return true;
 }
 
@@ -851,7 +929,7 @@ void Controller::extractSegmentLayers(
   }
 
   BlockIndexList all_label_blocks;
-  map_->getTsdfLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
+  map_->getLabelLayerPtr()->getAllAllocatedBlocks(&all_label_blocks);
 
   for (const BlockIndex& block_index : all_label_blocks) {
     Block<TsdfVoxel>::Ptr global_tsdf_block =
@@ -997,7 +1075,10 @@ bool Controller::publishObjects(const bool publish_all) {
   extractSegmentLayers(labels_to_publish, &label_to_layers, publish_all);
   ros::Time stop = ros::Time::now();
   ros::Duration duration = stop - start;
-  ROS_INFO_STREAM("Extracting segment layers took " << duration.toSec() << "s");
+  // ROS_INFO_STREAM("Extracting segment layers took " << duration.toSec() <<
+  // "s");
+
+  LOG(INFO) << "Extracted segment layers " << label_to_layers.size();
 
   for (const Label& label : labels_to_publish) {
     auto it = label_to_layers.find(label);
@@ -1132,6 +1213,20 @@ bool Controller::publishObjects(const bool publish_all) {
       gsm_update_msg.object.bbox.dimensions.y = bbox_size(1);
       gsm_update_msg.object.bbox.dimensions.z = bbox_size(2);
 
+      constexpr bool kSaveBboxToFile = true;
+      if (kSaveBboxToFile) {
+        std::ofstream file;
+        file.open(std::to_string(gsm_update_msg.object.label) + ".txt");
+        file << gsm_update_msg.object.label << ", "
+             << gsm_update_msg.object.bbox.pose.position.x << ", "
+             << gsm_update_msg.object.bbox.pose.position.y << ", "
+             << gsm_update_msg.object.bbox.pose.position.z << ", "
+             << bbox_quaternion.x() << ", " << bbox_quaternion.y() << ", "
+             << bbox_quaternion.z() << ", " << bbox_quaternion.w() << ", "
+             << bbox_size(0) << ", " << bbox_size(1) << ", " << bbox_size(2);
+        file.close();
+      }
+
       visualization_msgs::Marker marker;
       marker.header.frame_id = world_frame_;
       marker.header.stamp = ros::Time();
@@ -1213,18 +1308,20 @@ void Controller::publishScene() {
   gsm_update_msg.header.frame_id = world_frame_;
 
   constexpr bool kSerializeOnlyUpdated = false;
-  serializeLayerAsMsg<TsdfVoxel>(map_->getTsdfLayer(), kSerializeOnlyUpdated,
+  serializeLayerAsMsg<TsdfVoxel>(scene_map_->getTsdfLayer(),
+                                 kSerializeOnlyUpdated,
                                  &gsm_update_msg.object.tsdf_layer);
   // TODO(ff): Make sure this works also, there is no LabelVoxel in voxblox
   // yet, hence it doesn't work.
   // TODO(ntonci): This seems to work?
-  serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(), kSerializeOnlyUpdated,
-                                  &gsm_update_msg.object.label_layer);
+  // serializeLayerAsMsg<LabelVoxel>(map_->getLabelLayer(),
+  // kSerializeOnlyUpdated,
+  //                                 &gsm_update_msg.object.label_layer);
   // TODO(ntonci): Also publish feature layer for scene.
 
   pcl::PointCloud<pcl::PointSurfel>::Ptr surfel_cloud(
       new pcl::PointCloud<pcl::PointSurfel>());
-  convertVoxelGridToPointCloud(map_->getTsdfLayer(), mesh_config_,
+  convertVoxelGridToPointCloud(scene_map_->getTsdfLayer(), mesh_config_,
                                surfel_cloud.get());
   pcl::toROSMsg(*surfel_cloud, gsm_update_msg.object.surfel_cloud);
   gsm_update_msg.object.surfel_cloud.header = gsm_update_msg.header;
@@ -1242,6 +1339,7 @@ void Controller::publishScene() {
   transform.rotation.z = 0.0;
   gsm_update_msg.object.transforms.clear();
   gsm_update_msg.object.transforms.push_back(transform);
+
   publishGsmUpdate(*scene_gsm_update_pub_, &gsm_update_msg);
 }
 

@@ -35,6 +35,9 @@ int main(int argc, char** argv) {
   ros::Subscriber feature_sub;
   controller->subscribeFeatureTopic(&feature_sub);
 
+  ros::Subscriber scene_point_cloud_sub;
+  controller->subscribeScenePointCloudTopic(&scene_point_cloud_sub);
+
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
@@ -66,6 +69,9 @@ int main(int argc, char** argv) {
   if (controller->publish_feature_blocks_marker_) {
     controller->advertiseFeatureBlockTopic(&feature_block_pub);
   }
+
+  ros::Publisher tsdf_surface_pub;
+  controller->advertiseTsdfSurfaceTopic(&tsdf_surface_pub);
 
   ros::ServiceServer publish_scene_srv;
   controller->advertisePublishSceneService(&publish_scene_srv);

@@ -25,6 +25,8 @@
 #include <std_srvs/SetBool.h>
 #include <tf/transform_listener.h>
 #include <tf2_ros/transform_broadcaster.h>
+#include <voxblox/core/tsdf_map.h>
+#include <voxblox/integrator/tsdf_integrator.h>
 #include <voxblox/io/mesh_ply.h>
 #include <voxblox_ros/conversions.h>
 
@@ -50,6 +52,10 @@ class Controller {
   void subscribeFeatureTopic(ros::Subscriber* feature_sub);
 
   void advertiseFeatureBlockTopic(ros::Publisher* feature_block_pub);
+
+  void advertiseTsdfSurfaceTopic(ros::Publisher* tsdf_surface_pub);
+
+  void subscribeScenePointCloudTopic(ros::Subscriber* scene_point_cloud_sub);
 
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
@@ -103,6 +109,9 @@ class Controller {
 
  protected:
   virtual void featureCallback(const modelify_msgs::Features& features_msg);
+
+  virtual void scenePointCloudCallback(
+      const sensor_msgs::PointCloud2::Ptr& point_cloud_msg);
 
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
@@ -164,6 +173,9 @@ class Controller {
   std::shared_ptr<LabelTsdfMap> map_;
   std::shared_ptr<LabelTsdfIntegrator> integrator_;
 
+  std::shared_ptr<TsdfMap> scene_map_;
+  std::shared_ptr<TsdfIntegratorBase> scene_integrator_;
+
   bool received_first_feature_;
   std::shared_ptr<FeatureLayer<Feature3D>> feature_layer_;
   std::shared_ptr<FeatureIntegrator> feature_integrator_;
@@ -202,6 +214,7 @@ class Controller {
   std::set<Label> all_published_segments_;
   ros::Publisher* bbox_pub_;
   ros::Publisher* feature_block_pub_;
+  ros::Publisher* tsdf_surface_pub_;
   int max_block_features_for_visualization_;
 
   std::thread viz_thread_;
