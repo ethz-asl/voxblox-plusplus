@@ -40,7 +40,7 @@
 - git:
     local-name: pcl_catkin
     uri: https://github.com/ethz-asl/pcl_catkin.git
-    version: fix/pcl-1.10
+    version: fix/advance_perception_pcl
 - git:
     local-name: vpp_msgs
     uri: https://github.com/ethz-asl/vpp_msgs.git
