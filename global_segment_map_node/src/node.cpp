@@ -33,14 +33,21 @@ int main(int argc, char** argv) {
   ros::Subscriber segment_point_cloud_sub;
   controller->subscribeSegmentPointCloudTopic(&segment_point_cloud_sub);
 
+  if (controller->publish_scene_map_) {
+    controller->advertiseMapTopic();
+  }
+
   if (controller->publish_scene_mesh_) {
     controller->advertiseSceneMeshTopic();
     controller->advertiseSceneCloudTopic();
   }
 
-  if (controller->compute_and_publish_bbox_) {
+  if (controller->publish_object_bbox_) {
     controller->advertiseBboxTopic();
   }
+
+  ros::ServiceServer get_map_srv;
+  controller->advertiseGetMapService(&get_map_srv);
 
   ros::ServiceServer generate_mesh_srv;
   controller->advertiseGenerateMeshService(&generate_mesh_srv);

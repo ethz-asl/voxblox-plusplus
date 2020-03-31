@@ -23,12 +23,15 @@ semantic_instance_segmentation:
   enable_semantic_instance_segmentation: false
   class_tsdk: "coco80"
 
+publishers:
+  publish_scene_map: true
+  publish_scene_mesh: true
+  publish_object_bbox: false
+
 meshing:
   visualize: false
   update_mesh_every_n_sec: 0.0
-  publish_scene_mesh: true
   mesh_filename: "vpp_mesh.ply"
-  compute_and_publish_bbox: false
   visualizer_parameters:
     camera_position: [-0.73071,  1.35896,   6.98444,  # Position - x y z
                        0.204536, 0.470912,  0.381721, # Focal point - x y z

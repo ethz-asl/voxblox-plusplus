@@ -57,20 +57,44 @@ struct PointSurfelSemanticInstance {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 } EIGEN_ALIGN16;
 
+// Map pointcloud type.
+struct PointTSDFLabel {
+  PCL_ADD_POINT4D;
+
+  // TSDF fields.
+  float distance;
+  float weight;
+
+  // Semantic segmentation fields.
+  Label segment_label;
+  SemanticLabel semantic_class;
+
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+} EIGEN_ALIGN16;
+
 typedef pcl::PointXYZRGB PointType;
 typedef PointSurfelLabel PointLabelType;
 typedef PointSurfelSemanticInstance PointSemanticInstanceType;
+typedef PointTSDFLabel PointMapType;
 
 }  // namespace voxblox
 
-POINT_CLOUD_REGISTER_POINT_STRUCT(voxblox::PointSurfelLabel,
-                                  (float, x, x)(float, y, y)(float, z, z)(
-                                      float, rgb, rgb)(uint32_t, label, label))
+POINT_CLOUD_REGISTER_POINT_STRUCT(
+    voxblox::PointSurfelLabel,
+    (float, x, x)(float, y, y)(float, z, z)(float, rgb, rgb)(std::uint32_t,
+                                                             label, label))
 
 POINT_CLOUD_REGISTER_POINT_STRUCT(
     voxblox::PointSemanticInstanceType,
     (float, x, x)(float, y, y)(float, z, z)(float, rgb, rgb)(
-        uint8_t, instance_label,
+        std::uint8_t, instance_label,
         instance_label)(voxblox::SemanticLabel, semantic_label, semantic_label))
+
+POINT_CLOUD_REGISTER_POINT_STRUCT(
+    voxblox::PointTSDFLabel,
+    (float, x, x)(float, y, y)(float, z, z)(float, distance, distance)(
+        float, weight, weight)(voxblox::Label, segment_label,
+                               segment_label)(voxblox::SemanticLabel,
+                                              semantic_class, semantic_class))
 
 #endif  // GLOBAL_SEGMENT_MAP_COMMON_H_

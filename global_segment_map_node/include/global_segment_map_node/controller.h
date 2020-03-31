@@ -22,6 +22,7 @@
 #include <voxblox_ros/conversions.h>
 #include <vpp_msgs/GetAlignedInstanceBoundingBox.h>
 #include <vpp_msgs/GetListSemanticInstances.h>
+#include <vpp_msgs/GetMap.h>
 #include <vpp_msgs/GetScenePointcloud.h>
 
 namespace voxblox {
@@ -38,6 +39,8 @@ class Controller {
   void subscribeSegmentPointCloudTopic(
       ros::Subscriber* segment_point_cloud_sub);
 
+  void advertiseMapTopic();
+
   void advertiseSceneMeshTopic();
 
   void advertiseSceneCloudTopic();
@@ -48,6 +51,8 @@ class Controller {
 
   void advertiseToggleIntegrationService(
       ros::ServiceServer* toggle_integration_srv);
+
+  void advertiseGetMapService(ros::ServiceServer* get_map_srv);
 
   void advertiseGenerateMeshService(ros::ServiceServer* generate_mesh_srv);
 
@@ -68,8 +73,9 @@ class Controller {
 
   bool enable_semantic_instance_segmentation_;
 
+  bool publish_scene_map_;
   bool publish_scene_mesh_;
-  bool compute_and_publish_bbox_;
+  bool publish_object_bbox_;
 
   bool use_label_propagation_;
 
@@ -87,6 +93,9 @@ class Controller {
 
   virtual void segmentPointCloudCallback(
       const sensor_msgs::PointCloud2::Ptr& segment_point_cloud_msg);
+
+  bool getMapCallback(vpp_msgs::GetMap::Request& /* request */,
+                      vpp_msgs::GetMap::Response& response);
 
   bool generateMeshCallback(std_srvs::Empty::Request& request,
                             std_srvs::Empty::Response& response);
@@ -152,8 +161,7 @@ class Controller {
   MeshIntegratorConfig mesh_config_;
   MeshLabelIntegrator::LabelTsdfConfig label_tsdf_mesh_config_;
   ros::Timer update_mesh_timer_;
-  ros::Publisher* scene_mesh_pub_;
-  ros::Publisher* scene_cloud_pub_;
+
   MeshLabelIntegrator::ColorScheme mesh_color_scheme_;
   std::string mesh_filename_;
 
@@ -177,6 +185,10 @@ class Controller {
   std::map<Label, std::map<Segment*, size_t>> segment_label_candidates;
   std::map<Segment*, std::vector<Label>> segment_merge_candidates_;
 
+  // Publishers.
+  ros::Publisher* map_cloud_pub_;
+  ros::Publisher* scene_mesh_pub_;
+  ros::Publisher* scene_cloud_pub_;
   ros::Publisher* bbox_pub_;
 
   std::thread viz_thread_;
