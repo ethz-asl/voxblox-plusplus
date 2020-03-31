@@ -680,7 +680,6 @@ bool Controller::getMapCallback(vpp_msgs::GetMap::Request& /* request */,
   map_pointcloud.header.frame_id = world_frame_;
   pcl::toROSMsg(map_pointcloud, response.map_cloud);
 
-  response.voxels_per_side = map_config_.voxels_per_side;
   response.voxel_size = map_config_.voxel_size;
 
   if (publish_scene_map_) {
