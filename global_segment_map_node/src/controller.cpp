@@ -19,6 +19,7 @@
 #include <geometry_msgs/TransformStamped.h>
 #include <global_segment_map/label_voxel.h>
 #include <global_segment_map/utils/file_utils.h>
+#include <global_segment_map/utils/map_utils.h>
 #include <glog/logging.h>
 #include <minkindr_conversions/kindr_tf.h>
 #include <visualization_msgs/Marker.h>
@@ -127,12 +128,13 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
       tf_listener_(ros::Duration(500)),
       world_frame_("world"),
       integration_on_(true),
+      publish_scene_map_(false),
       publish_scene_mesh_(false),
       received_first_message_(false),
       mesh_layer_updated_(false),
       need_full_remesh_(false),
       enable_semantic_instance_segmentation_(true),
-      compute_and_publish_bbox_(false),
+      publish_object_bbox_(false),
       use_label_propagation_(true) {
   CHECK_NOTNULL(node_handle_private_);
 
@@ -292,22 +294,15 @@ Controller::Controller(ros::NodeHandle* node_handle_private)
     viz_thread_ = std::thread(&Visualizer::visualizeMesh, visualizer_);
   }
 
-  node_handle_private_->param<bool>("meshing/publish_scene_mesh",
+  node_handle_private_->param<bool>("publishers/publish_scene_map",
+                                    publish_scene_map_, publish_scene_map_);
+  node_handle_private_->param<bool>("publishers/publish_scene_mesh",
                                     publish_scene_mesh_, publish_scene_mesh_);
-  node_handle_private_->param<bool>("meshing/compute_and_publish_bbox",
-                                    compute_and_publish_bbox_,
-                                    compute_and_publish_bbox_);
+  node_handle_private_->param<bool>("publishers/publish_object_bbox",
+                                    publish_object_bbox_, publish_object_bbox_);
 
   node_handle_private_->param<bool>(
       "use_label_propagation", use_label_propagation_, use_label_propagation_);
-
-#ifndef APPROXMVBB_AVAILABLE
-  if (compute_and_publish_bbox_) {
-    LOG(WARNING) << "ApproxMVBB is not available and therefore "
-                    "bounding box functionality is disabled.";
-  }
-  compute_and_publish_bbox_ = false;
-#endif
 
   // If set, use a timer to progressively update the mesh.
   double update_mesh_every_n_sec = 0.0;
@@ -345,6 +340,12 @@ void Controller::subscribeSegmentPointCloudTopic(
       &Controller::segmentPointCloudCallback, this);
 }
 
+void Controller::advertiseMapTopic() {
+  map_cloud_pub_ = new ros::Publisher(
+      node_handle_private_->advertise<pcl::PointCloud<PointMapType>>("map", 1,
+                                                                     true));
+}
+
 void Controller::advertiseSceneMeshTopic() {
   scene_mesh_pub_ = new ros::Publisher(
       node_handle_private_->advertise<voxblox_msgs::Mesh>("mesh", 1, true));
@@ -373,6 +374,12 @@ void Controller::advertiseToggleIntegrationService(
   CHECK_NOTNULL(toggle_integration_srv);
   *toggle_integration_srv = node_handle_private_->advertiseService(
       "toggle_integration", &Controller::toggleIntegrationCallback, this);
+}
+
+void Controller::advertiseGetMapService(ros::ServiceServer* get_map_srv) {
+  CHECK_NOTNULL(get_map_srv);
+  *get_map_srv = node_handle_private_->advertiseService(
+      "get_map", &Controller::getMapCallback, this);
 }
 
 void Controller::advertiseGenerateMeshService(
@@ -660,6 +667,28 @@ bool Controller::toggleIntegrationCallback(
   return true;
 }
 
+bool Controller::getMapCallback(vpp_msgs::GetMap::Request& /* request */,
+                                vpp_msgs::GetMap::Response& response) {
+  pcl::PointCloud<PointMapType> map_pointcloud;
+
+  {
+    std::lock_guard<std::mutex> label_tsdf_layers_lock(
+        label_tsdf_layers_mutex_);
+    createPointcloudFromMap(*map_, &map_pointcloud);
+  }
+
+  map_pointcloud.header.frame_id = world_frame_;
+  pcl::toROSMsg(map_pointcloud, response.map_cloud);
+
+  response.voxel_size = map_config_.voxel_size;
+
+  if (publish_scene_map_) {
+    map_cloud_pub_->publish(map_pointcloud);
+  }
+
+  return true;
+}
+
 bool Controller::generateMeshCallback(std_srvs::Empty::Request& request,
                                       std_srvs::Empty::Response& response) {
   constexpr bool kClearMesh = true;
@@ -800,7 +829,7 @@ bool Controller::getAlignedInstanceBoundingBoxCallback(
   fillAlignedBoundingBoxMsg(bbox_translation, bbox_quaternion, bbox_size,
                             &response.bbox);
 
-  if (compute_and_publish_bbox_) {
+  if (publish_object_bbox_) {
     visualization_msgs::Marker bbox_marker;
     fillBoundingBoxMarkerMsg(world_frame_, instance_label, bbox_translation,
                              bbox_quaternion, bbox_size, &bbox_marker);
@@ -1054,9 +1083,8 @@ void Controller::computeAlignedBoundingBox(
   *bbox_translation = ((min_in_I + max_in_I) / 2).cast<float>();
   *bbox_size = ((oobb.m_maxPoint - oobb.m_minPoint).cwiseAbs()).cast<float>();
 #else
-  LOG(WARNING)
-      << "Bounding box computation is not supported since ApproxMVBB is "
-         "disabled.";
+  LOG(WARNING) << "ApproxMVBB is not available and therefore "
+                  "bounding box functionality is disabled.";
 #endif
 }
 
