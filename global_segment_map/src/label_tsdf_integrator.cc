@@ -656,8 +656,9 @@ void LabelTsdfIntegrator::integrateRays(
     std::list<std::thread> integration_threads;
     for (size_t i = 0u; i < config_.integrator_threads; ++i) {
       integration_threads.emplace_back(
-          &LabelTsdfIntegrator::integrateVoxels, this, T_G_C, points_C, colors,
-          label, enable_anti_grazing, clearing_ray, voxel_map, clear_map, i);
+          &LabelTsdfIntegrator::integrateVoxels, this, T_G_C,
+          std::cref(points_C), std::cref(colors), label, enable_anti_grazing,
+          clearing_ray, std::cref(voxel_map), std::cref(clear_map), i);
     }
 
     for (std::thread& thread : integration_threads) {
