@@ -1,0 +1,11 @@
+<launch>
+  <arg name="visualize" default="false" />
+  <arg name="sensor" default="realsense" />
+
+  <include file="$(find gsm_node)/launch/vpp_pipeline.launch">
+    <arg name="scene_name" value="royal_panda" />
+    <arg name="sensor_name" value="$(arg sensor)" />
+    <arg name="visualize" value="$(arg visualize)" />
+  </include>
+
+</launch>
