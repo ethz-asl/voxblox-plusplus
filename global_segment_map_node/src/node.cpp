@@ -19,7 +19,7 @@ int main(int argc, char** argv) {
   voxblox::voxblox_gsm::Controller* controller;
 
   std::cout << endl
-            << "Voxblox++ Copyright (C) 2016-2020 ASL, ETH Zurich." << endl
+            << "Voxblox++ Copyright (C) 2016-2021 ASL, ETH Zurich." << endl
             << endl;
 
   controller = new voxblox::voxblox_gsm::Controller(&node_handle_private);
